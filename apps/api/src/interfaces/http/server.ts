@@ -6,7 +6,6 @@ const app = Fastify({ logger: true });
 
 await app.register(cors, { origin: true });
 
-// 👇 ESTO ES LO CRÍTICO
 await registerRoutes(app);
 
 const port = Number(process.env.PORT ?? 3001);
