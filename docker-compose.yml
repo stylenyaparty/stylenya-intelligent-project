@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16
+    container_name: stylenya_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: stylenya_intel
+      POSTGRES_USER: stylenya
+      POSTGRES_PASSWORD: stylenya_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - stylenya_db_data:/var/lib/postgresql/data
+
+volumes:
+  stylenya_db_data:
