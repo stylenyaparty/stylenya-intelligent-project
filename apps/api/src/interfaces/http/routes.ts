@@ -1,15 +1,45 @@
-import { FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+
 import { PrismaUserRepository } from "../../infrastructure/repositories/prisma-user-repository";
 import { GetBootstrapStatusUseCase } from "../../application/use-cases/get-bootstrap-status";
 
-export async function registerRoutes(app: FastifyInstance) {
-    app.get("/health", async () => {
-        return { ok: true, service: "stylenya-api" };
-    });
+import {
+    CreateInitialAdminUseCase,
+    EmailAlreadyExistsError,
+    SetupAlreadyCompletedError,
+} from "../../application/use-cases/create-initial-admin";
 
-    app.get("/v1/bootstrap-status", async () => {
+export async function registerRoutes(app: FastifyInstance) {
+    app.get("/health", async () => ({ ok: true, service: "stylenya-api" }));
+
+    app.get("/bootstrap-status", async () => {
         const userRepo = new PrismaUserRepository();
         const uc = new GetBootstrapStatusUseCase(userRepo);
         return uc.execute();
+    });
+
+    app.post("/initial-admin", async (req, reply) => {
+        const Body = z.object({
+            email: z.string().email(),
+            name: z.string().min(1).optional(),
+        });
+
+        const body = Body.parse(req.body);
+
+        try {
+            const userRepo = new PrismaUserRepository();
+            const uc = new CreateInitialAdminUseCase(userRepo);
+            const result = await uc.execute(body);
+            return reply.code(201).send(result);
+        } catch (err) {
+            if (err instanceof SetupAlreadyCompletedError) {
+                return reply.code(409).send({ ok: false, reason: "SETUP_ALREADY_COMPLETED" });
+            }
+            if (err instanceof EmailAlreadyExistsError) {
+                return reply.code(409).send({ ok: false, reason: "EMAIL_ALREADY_EXISTS" });
+            }
+            throw err;
+        }
     });
 }
