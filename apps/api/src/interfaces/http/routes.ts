@@ -29,7 +29,7 @@ export async function registerRoutes(app: FastifyInstance) {
         return uc.execute();
     });
 
-    app.post("/initial-admin", async (req, reply) => {
+    app.post("/v1/initial-admin", async (req, reply) => {
         const Body = z.object({
             email: z.string().email(),
             name: z.string().min(1).optional(),
