@@ -1,15 +1,15 @@
 import Fastify from "fastify";
-import { registerRoutes } from "./routes";
+import cors from "@fastify/cors";
+import { registerRoutes } from "./routes.js";
 
-export async function buildApp() {
-    const app = Fastify({ logger: true });
+const app = Fastify({ logger: true });
 
-    // OJO: prefijo global para todas las rutas
-    await app.register(registerRoutes, { prefix: "/v1" });
+await app.register(cors, { origin: true });
 
-    return app;
-}
+// 👇 ESTO ES LO CRÍTICO
+await registerRoutes(app);
 
-// si tu archivo arranca el server aquí:
-const app = await buildApp();
-await app.listen({ port: 3001, host: "0.0.0.0" });
+const port = Number(process.env.PORT ?? 3001);
+const host = process.env.HOST ?? "0.0.0.0";
+
+app.listen({ port, host });

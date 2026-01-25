@@ -13,7 +13,17 @@ import {
 export async function registerRoutes(app: FastifyInstance) {
     app.get("/health", async () => ({ ok: true, service: "stylenya-api" }));
 
-    app.get("/bootstrap-status", async () => {
+    app.get("/", async () => ({
+        ok: true,
+        service: "stylenya-api",
+        version: "0.1.0",
+        docs: {
+            health: "/health",
+            bootstrapStatus: "/v1/bootstrap-status",
+        },
+    }));
+
+    app.get("/v1/bootstrap-status", async () => {
         const userRepo = new PrismaUserRepository();
         const uc = new GetBootstrapStatusUseCase(userRepo);
         return uc.execute();
