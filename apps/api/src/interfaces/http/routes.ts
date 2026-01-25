@@ -1,9 +1,12 @@
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
 
+// Rutas existentes (si las tienes en este mismo archivo, puedes dejarlas aquí)
+// y routes nuevas (auth)
+import { authRoutes } from "./auth/auth.routes";
+
+import { z } from "zod";
 import { PrismaUserRepository } from "../../infrastructure/repositories/prisma-user-repository";
 import { GetBootstrapStatusUseCase } from "../../application/use-cases/get-bootstrap-status";
-
 import {
     CreateInitialAdminUseCase,
     EmailAlreadyExistsError,
@@ -20,36 +23,50 @@ export async function registerRoutes(app: FastifyInstance) {
         docs: {
             health: "/health",
             bootstrapStatus: "/v1/bootstrap-status",
+            initialAdmin: "/v1/initial-admin",
+            login: "/v1/auth/login",
         },
     }));
 
+    // -------------------------
+    // v1 routes (bootstrap, initial-admin)
+    // -------------------------
+    const userRepo = new PrismaUserRepository();
+    const getBootstrapStatus = new GetBootstrapStatusUseCase(userRepo);
+    const createInitialAdmin = new CreateInitialAdminUseCase(userRepo);
+
     app.get("/v1/bootstrap-status", async () => {
-        const userRepo = new PrismaUserRepository();
-        const uc = new GetBootstrapStatusUseCase(userRepo);
-        return uc.execute();
+        const result = await getBootstrapStatus.execute();
+        return result;
     });
 
-    app.post("/v1/initial-admin", async (req, reply) => {
-        const Body = z.object({
+    app.post("/v1/initial-admin", async (request, reply) => {
+        const BodySchema = z.object({
             email: z.string().email(),
+            password: z.string().min(8),
             name: z.string().min(1).optional(),
         });
 
-        const body = Body.parse(req.body);
+        const body = BodySchema.parse(request.body);
 
         try {
-            const userRepo = new PrismaUserRepository();
-            const uc = new CreateInitialAdminUseCase(userRepo);
-            const result = await uc.execute(body);
+            const result = await createInitialAdmin.execute(body);
             return reply.code(201).send(result);
-        } catch (err) {
+        } catch (err: any) {
             if (err instanceof SetupAlreadyCompletedError) {
-                return reply.code(409).send({ ok: false, reason: "SETUP_ALREADY_COMPLETED" });
+                return reply.code(409).send({ error: err.message });
             }
             if (err instanceof EmailAlreadyExistsError) {
-                return reply.code(409).send({ ok: false, reason: "EMAIL_ALREADY_EXISTS" });
+                return reply.code(409).send({ error: err.message });
             }
-            throw err;
+            // Zod errors / unknown
+            return reply.code(400).send({ error: "Invalid request" });
         }
     });
+
+    // -------------------------
+    // Auth routes mounted as plugin
+    // Final endpoint: POST /v1/auth/login
+    // -------------------------
+    await app.register(authRoutes, { prefix: "/v1/auth" });
 }
