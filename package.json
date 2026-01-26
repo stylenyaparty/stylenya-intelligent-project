@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "dev": "concurrently -n API,WEB -c green,cyan \"npm --prefix apps/api run dev\" \"npm --prefix apps/web run dev\""
+  }
+}
