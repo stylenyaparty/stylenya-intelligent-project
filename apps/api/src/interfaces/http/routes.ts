@@ -13,7 +13,19 @@ import {
     SetupAlreadyCompletedError,
 } from "../../application/use-cases/create-initial-admin";
 
+import { requireAuth, requireRole } from "./middleware/auth.js"; 
+
 export async function registerRoutes(app: FastifyInstance) {
+    app.get("/v1/me", { preHandler: requireAuth }, async (request) => {
+        return { ok: true, auth: request.auth };
+    });
+
+    app.get(
+        "/v1/admin/ping",
+        { preHandler: [requireAuth, requireRole("ADMIN")] },
+        async () => ({ ok: true, admin: true })
+    );
+    
     app.get("/health", async () => ({ ok: true, service: "stylenya-api" }));
 
     app.get("/", async () => ({
