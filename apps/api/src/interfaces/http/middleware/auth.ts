@@ -1,4 +1,4 @@
-import type { Request, Response, NextFunction } from "express";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import jwt from "jsonwebtoken";
 
 export type AuthClaims = {
@@ -11,43 +11,51 @@ export type AuthClaims = {
     aud?: string | string[];
 };
 
-declare global {
-    namespace Express {
-        interface Request {
-            auth?: AuthClaims;
-        }
+// Extiende FastifyRequest para tener request.auth
+declare module "fastify" {
+    interface FastifyRequest {
+        auth?: AuthClaims;
     }
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
+function getBearerToken(req: FastifyRequest): string | null {
     const header = req.headers.authorization;
-    if (!header?.startsWith("Bearer ")) {
-        return res.status(401).json({ error: "Missing token" });
+    if (!header) return null;
+    const [type, token] = header.split(" ");
+    if (type !== "Bearer" || !token) return null;
+    return token;
+}
+
+export async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
+    const token = getBearerToken(request);
+    if (!token) {
+        return reply.code(401).send({ error: "Missing token" });
     }
 
-    const token = header.slice("Bearer ".length);
-    const secret = process.env.JWT_SECRET;
-    if (!secret) throw new Error("JWT_SECRET is not set");
+    const JWT_SECRET = process.env.JWT_SECRET;
+    if (!JWT_SECRET) {
+        return reply.code(500).send({ error: "JWT_SECRET not configured" });
+    }
 
     try {
-        const decoded = jwt.verify(token, secret, {
+        const decoded = jwt.verify(token, JWT_SECRET as jwt.Secret, {
             issuer: "stylenya-intelligent-api",
             audience: "stylenya-dashboard",
         }) as AuthClaims;
 
-        req.auth = decoded;
-        return next();
+        request.auth = decoded;
     } catch {
-        return res.status(401).json({ error: "Invalid token" });
+        return reply.code(401).send({ error: "Invalid token" });
     }
 }
 
 export function requireRole(...allowed: string[]) {
-    return (req: Request, res: Response, next: NextFunction) => {
-        if (!req.auth) return res.status(401).json({ error: "Missing token" });
-        if (!allowed.includes(req.auth.role)) {
-            return res.status(403).json({ error: "Forbidden" });
+    return async (request: FastifyRequest, reply: FastifyReply) => {
+        if (!request.auth) {
+            return reply.code(401).send({ error: "Missing token" });
         }
-        return next();
+        if (!allowed.includes(request.auth.role)) {
+            return reply.code(403).send({ error: "Forbidden" });
+        }
     };
 }
