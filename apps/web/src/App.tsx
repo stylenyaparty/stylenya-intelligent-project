@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
-import { RequireAuth } from "./auth/RequireAuth";
+import { ProtectedRoute } from "./auth/ProtectedRoute";
+import { PublicOnlyRoute } from "./auth/PublicOnlyRoute";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 
@@ -9,13 +10,23 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/login" element={<Login />} />
+          {/* Rutas públicas SOLO para no autenticados */}
+          <Route
+            path="/login"
+            element={
+              <PublicOnlyRoute>
+                <Login />
+              </PublicOnlyRoute>
+            }
+          />
+
+          {/* Rutas protegidas */}
           <Route
             path="/"
             element={
-              <RequireAuth>
+              <ProtectedRoute>
                 <Dashboard />
-              </RequireAuth>
+              </ProtectedRoute>
             }
           />
         </Routes>

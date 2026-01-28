@@ -1,4 +1,5 @@
-const API_URL = "";
+const API_URL = import.meta.env.VITE_API_URL ?? "";
+
 
 export type LoginUser = {
     id: string;
@@ -60,6 +61,11 @@ export async function fetchMe(): Promise<MeAuth> {
     if (res.status === 401) {
         clearToken();
         throw new Error("Unauthorized");
+    }
+
+    if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`ME failed (${res.status}) ${txt}`);
     }
 
     const data = await res.json();
