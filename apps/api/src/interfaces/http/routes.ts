@@ -1,7 +1,4 @@
 import type { FastifyInstance } from "fastify";
-
-// Rutas existentes (si las tienes en este mismo archivo, puedes dejarlas aquí)
-// y routes nuevas (auth)
 import { authRoutes } from "./auth/auth.routes";
 
 import { z } from "zod";
@@ -14,6 +11,10 @@ import {
 } from "../../application/use-cases/create-initial-admin";
 
 import { requireAuth, requireRole } from "./middleware/auth.js"; 
+
+import { RecommendWeeklyFocusUseCase } from "../../application/use-cases/recommend-weekly-focus.js";
+import { PrismaInsightsRepository } from "../../infrastructure/repositories/prisma-insights-repository.js";
+
 
 export async function registerRoutes(app: FastifyInstance) {
     app.get("/v1/me", { preHandler: requireAuth }, async (request) => {
@@ -39,10 +40,6 @@ export async function registerRoutes(app: FastifyInstance) {
             login: "/v1/auth/login",
         },
     }));
-
-    // -------------------------
-    // v1 routes (bootstrap, initial-admin)
-    // -------------------------
     const userRepo = new PrismaUserRepository();
     const getBootstrapStatus = new GetBootstrapStatusUseCase(userRepo);
     const createInitialAdmin = new CreateInitialAdminUseCase(userRepo);
@@ -51,6 +48,18 @@ export async function registerRoutes(app: FastifyInstance) {
         const result = await getBootstrapStatus.execute();
         return result;
     });
+
+    const insightsRepo = new PrismaInsightsRepository();
+    const recommendWeeklyFocus = new RecommendWeeklyFocusUseCase(insightsRepo);
+
+    app.get(
+        "/v1/recommendations/weekly-focus",
+        { preHandler: [requireAuth, requireRole("ADMIN")] },
+        async () => {
+            const items = await recommendWeeklyFocus.execute();
+            return { ok: true, items };
+        }
+    );
 
     app.post("/v1/initial-admin", async (request, reply) => {
         const BodySchema = z.object({
@@ -75,10 +84,5 @@ export async function registerRoutes(app: FastifyInstance) {
             return reply.code(400).send({ error: "Invalid request" });
         }
     });
-
-    // -------------------------
-    // Auth routes mounted as plugin
-    // Final endpoint: POST /v1/auth/login
-    // -------------------------
     await app.register(authRoutes, { prefix: "/v1/auth" });
 }
