@@ -17,7 +17,103 @@ model User {
   passwordHash String
 }
 
+model Product {
+  id                String   @id @default(uuid())
+  name              String
+  productSource     ProductSource
+  productType       String
+  status            ProductStatus @default(ACTIVE)
+  seasonality       Seasonality   @default(NONE)
+
+  shopifyProductId  String?
+  etsyListingId     String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  salesRecords      SalesRecord[]
+  requests          Request[]
+}
+
+model SalesRecord {
+  id             String      @id @default(uuid())
+  productId      String
+  product        Product     @relation(fields: [productId], references: [id])
+
+  salesPeriod    SalesPeriod
+  unitsSold      Int
+  revenueAmount  Decimal
+
+  asOfDate       DateTime
+  createdAt      DateTime @default(now())
+}
+
+model Request {
+  id          String        @id @default(uuid())
+  channel     RequestChannel
+  theme       String
+  productType String?
+  status      RequestStatus @default(NEW)
+
+  productId   String?
+  product     Product?     @relation(fields: [productId], references: [id])
+
+  createdAt   DateTime @default(now())
+}
+
+model Settings {
+  id                              Int     @id @default(1)
+  boostSalesThresholdD90          Int     @default(10)
+  retireSalesThresholdD180        Int     @default(2)
+  requestThemePriorityThreshold   Int     @default(3)
+  defaultCurrency                 String  @default("USD")
+
+  updatedAt DateTime @updatedAt
+}
+
 enum UserRole {
   ADMIN
   USER
+}
+
+enum ProductSource {
+  ETSY
+  SHOPIFY
+  BOTH
+}
+
+enum ProductStatus {
+  ACTIVE
+  DRAFT
+  ARCHIVED
+}
+
+enum Seasonality {
+  NONE
+  VALENTINES
+  EASTER
+  BACK_TO_SCHOOL
+  HALLOWEEN
+  CHRISTMAS
+  CUSTOM
+}
+
+enum SalesPeriod {
+  D30
+  D90
+  D180
+  D365
+}
+
+enum RequestChannel {
+  WHATSAPP
+  FORM
+  MANUAL
+}
+
+enum RequestStatus {
+  NEW
+  REVIEWED
+  FULFILLED
+  DISMISSED
 }
