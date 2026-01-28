@@ -14,6 +14,8 @@ import { requireAuth, requireRole } from "./middleware/auth.js";
 
 import { RecommendWeeklyFocusUseCase } from "../../application/use-cases/recommend-weekly-focus.js";
 import { PrismaInsightsRepository } from "../../infrastructure/repositories/prisma-insights-repository.js";
+import { PrismaDecisionLogRepository } from "../../infrastructure/repositories/prisma-decision-log-repository";
+import { GenerateWeeklyFocusSnapshotUseCase } from "../../application/use-cases/generate-weekly-focus-snapshot";
 
 
 export async function registerRoutes(app: FastifyInstance) {
@@ -51,13 +53,27 @@ export async function registerRoutes(app: FastifyInstance) {
 
     const insightsRepo = new PrismaInsightsRepository();
     const recommendWeeklyFocus = new RecommendWeeklyFocusUseCase(insightsRepo);
-
+    const decisionLogRepo = new PrismaDecisionLogRepository();
+    const generateWeeklySnapshot = new GenerateWeeklyFocusSnapshotUseCase(
+        recommendWeeklyFocus,
+        decisionLogRepo
+    );
+    
     app.get(
         "/v1/recommendations/weekly-focus",
         { preHandler: [requireAuth, requireRole("ADMIN")] },
         async () => {
             const items = await recommendWeeklyFocus.execute();
             return { ok: true, items };
+        }
+    );
+
+    app.get(
+        "/v1/decisions/weekly-focus/latest",
+        { preHandler: [requireAuth, requireRole("ADMIN")] },
+        async () => {
+            const row = await decisionLogRepo.findLatest("v1");
+            return { ok: true, decisionLog: row };
         }
     );
 
@@ -84,5 +100,15 @@ export async function registerRoutes(app: FastifyInstance) {
             return reply.code(400).send({ error: "Invalid request" });
         }
     });
+
+    app.post(
+        "/v1/decisions/weekly-focus/generate",
+        { preHandler: [requireAuth, requireRole("ADMIN")] },
+        async (request, reply) => {
+            const row = await generateWeeklySnapshot.execute();
+            return reply.code(201).send({ ok: true, decisionLog: row });
+        }
+    );
+
     await app.register(authRoutes, { prefix: "/v1/auth" });
 }
