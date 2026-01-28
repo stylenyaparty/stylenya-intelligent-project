@@ -3,11 +3,11 @@ import { useAuth } from "../auth/useAuth";
 import { useNavigate } from "react-router-dom";
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, loading } = useAuth();
   const nav = useNavigate();
 
-  const [email, setEmail] = useState("admin@stylenya.com");
-  const [password, setPassword] = useState("Admin123!Admin123!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
   async function onSubmit(e: React.FormEvent) {
@@ -16,8 +16,8 @@ export default function Login() {
     try {
       await login(email, password);
       nav("/", { replace: true });
-    } catch (e: any) {
-      setError(e?.message ?? "Login failed");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Login failed");
     }
   }
 
@@ -26,10 +26,23 @@ export default function Login() {
       <h1>Login</h1>
       <form onSubmit={onSubmit}>
         <div style={{ display: "grid", gap: 12 }}>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" />
-          <button type="submit">Sign in</button>
-          {error && <p>{error}</p>}
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            required
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            required
+          />
+          <button type="submit" disabled={loading}>
+            {loading ? "Signing in..." : "Sign in"}
+          </button>
+          {error && <p style={{ color: "crimson" }}>{error}</p>}
         </div>
       </form>
     </div>
