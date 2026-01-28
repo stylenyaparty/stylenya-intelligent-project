@@ -71,6 +71,20 @@ model Settings {
   updatedAt DateTime @updatedAt
 }
 
+model DecisionLog {
+  id           String   @id @default(uuid())
+  weekStart    DateTime
+  engineVersion String  @default("v1")
+
+  // snapshot JSON de items (WeeklyFocusItem[])
+  itemsJson     Json
+
+  createdAt     DateTime @default(now())
+
+  @@unique([weekStart, engineVersion])
+  @@index([weekStart])
+}
+
 enum UserRole {
   ADMIN
   USER
