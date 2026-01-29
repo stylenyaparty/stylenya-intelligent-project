@@ -83,6 +83,13 @@ export async function registerRoutes(app: FastifyInstance) {
 
         try {
             const result = await createInitialAdmin.execute(body);
+            if (!result.created) {
+                const message =
+                    result.reason === "SETUP_ALREADY_COMPLETED"
+                        ? "Initial setup already completed"
+                        : "Email already exists";
+                return reply.code(409).send({ error: message });
+            }
             return reply.code(201).send(result);
         } catch (err: any) {
             if (err instanceof SetupAlreadyCompletedError) {
