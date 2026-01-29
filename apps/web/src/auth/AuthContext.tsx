@@ -15,14 +15,12 @@ export type AuthContextType = {
   refreshMe: () => Promise<void>;
 };
 
-// eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext<AuthContextType>(null!);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Source of truth: /v1/me (si token válido -> user; si no -> null)
   async function refreshMe() {
     try {
       const u = await fetchMe();
@@ -32,7 +30,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // Hydration inicial
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -45,11 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       const u = await apiLogin(email, password);
-      // /login devuelve {id,email,role}; lo normalizamos a {sub,...}
       setUser({ sub: u.id, email: u.email, role: u.role });
-
-      // Importante: validamos sesión contra /me (token + middleware)
-      // Si algo falló con el token/header, esto lo detecta al instante.
       await refreshMe();
     } finally {
       setLoading(false);

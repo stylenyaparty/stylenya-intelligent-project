@@ -1,0 +1,103 @@
+import { useLocation } from "react-router-dom";
+import { LayoutDashboard, Target, ClipboardList } from "lucide-react";
+import { NavLink } from "@/components/NavLink";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarHeader,
+  useSidebar,
+} from "@/components/ui/sidebar";
+
+const navigationItems = [
+  { 
+    title: "Dashboard", 
+    url: "/dashboard", 
+    icon: LayoutDashboard,
+    description: "Overview & KPIs"
+  },
+  { 
+    title: "Weekly Focus", 
+    url: "/dashboard/weekly-focus", 
+    icon: Target,
+    description: "Prioritized actions"
+  },
+  { 
+    title: "Decisions", 
+    url: "/dashboard/decisions", 
+    icon: ClipboardList,
+    description: "Decision log"
+  },
+];
+
+export function AppSidebar() {
+  const location = useLocation();
+  const { state } = useSidebar();
+  const isCollapsed = state === "collapsed";
+
+  const isActive = (path: string) => {
+    if (path === "/dashboard") {
+      return location.pathname === "/dashboard" || location.pathname === "/dashboard/";
+    }
+    return location.pathname.startsWith(path);
+  };
+
+  return (
+    <Sidebar 
+      className="border-r border-sidebar-border"
+      collapsible="icon"
+    >
+      <SidebarHeader className="h-14 flex items-center justify-center border-b border-sidebar-border">
+        <div className="flex items-center gap-2 px-2">
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+            <span className="text-primary-foreground font-bold text-sm">S</span>
+          </div>
+          {!isCollapsed && (
+            <div className="flex flex-col">
+              <span className="font-semibold text-sm text-sidebar-foreground">Stylenya</span>
+              <span className="text-xs text-muted-foreground">Intelligence</span>
+            </div>
+          )}
+        </div>
+      </SidebarHeader>
+
+      <SidebarContent className="px-2 py-4">
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+            Navigation
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu className="space-y-1">
+              {navigationItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton 
+                    asChild
+                    isActive={isActive(item.url)}
+                    tooltip={isCollapsed ? item.title : undefined}
+                  >
+                    <NavLink 
+                      to={item.url} 
+                      end={item.url === "/dashboard"}
+                      className="flex items-center gap-3 px-3 py-2 rounded-md transition-colors hover:bg-sidebar-accent"
+                      activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                    >
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      {!isCollapsed && (
+                        <span className="truncate">{item.title}</span>
+                      )}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+    </Sidebar>
+  );
+}
