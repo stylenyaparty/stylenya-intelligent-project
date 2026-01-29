@@ -1,146 +1,95 @@
-import { randomUUID } from "crypto";
-import type { PrismaInsightsRepository } from "../../infrastructure/repositories/prisma-insights-repository";
+import type { SalesPeriod } from "@prisma/client";
+import { prisma } from "../../infrastructure/db/prisma";
+import { evaluateProduct } from "../../modules/recommendations/rule-engine";
+import type { WeeklyFocusItem } from "../../modules/recommendations/types";
 
-type DecisionType = "BOOST" | "KEEP" | "PAUSE" | "RETIRE" | "MIGRATE" | "LAUNCH" | "PROMOTE";
-type TargetType = "PRODUCT" | "COLLECTION" | "THEME";
-type Confidence = "LOW" | "MED" | "HIGH";
-
-export type WeeklyFocusItem = {
-    id: string;
-    decisionType: DecisionType;
-    targetType: TargetType;
-    targetId: string;
-    title: string;
-    why: string[];
-    confidence: Confidence;
-    evidence: Record<string, any>;
-    createdAt: string;
-};
+type SalesIndex = Record<string, Partial<Record<SalesPeriod, { unitsSold: number }>>>;
 
 export class RecommendWeeklyFocusUseCase {
-    constructor(private repo: PrismaInsightsRepository) { }
+    async execute(input?: { limit?: number }): Promise<WeeklyFocusItem[]> {
+        const { items } = await this.executeDetailed(input);
+        return items;
+    }
 
-    async execute(): Promise<WeeklyFocusItem[]> {
-        const settings =
-            (await this.repo.getSettings()) ?? {
-                boostSalesThresholdD90: 10,
-                retireSalesThresholdD180: 2,
-                requestThemePriorityThreshold: 3,
-                defaultCurrency: "USD",
-            };
-        const products = await this.repo.listProducts();
-        const productIds = products.map((p) => p.id);
-        const sales = await this.repo.getSalesAgg(productIds);
-        const themeCounts = await this.repo.getThemeRequestCounts();
+    async executeDetailed(input?: { limit?: number }): Promise<{
+        asOf: string;
+        limit: number;
+        items: WeeklyFocusItem[];
+    }> {
+        const limit = Math.min(Math.max(input?.limit ?? 7, 1), 25);
 
-        // Index sales by product+period (Prisma camelCase)
-        const byProd: Record<
-            string,
-            Record<string, { unitsSold: number; revenueAmount: number }>
-        > = {};
+        const settingsRow = await prisma.settings.upsert({
+            where: { id: 1 },
+            update: {},
+            create: { id: 1 },
+            select: {
+                boostSalesThresholdD90: true,
+                retireSalesThresholdD180: true,
+                requestThemePriorityThreshold: true,
+            },
+        });
 
+        const products = await prisma.product.findMany({
+            where: { status: "ACTIVE" },
+            select: {
+                id: true,
+                name: true,
+                seasonality: true,
+                shopifyProductId: true,
+            },
+        });
+
+        const sales = await prisma.salesRecord.findMany({
+            where: { salesPeriod: { in: ["D90", "D180"] } },
+            orderBy: { asOfDate: "desc" },
+            select: { productId: true, salesPeriod: true, unitsSold: true, asOfDate: true },
+        });
+
+        const salesIdx: SalesIndex = {};
         for (const s of sales) {
-            const pid = s.productId;
-            const period = s.salesPeriod; // "D90", "D180", etc.
-
-            byProd[pid] ||= {};
-            byProd[pid][period] = {
-                unitsSold: s.unitsSold ?? 0,
-                revenueAmount: Number(s.revenueAmount ?? 0),
-            };
+            salesIdx[s.productId] ??= {};
+            if (salesIdx[s.productId]?.[s.salesPeriod]) continue; // ya tomamos el más reciente
+            salesIdx[s.productId][s.salesPeriod] = { unitsSold: s.unitsSold };
         }
 
-        const items: WeeklyFocusItem[] = [];
+        const since = new Date();
+        since.setDate(since.getDate() - 30);
 
-        // --- Product rules
-        for (const p of products) {
-            const d90 = byProd[p.id]?.D90 ?? { unitsSold: 0, revenueAmount: 0 };
-            const d180 = byProd[p.id]?.D180 ?? { unitsSold: 0, revenueAmount: 0 };
+        const reqs = await prisma.request.findMany({
+            where: { createdAt: { gte: since } },
+            select: { productId: true },
+        });
 
-            const inShopify = !!p.shopifyProductId;
-            const inEtsy = !!p.etsyListingId;
-
-            // MIGRATE: buen Etsy, no está en Shopify
-            if (inEtsy && !inShopify && d90.unitsSold >= settings.boostSalesThresholdD90) {
-                items.push({
-                    id: randomUUID(),
-                    decisionType: "MIGRATE",
-                    targetType: "PRODUCT",
-                    targetId: p.id,
-                    title: `Migrate: ${p.name} → Shopify`,
-                    why: [
-                        `Strong Etsy performance in last 90d (${d90.unitsSold} units).`,
-                        "Not yet available in Shopify (cold-start risk).",
-                    ],
-                    confidence: "HIGH",
-                    evidence: { d90, inShopify, inEtsy, seasonality: p.seasonality, productSource: p.productSource },
-                    createdAt: new Date().toISOString(),
-                });
-                continue;
-            }
-
-            // BOOST: buen performance
-            if (d90.unitsSold >= settings.boostSalesThresholdD90) {
-                items.push({
-                    id: randomUUID(),
-                    decisionType: "BOOST",
-                    targetType: "PRODUCT",
-                    targetId: p.id,
-                    title: `Boost: ${p.name}`,
-                    why: [
-                        `Meets boost threshold in last 90d (${d90.unitsSold} units).`,
-                        "Candidate for Product of the Week / promo copy.",
-                    ],
-                    confidence: inEtsy ? "HIGH" : "MED",
-                    evidence: { d90, inShopify, inEtsy, seasonality: p.seasonality },
-                    createdAt: new Date().toISOString(),
-                });
-            }
-
-            // RETIRE candidate: muy bajo 180d y no estacional
-            if ((d180.unitsSold ?? 0) <= settings.retireSalesThresholdD180 && p.seasonality === "NONE") {
-                items.push({
-                    id: randomUUID(),
-                    decisionType: "RETIRE",
-                    targetType: "PRODUCT",
-                    targetId: p.id,
-                    title: `Retire candidate: ${p.name}`,
-                    why: [
-                        `Low performance in last 180d (${d180.unitsSold} units).`,
-                        "Not seasonal (no upcoming seasonal upside).",
-                    ],
-                    confidence: "MED",
-                    evidence: { d180, seasonality: p.seasonality },
-                    createdAt: new Date().toISOString(),
-                });
-            }
+        const requestsByProduct: Record<string, number> = {};
+        for (const r of reqs) {
+            if (!r.productId) continue;
+            requestsByProduct[r.productId] = (requestsByProduct[r.productId] ?? 0) + 1;
         }
 
-        // --- Theme rule (LAUNCH)
-        for (const t of themeCounts) {
-            if (t.count >= settings.requestThemePriorityThreshold) {
-                items.push({
-                    id: randomUUID(),
-                    decisionType: "LAUNCH",
-                    targetType: "THEME",
-                    targetId: t.theme,
-                    title: `Launch theme: ${t.theme}`,
-                    why: [
-                        `High request volume (${t.count}).`,
-                        "Opportunity to create new SKUs aligned to demand.",
-                    ],
-                    confidence: "MED",
-                    evidence: { requestsCount: t.count },
-                    createdAt: new Date().toISOString(),
-                });
-            }
-        }
+        const evaluated: WeeklyFocusItem[] = products.map((p) => {
+            const d90Units = salesIdx[p.id]?.D90?.unitsSold ?? 0;
+            const d180Units = salesIdx[p.id]?.D180?.unitsSold ?? 0;
 
-        // --- Prioritization (MVP simple)
-        const weight: Record<string, number> = { MIGRATE: 100, BOOST: 80, LAUNCH: 60, KEEP: 40, PAUSE: 30, RETIRE: 10, PROMOTE: 70 };
-        items.sort((a, b) => (weight[b.decisionType] ?? 0) - (weight[a.decisionType] ?? 0));
+            return evaluateProduct({
+                productId: p.id,
+                name: p.name,
+                settings: settingsRow,
+                signals: {
+                    inShopify: Boolean(p.shopifyProductId),
+                    d90Units,
+                    d180Units,
+                    requests30d: requestsByProduct[p.id] ?? 0,
+                    seasonality: p.seasonality,
+                },
+            });
+        });
 
-        // Return top N (3–7 ideal)
-        return items.slice(0, 7);
+        evaluated.sort((a, b) => b.priorityScore - a.priorityScore);
+
+        return {
+            asOf: new Date().toISOString().slice(0, 10),
+            limit,
+            items: evaluated.slice(0, limit),
+        };
     }
 }
