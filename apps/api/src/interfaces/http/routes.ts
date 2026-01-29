@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
+import { recommendationsRoutes } from "./recommendations/routes";
 import { authRoutes } from "./auth/auth.routes";
+import { decisionsRoutes } from "./decisions/routes";
 
 import { z } from "zod";
 import { PrismaUserRepository } from "../../infrastructure/repositories/prisma-user-repository";
@@ -13,12 +15,16 @@ import {
 import { requireAuth, requireRole } from "./middleware/auth.js"; 
 
 import { RecommendWeeklyFocusUseCase } from "../../application/use-cases/recommend-weekly-focus.js";
-import { PrismaInsightsRepository } from "../../infrastructure/repositories/prisma-insights-repository.js";
 import { PrismaDecisionLogRepository } from "../../infrastructure/repositories/prisma-decision-log-repository";
 import { GenerateWeeklyFocusSnapshotUseCase } from "../../application/use-cases/generate-weekly-focus-snapshot";
 
 
 export async function registerRoutes(app: FastifyInstance) {
+
+    app.register(recommendationsRoutes, { prefix: "/v1" });
+
+    app.register(decisionsRoutes, { prefix: "/v1" });
+    
     app.get("/v1/me", { preHandler: requireAuth }, async (request) => {
         return { ok: true, auth: request.auth };
     });
@@ -51,23 +57,13 @@ export async function registerRoutes(app: FastifyInstance) {
         return result;
     });
 
-    const insightsRepo = new PrismaInsightsRepository();
-    const recommendWeeklyFocus = new RecommendWeeklyFocusUseCase(insightsRepo);
+    const recommendWeeklyFocus = new RecommendWeeklyFocusUseCase();
     const decisionLogRepo = new PrismaDecisionLogRepository();
     const generateWeeklySnapshot = new GenerateWeeklyFocusSnapshotUseCase(
         recommendWeeklyFocus,
         decisionLogRepo
     );
     
-    app.get(
-        "/v1/recommendations/weekly-focus",
-        { preHandler: [requireAuth, requireRole("ADMIN")] },
-        async () => {
-            const items = await recommendWeeklyFocus.execute();
-            return { ok: true, items };
-        }
-    );
-
     app.get(
         "/v1/decisions/weekly-focus/latest",
         { preHandler: [requireAuth, requireRole("ADMIN")] },
@@ -76,7 +72,6 @@ export async function registerRoutes(app: FastifyInstance) {
             return { ok: true, decisionLog: row };
         }
     );
-
     app.post("/v1/initial-admin", async (request, reply) => {
         const BodySchema = z.object({
             email: z.string().email(),
