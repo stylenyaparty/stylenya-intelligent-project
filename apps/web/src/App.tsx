@@ -1,47 +1,60 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "./auth/AuthContext";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { PublicOnlyRoute } from "./auth/PublicOnlyRoute";
+import { AppLayout } from "./components/layout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import WeeklyFocusPage from "./pages/WeeklyFocusPage";
 import DecisionsPage from "./pages/DecisionsPage";
+import NotFound from "./pages/NotFound";
 
-export default function App() {
-  return (
-    <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          {/* Rutas públicas SOLO para no autenticados */}
-          <Route
-            path="/login"
-            element={
-              <PublicOnlyRoute>
-                <Login />
-              </PublicOnlyRoute>
-            }
-          />
+const queryClient = new QueryClient();
 
-          {/* Rutas protegidas */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          >
-            {/* default */}
-            <Route index element={<Navigate to="weekly-focus" replace />} />
-            <Route path="weekly-focus" element={<WeeklyFocusPage />} />
-            <Route path="decisions" element={<DecisionsPage />} />
-          </Route>
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <AuthProvider>
+          <Routes>
+            {/* Public routes - only for non-authenticated users */}
+            <Route
+              path="/login"
+              element={
+                <PublicOnlyRoute>
+                  <Login />
+                </PublicOnlyRoute>
+              }
+            />
 
-          {/* redirect root */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
-      </AuthProvider>
-    </BrowserRouter>
-  );
-}
+            {/* Protected routes with layout */}
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <AppLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="weekly-focus" element={<WeeklyFocusPage />} />
+              <Route path="decisions" element={<DecisionsPage />} />
+            </Route>
+
+            {/* Redirects */}
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
+      </BrowserRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
+
+export default App;
