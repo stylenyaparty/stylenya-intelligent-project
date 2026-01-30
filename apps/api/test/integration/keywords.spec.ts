@@ -1,11 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
-import { createTestServer, getAuthToken, seedAdmin } from "../helpers.js";
+import { createTestServer, getAuthToken, seedAdmin, resetDatabase } from "../helpers.js";
 
 describe("Keywords API", () => {
     let app: FastifyInstance;
-    let request: supertest.SuperTest<supertest.Test>;
+    let request: ReturnType<typeof supertest>;
+
+    let cachedHeaders: { Authorization: string } | null = null;
 
     beforeAll(async () => {
         app = await createTestServer();
@@ -17,9 +19,16 @@ describe("Keywords API", () => {
     });
 
     async function authHeader() {
-        const admin = await seedAdmin(app, { email: `admin-${Date.now()}@example.com` });
+        if (cachedHeaders) return cachedHeaders;
+
+        const admin = await seedAdmin(app, {
+            email: "admin@example.com",
+            password: "AdminPass123!",
+        });
+
         const token = await getAuthToken(app, admin.email, admin.password);
-        return { Authorization: `Bearer ${token}` };
+        cachedHeaders = { Authorization: `Bearer ${token}` };
+        return cachedHeaders;
     }
 
     it("creates seeds with normalization and dedupe", async () => {
@@ -57,7 +66,9 @@ describe("Keywords API", () => {
             .send({ terms: ["wedding favors", "bridal shower decor"] })
             .expect(201);
 
-        const seedIds = seeds.body.created.map((seed: { id: string }) => seed.id);
+        const seedIds = [...seeds.body.created, ...seeds.body.existing].map(
+            (seed: { id: string }) => seed.id
+        );
 
         const response = await request
             .post("/v1/keywords/jobs")
@@ -87,13 +98,13 @@ describe("Keywords API", () => {
                 language: "EN",
                 params: { occasion: "birthday", productType: "banner", audience: "kids" },
             })
-            .expect(201);
+        console.log("AUTO job status/body:", response.status, response.body);
+        //.expect(201);
+            expect(response.status).toBe(201);
 
         expect(response.body.job.mode).toBe("AUTO");
         expect(response.body.items.length).toBeGreaterThan(0);
-        expect(
-            response.body.items.every((item: { source: string }) => item.source === "AUTO")
-        ).toBe(true);
+        expect(response.body.items.every((item: { source: string }) => item.source === "AUTO")).toBe(true);
     });
 
     it("creates a HYBRID job with deduped items", async () => {
@@ -105,7 +116,9 @@ describe("Keywords API", () => {
             .send({ terms: ["Party Decorations Banner"] })
             .expect(201);
 
-        const seedIds = seeds.body.created.map((seed: { id: string }) => seed.id);
+        const seedIds = [...seeds.body.created, ...seeds.body.existing].map(
+            (seed: { id: string }) => seed.id
+        );
 
         const response = await request
             .post("/v1/keywords/jobs")
@@ -118,7 +131,9 @@ describe("Keywords API", () => {
                 params: { productType: "banner" },
                 seedIds,
             })
-            .expect(201);
+        console.log("HYBRID status/body:", response.status, response.body);
+        expect(response.status).toBe(201);
+           // .expect(201);
 
         const terms = response.body.items.map((item: { term: string }) => item.term);
         const uniqueTerms = new Set(terms);

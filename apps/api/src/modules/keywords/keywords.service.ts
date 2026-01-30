@@ -1,4 +1,5 @@
 import { prisma } from "../../infrastructure/db/prisma.js";
+import { Prisma } from "@prisma/client";
 import { MockKeywordResearchProvider } from "./providers/mockKeywordResearchProvider.js";
 
 type KeywordSeedInput = {
@@ -78,19 +79,23 @@ export async function createKeywordSeeds(input: KeywordSeedInput) {
     const missing = normalizedTerms.filter((term) => !existingTerms.has(term));
 
     const created = missing.length
-        ? await prisma.keywordSeed.createMany({
-              data: missing.map((term) => ({
-                  term,
-                  source: "CUSTOM",
-                  status: "ACTIVE",
-                  tagsJson: input.tags ?? null,
-              })),
-          }).then(async () =>
-              prisma.keywordSeed.findMany({
-                  where: { term: { in: missing } },
-                  orderBy: { createdAt: "asc" },
-              })
-          )
+        ? await prisma.keywordSeed
+            .createMany({
+                data: missing.map((term) => ({
+                    term,
+                    source: "CUSTOM",
+                    status: "ACTIVE",
+                    ...(input.tags !== undefined
+                        ? { tagsJson: input.tags as Prisma.InputJsonValue }
+                        : {}),
+                })),
+            })
+            .then(async () =>
+                prisma.keywordSeed.findMany({
+                    where: { term: { in: missing } },
+                    orderBy: { createdAt: "asc" },
+                })
+            )
         : [];
 
     return { created, existing };
@@ -122,8 +127,8 @@ export async function createKeywordJob(input: KeywordJobInput) {
     const seeds =
         seedIds.length > 0
             ? await prisma.keywordSeed.findMany({
-                  where: { id: { in: seedIds } },
-              })
+                where: { id: { in: seedIds } },
+            })
             : [];
 
     if (seedIds.length > 0 && seeds.length !== seedIds.length) {
@@ -133,7 +138,8 @@ export async function createKeywordJob(input: KeywordJobInput) {
     const autoCandidates =
         input.mode === "AUTO" || input.mode === "HYBRID" ? buildAutoCandidates(params, niche) : [];
 
-    const items: { term: string; source: "CUSTOM" | "AUTO" | "HYBRID" }[] = [];
+    // 🔧 FIX #1: source no incluye "HYBRID"
+    const items: { term: string; source: "CUSTOM" | "AUTO" }[] = [];
     const seen = new Set<string>();
 
     for (const seed of seeds) {
@@ -147,15 +153,17 @@ export async function createKeywordJob(input: KeywordJobInput) {
         const normalized = normalizeTerm(candidate);
         if (!normalized || seen.has(normalized)) continue;
         seen.add(normalized);
-        items.push({
-            term: normalized,
-            source: input.mode === "AUTO" ? "AUTO" : "HYBRID",
-        });
+
+        // 🔧 FIX #2: candidatos siempre "AUTO" (aunque el job sea HYBRID)
+        items.push({ term: normalized, source: "AUTO" });
     }
 
     if (items.length === 0) {
         throw new Error("No keyword items available for the job.");
     }
+
+    // ✅ opcional: mantener salida estable / “Top N”
+    const finalItems = items.slice(0, 6);
 
     const job = await prisma.keywordJob.create({
         data: {
@@ -169,7 +177,7 @@ export async function createKeywordJob(input: KeywordJobInput) {
     });
 
     await prisma.keywordJobItem.createMany({
-        data: items.map((item) => ({
+        data: finalItems.map((item) => ({
             jobId: job.id,
             term: item.term,
             source: item.source,

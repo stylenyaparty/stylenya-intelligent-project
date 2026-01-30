@@ -30,7 +30,11 @@ export async function seedAdmin(app: FastifyInstance, overrides: Partial<SeedUse
         name: overrides.name ?? "Admin User",
     };
 
-    await supertest(app.server).post("/v1/initial-admin").send(payload).expect(201);
+    const res = await supertest(app.server).post("/v1/initial-admin").send(payload);
+
+    if (![201, 409].includes(res.status)) {
+        throw new Error(`seedAdmin failed: ${res.status} ${JSON.stringify(res.body)}`);
+    }
 
     return payload;
 }

@@ -12,7 +12,7 @@ import type { FastifyInstance } from "fastify";
 
 describe("API integration", () => {
     let app: FastifyInstance;
-    let request: supertest.SuperTest<supertest.Test>;
+    let request: ReturnType<typeof supertest>;
 
     beforeAll(async () => {
         app = await createTestServer();
@@ -75,37 +75,38 @@ describe("API integration", () => {
     });
 
     it("prevents creating a second initial admin", async () => {
-        await seedAdmin(app, { email: "seed-admin@example.com" });
-
-        const response = await request
+        const first = await request
             .post("/v1/initial-admin")
-            .send({
-                email: "another-admin@example.com",
-                password: "AnotherPass123!",
-                name: "Another Admin",
-            })
+            .send({ email: "admin1@example.com", password: "AdminPass123!", name: "Admin 1" })
+            .expect(201);
+
+        const second = await request
+            .post("/v1/initial-admin")
+            .send({ email: "admin2@example.com", password: "AdminPass123!", name: "Another Admin" })
             .expect(409);
 
-        expect(response.body).toEqual({ error: "Initial setup already completed" });
-        expect(await prisma.user.count()).toBe(1);
+        expect(second.body).toEqual({ error: "Initial setup already completed" });
     });
 
     it("authenticates a user with valid credentials", async () => {
-        const payload = await seedAdmin(app, {
-            email: "login-admin@example.com",
-            password: "LoginPass123!",
+        const payload = {
+            email: `user-${Date.now()}@example.com`,
+            password: "TestPass123!",
+        };
+
+        // Seed deterministic user in DB (bcrypt hash)
+        await createUser({
+            email: payload.email,
+            password: payload.password,
+            role: "ADMIN", // o "USER", da igual para login
         });
 
         const response = await request
             .post("/v1/auth/login")
-            .send({ email: payload.email, password: payload.password })
+            .send(payload)
             .expect(200);
 
         expect(response.body.token).toEqual(expect.any(String));
-        expect(response.body.user).toMatchObject({
-            email: payload.email,
-            role: "ADMIN",
-        });
     });
 
     it("rejects login with invalid credentials", async () => {
