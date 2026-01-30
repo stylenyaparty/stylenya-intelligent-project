@@ -91,33 +91,47 @@ export default function WeeklyFocusPage() {
   const items = useMemo(() => data?.items ?? [], [data]);
 
   async function createDecision() {
-    if (!selected) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await api(`/v1/decisions`, {
-        method: "POST",
-        body: JSON.stringify({
-          productId: selected.productId,
-          decisionType: selected.action,
-          rationale: rationale || selected.why,
-          expectedImpact: expectedImpact || undefined,
-          engineVersion: "v1",
-          engineSnapshot: selected,
-        }),
-      });
-      // Reset modal
-      setSelected(null);
-      setRationale("");
-      setExpectedImpact("");
-      // Reload data
-      await load();
-    } catch (e: unknown) {
-      setError((e instanceof Error ? e.message : String(e)) || "Failed to create decision");
-    } finally {
-      setBusy(false);
-    }
+  if (!selected) return;
+
+  const decidedProductId = selected.productId; // guardamos antes de resetear selected
+  setBusy(true);
+  setError(null);
+
+  try {
+    await api(`/v1/decisions`, {
+      method: "POST",
+      body: JSON.stringify({
+        productId: selected.productId,
+        decisionType: selected.action,
+        rationale: rationale || selected.why,
+        expectedImpact: expectedImpact || undefined,
+        engineVersion: "v1",
+        engineSnapshot: selected,
+      }),
+    });
+
+    // ✅ Optimistic UI: quita el item decidido de la tabla inmediatamente
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        items: prev.items.filter((x) => x.productId !== decidedProductId),
+      };
+    });
+
+    // Reset modal
+    setSelected(null);
+    setRationale("");
+    setExpectedImpact("");
+
+    // Reload data (source of truth)
+    //await load();
+  } catch (e: unknown) {
+    setError((e instanceof Error ? e.message : String(e)) || "Failed to create decision");
+  } finally {
+    setBusy(false);
   }
+}
 
   function openCreateModal(item: WeeklyFocusItem) {
     setSelected(item);
