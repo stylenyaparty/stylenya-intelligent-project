@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { recommendationsRoutes } from "./recommendations/routes";
 import { authRoutes } from "./auth/auth.routes";
 import { decisionsRoutes } from "./decisions/routes";
+import { keywordsRoutes } from "../../modules/keywords/keywords.routes";
 
 import { z } from "zod";
 import { PrismaUserRepository } from "../../infrastructure/repositories/prisma-user-repository";
@@ -24,6 +25,8 @@ export async function registerRoutes(app: FastifyInstance) {
     app.register(recommendationsRoutes, { prefix: "/v1" });
 
     app.register(decisionsRoutes, { prefix: "/v1" });
+
+    app.register(keywordsRoutes, { prefix: "/v1" });
     
     app.get("/v1/me", { preHandler: requireAuth }, async (request) => {
         return { ok: true, auth: request.auth };

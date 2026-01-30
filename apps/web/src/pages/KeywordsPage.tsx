@@ -1,0 +1,743 @@
+import { useEffect, useMemo, useState } from "react";
+import { api } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  PageHeader,
+  LoadingState,
+  ErrorState,
+  EmptyState,
+} from "@/components/dashboard";
+import { RefreshCw, Plus, Play, Tags, FolderSearch } from "lucide-react";
+
+type KeywordSeed = {
+  id: string;
+  term: string;
+  source: "CUSTOM" | "AUTO";
+  status: "ACTIVE" | "ARCHIVED";
+  tagsJson?: unknown;
+  createdAt: string;
+};
+
+type KeywordJob = {
+  id: string;
+  mode: "CUSTOM" | "AUTO" | "HYBRID";
+  marketplace: "ETSY" | "SHOPIFY" | "GOOGLE";
+  language: "EN" | "ES";
+  niche: string;
+  status: "PENDING" | "RUNNING" | "DONE" | "FAILED";
+  createdAt: string;
+};
+
+type KeywordJobItem = {
+  id: string;
+  term: string;
+  source: "CUSTOM" | "AUTO" | "HYBRID";
+  status: "PENDING" | "DONE" | "FAILED";
+  resultJson?: {
+    summary?: string;
+    interestScore?: number;
+    competitionScore?: number;
+    relatedKeywords?: string[];
+  } | null;
+};
+
+type SeedResponse = {
+  ok: boolean;
+  seeds: KeywordSeed[];
+};
+
+type SeedCreateResponse = {
+  ok: boolean;
+  created: KeywordSeed[];
+  existing: KeywordSeed[];
+};
+
+type JobResponse = {
+  ok: boolean;
+  jobs: KeywordJob[];
+};
+
+type JobCreateResponse = {
+  ok: boolean;
+  job: KeywordJob;
+  items: KeywordJobItem[];
+};
+
+type JobItemsResponse = {
+  ok: boolean;
+  items: KeywordJobItem[];
+};
+
+export default function KeywordsPage() {
+  const [activeTab, setActiveTab] = useState("seeds");
+  const [seedInput, setSeedInput] = useState("");
+  const [seeds, setSeeds] = useState<KeywordSeed[]>([]);
+  const [jobs, setJobs] = useState<KeywordJob[]>([]);
+  const [items, setItems] = useState<KeywordJobItem[]>([]);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [loadingSeeds, setLoadingSeeds] = useState(false);
+  const [loadingJobs, setLoadingJobs] = useState(false);
+  const [loadingItems, setLoadingItems] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [jobDialogOpen, setJobDialogOpen] = useState(false);
+  const [jobMode, setJobMode] = useState<KeywordJob["mode"]>("AUTO");
+  const [jobMarketplace, setJobMarketplace] = useState<KeywordJob["marketplace"]>("ETSY");
+  const [jobLanguage, setJobLanguage] = useState<KeywordJob["language"]>("EN");
+  const [jobNiche, setJobNiche] = useState("party decorations");
+  const [jobOccasion, setJobOccasion] = useState("");
+  const [jobProductType, setJobProductType] = useState("");
+  const [jobAudience, setJobAudience] = useState("");
+  const [jobGeo, setJobGeo] = useState("");
+  const [jobSeedIds, setJobSeedIds] = useState<string[]>([]);
+
+  const activeSeeds = useMemo(
+    () => seeds.filter((seed) => seed.status === "ACTIVE"),
+    [seeds]
+  );
+
+  async function loadSeeds() {
+    setLoadingSeeds(true);
+    setError(null);
+    try {
+      const res = await api<SeedResponse>("/v1/keywords/seeds");
+      setSeeds(res.seeds);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to load seeds");
+    } finally {
+      setLoadingSeeds(false);
+    }
+  }
+
+  async function loadJobs() {
+    setLoadingJobs(true);
+    setError(null);
+    try {
+      const res = await api<JobResponse>("/v1/keywords/jobs");
+      setJobs(res.jobs);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to load jobs");
+    } finally {
+      setLoadingJobs(false);
+    }
+  }
+
+  async function loadItems(jobId: string) {
+    setLoadingItems(true);
+    setError(null);
+    try {
+      const res = await api<JobItemsResponse>(`/v1/keywords/jobs/${jobId}/items`);
+      setItems(res.items);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to load results");
+    } finally {
+      setLoadingItems(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadSeeds();
+    void loadJobs();
+  }, []);
+
+  useEffect(() => {
+    if (selectedJobId) {
+      void loadItems(selectedJobId);
+    }
+  }, [selectedJobId]);
+
+  async function submitSeeds() {
+    const terms = seedInput
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (terms.length === 0) return;
+
+    setLoadingSeeds(true);
+    setError(null);
+    try {
+      const res = await api<SeedCreateResponse>("/v1/keywords/seeds", {
+        method: "POST",
+        body: JSON.stringify({ terms }),
+      });
+      setSeedInput("");
+      setSeeds((prev) => [...res.created, ...res.existing, ...prev]);
+      await loadSeeds();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to create seeds");
+    } finally {
+      setLoadingSeeds(false);
+    }
+  }
+
+  async function toggleSeedStatus(seed: KeywordSeed) {
+    setLoadingSeeds(true);
+    setError(null);
+    try {
+      await api(`/v1/keywords/seeds/${seed.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: seed.status === "ACTIVE" ? "ARCHIVED" : "ACTIVE",
+        }),
+      });
+      await loadSeeds();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to update seed");
+    } finally {
+      setLoadingSeeds(false);
+    }
+  }
+
+  async function createJob() {
+    if ((jobMode === "CUSTOM" || jobMode === "HYBRID") && jobSeedIds.length === 0) {
+      setError("Select at least one seed for this mode.");
+      return;
+    }
+
+    setLoadingJobs(true);
+    setError(null);
+    try {
+      const payload = {
+        mode: jobMode,
+        marketplace: jobMarketplace,
+        language: jobLanguage,
+        niche: jobNiche || undefined,
+        params: {
+          occasion: jobOccasion || undefined,
+          productType: jobProductType || undefined,
+          audience: jobAudience || undefined,
+          geo: jobGeo || undefined,
+        },
+        seedIds: jobMode === "AUTO" ? undefined : jobSeedIds,
+      };
+
+      const res = await api<JobCreateResponse>("/v1/keywords/jobs", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setJobDialogOpen(false);
+      setJobSeedIds([]);
+      setJobs((prev) => [res.job, ...prev]);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to create job");
+    } finally {
+      setLoadingJobs(false);
+    }
+  }
+
+  async function runJob(jobId: string) {
+    setLoadingItems(true);
+    setError(null);
+    try {
+      await api(`/v1/keywords/jobs/${jobId}/run`, {
+        method: "POST",
+      });
+      await loadJobs();
+      if (selectedJobId === jobId) {
+        await loadItems(jobId);
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to run job");
+    } finally {
+      setLoadingItems(false);
+    }
+  }
+
+  async function promoteToSeeds(term: string) {
+    setLoadingSeeds(true);
+    setError(null);
+    try {
+      await api("/v1/keywords/seeds", {
+        method: "POST",
+        body: JSON.stringify({ terms: [term] }),
+      });
+      await loadSeeds();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to promote seed");
+    } finally {
+      setLoadingSeeds(false);
+    }
+  }
+
+  const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? null;
+
+  return (
+    <div className="animate-fade-in space-y-6">
+      <PageHeader
+        title="Keywords"
+        description="Curate seed keywords and run research jobs to surface new opportunities."
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            void loadSeeds();
+            void loadJobs();
+            if (selectedJobId) {
+              void loadItems(selectedJobId);
+            }
+          }}
+          className="gap-2"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Refresh
+        </Button>
+      </PageHeader>
+
+      {error && (
+        <ErrorState
+          message={error}
+          onRetry={() => {
+            void loadSeeds();
+            void loadJobs();
+            if (selectedJobId) {
+              void loadItems(selectedJobId);
+            }
+          }}
+        />
+      )}
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="seeds">Seeds</TabsTrigger>
+          <TabsTrigger value="jobs">Jobs</TabsTrigger>
+          <TabsTrigger value="results">Results</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="seeds" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Tags className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg">Seed Library</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-2">
+                <Label htmlFor="seed-input">Add keywords (one per line)</Label>
+                <Textarea
+                  id="seed-input"
+                  placeholder="birthday banner\nbridal shower decor"
+                  value={seedInput}
+                  onChange={(event) => setSeedInput(event.target.value)}
+                  rows={4}
+                />
+                <div className="flex items-center justify-end">
+                  <Button onClick={submitSeeds} disabled={loadingSeeds || seedInput.trim() === ""}>
+                    Add Seeds
+                  </Button>
+                </div>
+              </div>
+
+              {loadingSeeds && <LoadingState message="Loading seeds..." />}
+
+              {!loadingSeeds && seeds.length === 0 ? (
+                <EmptyState
+                  title="No seeds yet"
+                  description="Add custom seeds to anchor your keyword research."
+                  icon={<Tags className="h-6 w-6 text-muted-foreground" />}
+                />
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead>Keyword</TableHead>
+                        <TableHead className="w-[120px]">Source</TableHead>
+                        <TableHead className="w-[120px]">Status</TableHead>
+                        <TableHead className="w-[140px] text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {seeds.map((seed) => (
+                        <TableRow key={seed.id}>
+                          <TableCell className="font-medium">{seed.term}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {seed.source}
+                          </TableCell>
+                          <TableCell className="text-sm">{seed.status}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => toggleSeedStatus(seed)}
+                            >
+                              {seed.status === "ACTIVE" ? "Archive" : "Restore"}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="jobs" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FolderSearch className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-lg">Research Jobs</CardTitle>
+                </div>
+                <Button onClick={() => setJobDialogOpen(true)} className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  New Job
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {loadingJobs && <LoadingState message="Loading jobs..." />}
+
+              {!loadingJobs && jobs.length === 0 ? (
+                <EmptyState
+                  title="No keyword jobs yet"
+                  description="Create a job to generate keyword research in CUSTOM, AUTO, or HYBRID mode."
+                  icon={<FolderSearch className="h-6 w-6 text-muted-foreground" />}
+                />
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead>Mode</TableHead>
+                        <TableHead>Marketplace</TableHead>
+                        <TableHead>Language</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="w-[140px] text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {jobs.map((job) => (
+                        <TableRow key={job.id}>
+                          <TableCell className="font-medium">{job.mode}</TableCell>
+                          <TableCell>{job.marketplace}</TableCell>
+                          <TableCell>{job.language}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {job.status}
+                          </TableCell>
+                          <TableCell className="text-right space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedJobId(job.id);
+                                setActiveTab("results");
+                              }}
+                            >
+                              View
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => runJob(job.id)}
+                              disabled={job.status === "RUNNING"}
+                              className="gap-1"
+                            >
+                              <Play className="h-4 w-4" />
+                              Run
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="results" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <FolderSearch className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-lg">Keyword Results</CardTitle>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={selectedJobId ?? ""}
+                    onValueChange={(value) => setSelectedJobId(value)}
+                  >
+                    <SelectTrigger className="w-[220px]">
+                      <SelectValue placeholder="Select job" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover border border-border shadow-lg">
+                      {jobs.map((job) => (
+                        <SelectItem key={job.id} value={job.id}>
+                          {job.mode} • {job.marketplace} • {job.language}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedJob && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => runJob(selectedJob.id)}
+                      disabled={selectedJob.status === "RUNNING"}
+                      className="gap-1"
+                    >
+                      <Play className="h-4 w-4" />
+                      Run
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {loadingItems && <LoadingState message="Loading results..." />}
+
+              {!loadingItems && !selectedJob && (
+                <EmptyState
+                  title="Select a job"
+                  description="Choose a job to view its keyword research results."
+                  icon={<FolderSearch className="h-6 w-6 text-muted-foreground" />}
+                />
+              )}
+
+              {!loadingItems && selectedJob && items.length === 0 ? (
+                <EmptyState
+                  title="No results yet"
+                  description="Run the job to generate keyword insights."
+                  icon={<FolderSearch className="h-6 w-6 text-muted-foreground" />}
+                />
+              ) : null}
+
+              {!loadingItems && selectedJob && items.length > 0 && (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead>Keyword</TableHead>
+                        <TableHead className="w-[110px]">Source</TableHead>
+                        <TableHead className="w-[140px] text-right">Interest</TableHead>
+                        <TableHead className="w-[160px] text-right">Competition</TableHead>
+                        <TableHead>Summary</TableHead>
+                        <TableHead className="w-[140px] text-right">Related</TableHead>
+                        <TableHead className="w-[160px] text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {items.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-medium">{item.term}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {item.source}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {item.resultJson?.interestScore ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {item.resultJson?.competitionScore ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground max-w-[320px]">
+                            <p className="line-clamp-2">
+                              {item.resultJson?.summary ?? "Run the job to view insights."}
+                            </p>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {item.resultJson?.relatedKeywords?.length ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {item.source !== "CUSTOM" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => promoteToSeeds(item.term)}
+                              >
+                                Promote
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      <Dialog open={jobDialogOpen} onOpenChange={setJobDialogOpen}>
+        <DialogContent className="sm:max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle>Create keyword job</DialogTitle>
+            <DialogDescription>
+              Choose a mode and parameters to generate keyword research items.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label>Mode</Label>
+              <Select value={jobMode} onValueChange={(value) => setJobMode(value as KeywordJob["mode"])}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select mode" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border border-border shadow-lg">
+                  <SelectItem value="CUSTOM">CUSTOM</SelectItem>
+                  <SelectItem value="AUTO">AUTO</SelectItem>
+                  <SelectItem value="HYBRID">HYBRID</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label>Marketplace</Label>
+                <Select
+                  value={jobMarketplace}
+                  onValueChange={(value) => setJobMarketplace(value as KeywordJob["marketplace"])}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border border-border shadow-lg">
+                    <SelectItem value="ETSY">ETSY</SelectItem>
+                    <SelectItem value="SHOPIFY">SHOPIFY</SelectItem>
+                    <SelectItem value="GOOGLE">GOOGLE</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Language</Label>
+                <Select
+                  value={jobLanguage}
+                  onValueChange={(value) => setJobLanguage(value as KeywordJob["language"])}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border border-border shadow-lg">
+                    <SelectItem value="EN">EN</SelectItem>
+                    <SelectItem value="ES">ES</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="job-niche">Niche</Label>
+              <Input
+                id="job-niche"
+                value={jobNiche}
+                onChange={(event) => setJobNiche(event.target.value)}
+                placeholder="party decorations"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label>Occasion</Label>
+                <Input
+                  value={jobOccasion}
+                  onChange={(event) => setJobOccasion(event.target.value)}
+                  placeholder="birthday"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Product type</Label>
+                <Input
+                  value={jobProductType}
+                  onChange={(event) => setJobProductType(event.target.value)}
+                  placeholder="banner"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Audience</Label>
+                <Input
+                  value={jobAudience}
+                  onChange={(event) => setJobAudience(event.target.value)}
+                  placeholder="kids"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Geo</Label>
+                <Input
+                  value={jobGeo}
+                  onChange={(event) => setJobGeo(event.target.value)}
+                  placeholder="US"
+                />
+              </div>
+            </div>
+
+            {(jobMode === "CUSTOM" || jobMode === "HYBRID") && (
+              <div className="grid gap-2">
+                <Label>Seed selection</Label>
+                <div className="grid gap-2 border rounded-md p-3 max-h-[180px] overflow-y-auto">
+                  {activeSeeds.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Add seeds to enable CUSTOM or HYBRID mode.
+                    </p>
+                  ) : (
+                    activeSeeds.map((seed) => (
+                      <label key={seed.id} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={jobSeedIds.includes(seed.id)}
+                          onCheckedChange={(checked) => {
+                            setJobSeedIds((prev) =>
+                              checked
+                                ? [...prev, seed.id]
+                                : prev.filter((id) => id !== seed.id)
+                            );
+                          }}
+                        />
+                        <span>{seed.term}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setJobDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={createJob} disabled={loadingJobs}>
+              Create Job
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
