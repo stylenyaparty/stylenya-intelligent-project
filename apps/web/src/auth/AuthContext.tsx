@@ -23,9 +23,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function refreshMe() {
     try {
-      const u = await fetchMe();
+      const u = await fetchMe(); // <-- u es MeAuth {sub,email,role}
       setUser(u);
     } catch {
+      // fetchMe ya hace clearToken() cuando es 401
       setUser(null);
     }
   }
@@ -41,9 +42,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function login(email: string, password: string) {
     setLoading(true);
     try {
-      const u = await apiLogin(email, password);
-      setUser({ sub: u.id, email: u.email, role: u.role });
-      await refreshMe();
+      await apiLogin(email, password); // guarda token en localStorage
+      await refreshMe(); // valida y setea user desde /v1/me
     } finally {
       setLoading(false);
     }
@@ -52,6 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   function logout() {
     clearToken();
     setUser(null);
+    setLoading(false);
   }
 
   const value = useMemo(

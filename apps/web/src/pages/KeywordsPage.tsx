@@ -260,8 +260,9 @@ export default function KeywordsPage() {
     setError(null);
     try {
       await api(`/v1/keywords/jobs/${jobId}/run`, {
-        method: "POST",
+      method: "POST", body: JSON.stringify({}),
       });
+      
       await loadJobs();
       if (selectedJobId === jobId) {
         await loadItems(jobId);
