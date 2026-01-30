@@ -28,7 +28,6 @@ export async function login(email: string, password: string): Promise<LoginUser>
   let res: Response;
 
   try {
-    //res = await fetch(`${API_URL}/v1/auth/login`, {
     res = await fetch(`/v1/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -54,7 +53,7 @@ export async function fetchMe(): Promise<MeAuth> {
   const token = getToken();
   if (!token) throw new Error("No token");
 
-  const res = await fetch(`${API_URL}/v1/me`, {
+  const res = await fetch(`/v1/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 

@@ -28,5 +28,10 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     throw new Error(msg);
   }
 
-  return res.json() as Promise<T>;
+  // ✅ handle empty responses
+  const text = await res.text();
+  if (!text) return undefined as T;
+
+  return JSON.parse(text) as T;
 }
+
