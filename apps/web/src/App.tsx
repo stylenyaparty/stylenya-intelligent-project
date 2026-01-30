@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import WeeklyFocusPage from "./pages/WeeklyFocusPage";
 import DecisionsPage from "./pages/DecisionsPage";
+import KeywordsPage from "./pages/KeywordsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,7 @@ const App = () => (
               <Route index element={<Dashboard />} />
               <Route path="weekly-focus" element={<WeeklyFocusPage />} />
               <Route path="decisions" element={<DecisionsPage />} />
+              <Route path="keywords" element={<KeywordsPage />} />
             </Route>
 
             {/* Redirects */}
