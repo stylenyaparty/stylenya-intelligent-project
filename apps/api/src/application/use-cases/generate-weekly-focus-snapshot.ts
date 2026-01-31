@@ -1,4 +1,4 @@
-import type { WeeklyFocusItem } from "./recommend-weekly-focus";
+import type { WeeklyFocusItem } from "../../modules/recommendations/types";
 import { RecommendWeeklyFocusUseCase } from "./recommend-weekly-focus";
 import { PrismaDecisionLogRepository } from "../../infrastructure/repositories/prisma-decision-log-repository";
 

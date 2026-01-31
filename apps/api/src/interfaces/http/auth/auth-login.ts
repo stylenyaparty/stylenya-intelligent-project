@@ -1,7 +1,7 @@
-import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
+import type { FastifyRequest, FastifyReply } from "fastify";
 import jwt from "jsonwebtoken";
-import { prisma } from "../../lib/prisma"; // ajusta path
+import { prisma } from "../../../infrastructure/db/prisma.js";
 // Si ya tienes zod en el proyecto, úsalo. Si no, valida "a mano".
 import { z } from "zod";
 
@@ -17,11 +17,11 @@ function getJwtConfig() {
     return { secret, expiresIn };
 }
 
-export async function postAuthLogin(req: Request, res: Response) {
+export async function postAuthLogin(req: FastifyRequest, reply: FastifyReply) {
     // 1) Validate input
     const parsed = LoginSchema.safeParse(req.body);
     if (!parsed.success) {
-        return res.status(400).json({
+        return reply.status(400).send({
             error: "Invalid request",
             details: parsed.error.flatten(),
         });
@@ -44,7 +44,7 @@ export async function postAuthLogin(req: Request, res: Response) {
     const ok = await bcrypt.compare(password, hashToCompare);
 
     if (!user || !ok) {
-        return res.status(401).json({ error: "Invalid credentials" });
+        return reply.status(401).send({ error: "Invalid credentials" });
     }
 
     // 4) Build JWT payload (standard)
@@ -56,14 +56,14 @@ export async function postAuthLogin(req: Request, res: Response) {
 
     const { secret, expiresIn } = getJwtConfig();
 
-    const token = jwt.sign(payload, secret, {
+    const token = jwt.sign(payload, secret as string, {
         expiresIn,
         issuer: "stylenya-intelligent-api",
         audience: "stylenya-dashboard",
-    });
+    } as jwt.SignOptions);
 
     // 5) Return
-    return res.status(200).json({
+    return reply.status(200).send({
         token,
         user: { id: user.id, email: user.email, role: user.role },
     });
