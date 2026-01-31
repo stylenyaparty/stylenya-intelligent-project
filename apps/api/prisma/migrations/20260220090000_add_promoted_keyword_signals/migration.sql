@@ -8,12 +8,12 @@ UPDATE "KeywordJob" SET "maxResults" = 10 WHERE "maxResults" IS NULL;
 ALTER TABLE "KeywordJob" ALTER COLUMN "maxResults" SET NOT NULL;
 
 ALTER TABLE "KeywordJob" ALTER COLUMN "language" TYPE TEXT USING "language"::text;
-UPDATE "KeywordJob" SET "language" = lower("language");
+UPDATE "KeywordJob" SET "language" = lower("language"::text);
 
 ALTER TABLE "KeywordJob" ADD COLUMN "engine" TEXT NOT NULL DEFAULT 'google';
 ALTER TABLE "KeywordJob" ADD COLUMN "country" TEXT NOT NULL DEFAULT 'US';
 ALTER TABLE "KeywordJob" ADD COLUMN "providerUsed" TEXT NOT NULL DEFAULT 'mock';
-UPDATE "KeywordJob" SET "engine" = lower("marketplace");
+UPDATE "KeywordJob" SET "engine" = lower("marketplace"::text);
 
 -- DropEnum
 DROP TYPE "KeywordLanguage";
