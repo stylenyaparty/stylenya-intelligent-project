@@ -13,31 +13,39 @@ export async function decisionsRoutes(app: FastifyInstance) {
         "/decisions",
         { preHandler: [requireAuth, requireRole("ADMIN")] },
         async (request, reply) => {
-            const BodySchema = z.object({
-                actionType: ActionTypeSchema,
-                targetType: TargetTypeSchema.optional(),
-                targetId: z.string().min(1).optional(),
-                title: z.string().min(3),
-                rationale: z.string().min(3).optional(),
-                priorityScore: z.number().int().optional(),
-                sources: z.array(z.any()).optional(),
-            });
+            try {
+                const BodySchema = z.object({
+                    actionType: ActionTypeSchema,
+                    targetType: TargetTypeSchema.optional(),
+                    targetId: z.string().min(1).optional(),
+                    title: z.string().min(3),
+                    rationale: z.string().min(3).optional(),
+                    priorityScore: z.number().int().optional(),
+                    sources: z.array(z.any()).optional(),
+                });
 
-            const body = BodySchema.parse(request.body);
+                const body = BodySchema.parse(request.body);
 
-            const created = await prisma.decision.create({
-                data: {
-                    actionType: body.actionType,
-                    targetType: body.targetType,
-                    targetId: body.targetId,
-                    title: body.title,
-                    rationale: body.rationale,
-                    priorityScore: body.priorityScore,
-                    sources: body.sources ?? undefined,
-                },
-            });
+                const created = await prisma.decision.create({
+                    data: {
+                        actionType: body.actionType,
+                        targetType: body.targetType,
+                        targetId: body.targetId,
+                        title: body.title,
+                        rationale: body.rationale,
+                        priorityScore: body.priorityScore,
+                        sources: body.sources ?? undefined,
+                        productId: undefined,
+                    },
+                });
 
-            return reply.code(201).send({ ok: true, decision: created });
+                return reply.code(201).send({ ok: true, decision: created });
+            } catch (error) {
+                console.error("Error creating decision:", error);
+                return reply.code(500).send({ 
+                    error: error instanceof Error ? error.message : "Failed to create decision" 
+                });
+            }
         }
     );
 
