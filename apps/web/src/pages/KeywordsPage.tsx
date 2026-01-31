@@ -36,7 +36,7 @@ import {
   ErrorState,
   EmptyState,
 } from "@/components/dashboard";
-import { RefreshCw, Plus, Play, Tags, FolderSearch } from "lucide-react";
+import { RefreshCw, Plus, Play, Tags, FolderSearch, Info } from "lucide-react";
 
 type KeywordSeed = {
   id: string;
@@ -120,6 +120,9 @@ type PromotedSignalsResponse = {
 };
 
 export default function KeywordsPage() {
+  const defaultJobProviderUsed = "trends";
+  const defaultJobMaxResults = 10;
+
   const [activeTab, setActiveTab] = useState("seeds");
   const [seedInput, setSeedInput] = useState("");
   const [seeds, setSeeds] = useState<KeywordSeed[]>([]);
@@ -144,6 +147,8 @@ export default function KeywordsPage() {
   const [jobAudience, setJobAudience] = useState("");
   const [jobGeo, setJobGeo] = useState("");
   const [jobSeedIds, setJobSeedIds] = useState<string[]>([]);
+  const [jobProviderUsed, setJobProviderUsed] = useState(defaultJobProviderUsed);
+  const [jobMaxResults, setJobMaxResults] = useState(defaultJobMaxResults);
 
   const activeSeeds = useMemo(
     () => seeds.filter((seed) => seed.status === "ACTIVE"),
@@ -269,6 +274,8 @@ export default function KeywordsPage() {
         mode: jobMode,
         marketplace: jobMarketplace,
         language: jobLanguage,
+        providerUsed: jobProviderUsed,
+        maxResults: jobMaxResults,
         niche: jobNiche || undefined,
         params: {
           occasion: jobOccasion || undefined,
@@ -285,6 +292,8 @@ export default function KeywordsPage() {
       });
       setJobDialogOpen(false);
       setJobSeedIds([]);
+      setJobProviderUsed(defaultJobProviderUsed);
+      setJobMaxResults(defaultJobMaxResults);
       setJobs((prev) => [res.job, ...prev]);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create job");
@@ -333,6 +342,26 @@ export default function KeywordsPage() {
     () => new Set(promotedSignals.map((signal) => signal.jobItemId)),
     [promotedSignals]
   );
+  const providerBadgeBase =
+    "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium";
+  const chipBase =
+    "inline-flex items-center rounded-full border bg-muted/40 px-2 py-0.5 text-xs font-medium text-muted-foreground";
+
+  const renderProviderBadge = (providerUsed: string) => {
+    if (providerUsed === "mock") {
+      return (
+        <span className={`${providerBadgeBase} border-muted text-muted-foreground`}>
+          MOCK
+        </span>
+      );
+    }
+
+    return (
+      <span className={`${providerBadgeBase} border-primary/30 text-primary`}>
+        TRENDS
+      </span>
+    );
+  };
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -477,13 +506,15 @@ export default function KeywordsPage() {
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-muted/50">
-                        <TableHead>Mode</TableHead>
-                        <TableHead>Marketplace</TableHead>
-                        <TableHead>Language</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="w-[140px] text-right">Actions</TableHead>
-                      </TableRow>
+                        <TableRow className="bg-muted/50">
+                          <TableHead>Mode</TableHead>
+                          <TableHead>Marketplace</TableHead>
+                          <TableHead>Language</TableHead>
+                          <TableHead>Provider</TableHead>
+                          <TableHead>Geo</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="w-[140px] text-right">Actions</TableHead>
+                        </TableRow>
                     </TableHeader>
                     <TableBody>
                       {jobs.map((job) => (
@@ -491,6 +522,10 @@ export default function KeywordsPage() {
                           <TableCell className="font-medium">{job.mode}</TableCell>
                           <TableCell>{job.marketplace}</TableCell>
                           <TableCell>{job.language.toUpperCase()}</TableCell>
+                          <TableCell>{renderProviderBadge(job.providerUsed)}</TableCell>
+                          <TableCell>
+                            <span className={chipBase}>{job.country}</span>
+                          </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {job.status}
                           </TableCell>
@@ -575,6 +610,21 @@ export default function KeywordsPage() {
                 />
               )}
 
+              {!loadingItems && selectedJob && (
+                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground/70">
+                    Job Meta
+                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={chipBase}>Source</span>
+                    {renderProviderBadge(selectedJob.providerUsed)}
+                    <span className={chipBase}>Geo: {selectedJob.country}</span>
+                    <span className={chipBase}>Engine: {selectedJob.engine}</span>
+                    <span className={chipBase}>Max: {selectedJob.maxResults}</span>
+                  </div>
+                </div>
+              )}
+
               {!loadingItems && selectedJob && items.length === 0 ? (
                 <EmptyState
                   title="No results yet"
@@ -582,6 +632,16 @@ export default function KeywordsPage() {
                   icon={<FolderSearch className="h-6 w-6 text-muted-foreground" />}
                 />
               ) : null}
+
+              {!loadingItems && selectedJob?.providerUsed === "trends" && (
+                <div className="flex items-start gap-2 rounded-md border border-muted/60 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                  <Info className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                  <span>
+                    Google Trends doesn’t provide competition metrics, so Competition is
+                    unavailable for these results.
+                  </span>
+                </div>
+              )}
 
               {!loadingItems && selectedJob && items.length > 0 && (
                 <div className="overflow-x-auto">
@@ -608,7 +668,17 @@ export default function KeywordsPage() {
                             {item.resultJson?.interestScore ?? "—"}
                           </TableCell>
                           <TableCell className="text-right font-mono">
-                            {item.resultJson?.competitionScore ?? "—"}
+                            {item.resultJson?.competitionScore ?? (
+                              <span
+                                title={
+                                  selectedJob?.providerUsed === "trends"
+                                    ? "Not available from Google Trends"
+                                    : undefined
+                                }
+                              >
+                                —
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground max-w-[320px]">
                             <p className="line-clamp-2">
@@ -694,6 +764,42 @@ export default function KeywordsPage() {
                     <SelectItem value="es">ES</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label>Provider</Label>
+                <Select value={jobProviderUsed} onValueChange={setJobProviderUsed}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select provider" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border border-border shadow-lg">
+                    <SelectItem value="trends">Google Trends (real)</SelectItem>
+                    <SelectItem value="mock">Mock (tests/dev)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  {jobProviderUsed === "mock"
+                    ? "Dev/test only. Values may be simulated."
+                    : "Real trend-based signals. Competition metrics unavailable."}
+                </p>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="job-max-results">Max results</Label>
+                <Input
+                  id="job-max-results"
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={jobMaxResults}
+                  onChange={(event) => {
+                    const nextValue = Number(event.target.value);
+                    if (!Number.isNaN(nextValue)) {
+                      setJobMaxResults(Math.min(100, Math.max(1, nextValue)));
+                    }
+                  }}
+                />
               </div>
             </div>
 
