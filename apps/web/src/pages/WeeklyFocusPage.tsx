@@ -48,20 +48,67 @@ type WeeklyFocusResponse = {
   items: WeeklyFocusItem[];
 };
 
+type PlannedDecision = {
+  id: string;
+  dedupeKey: string;
+};
+
+type DecisionsResponse = {
+  ok: boolean;
+  limit: number;
+  decisions: PlannedDecision[];
+};
+
 export default function WeeklyFocusPage() {
   const [limit, setLimit] = useState("7");
   const [data, setData] = useState<WeeklyFocusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState<Record<string, boolean>>({});
-  const [plannedKeys, setPlannedKeys] = useState<string[]>([]);
+  const [plannedDecisions, setPlannedDecisions] = useState<Record<string, PlannedDecision>>({});
+
+  function stableStringify(value: unknown): string {
+    if (value === null || typeof value !== "object") {
+      return JSON.stringify(value);
+    }
+
+    if (Array.isArray(value)) {
+      return `[${value.map(stableStringify).join(", ")}]`;
+    }
+
+    const record = value as Record<string, unknown>;
+    const keys = Object.keys(record).sort();
+    return `{${keys
+      .map((key) => `${JSON.stringify(key)}: ${stableStringify(record[key])}`)
+      .join(", ")}}`;
+  }
+
+  function getWeekBucket(date: Date) {
+    const utc = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    const day = utc.getUTCDay();
+    const diff = (day + 6) % 7;
+    utc.setUTCDate(utc.getUTCDate() - diff);
+    return utc.toISOString().slice(0, 10);
+  }
 
   async function load() {
     setBusy(true);
     setError(null);
     try {
-      const res = await api<WeeklyFocusResponse>(`/v1/weekly-focus?limit=${limit}`);
-      setData(res);
+      const [weeklyFocus, decisions] = await Promise.all([
+        api<WeeklyFocusResponse>(`/v1/weekly-focus?limit=${limit}`),
+        api<DecisionsResponse>(`/v1/decisions?limit=200&status=PLANNED`),
+      ]);
+
+      setData(weeklyFocus);
+      const planned = decisions.decisions.reduce<Record<string, PlannedDecision>>(
+        (acc, decision) => {
+          acc[decision.dedupeKey] = decision;
+          return acc;
+        },
+        {}
+      );
+      setPlannedDecisions(planned);
     } catch (e: unknown) {
       setError((e instanceof Error ? e.message : String(e)) || "Failed to load");
     } finally {
@@ -74,16 +121,25 @@ export default function WeeklyFocusPage() {
   }, [limit]);
 
   const items = useMemo(() => data?.items ?? [], [data]);
-  const itemKey = (item: WeeklyFocusItem) =>
-    `${item.actionType}-${item.targetType}-${item.targetId}`;
+  const itemKey = (item: WeeklyFocusItem) => {
+    const weekBucket = getWeekBucket(data?.asOf ? new Date(data.asOf) : new Date());
+    const normalizedSources = item.sources.map(stableStringify).sort();
+    return [
+      item.actionType,
+      item.targetType,
+      item.targetId,
+      weekBucket,
+      normalizedSources.join(", "),
+    ].join("|");
+  };
 
   async function createDecision(item: WeeklyFocusItem) {
     const key = itemKey(item);
-    if (creating[key] || plannedKeys.includes(key)) return;
+    if (creating[key] || plannedDecisions[key]) return;
 
     setCreating((prev) => ({ ...prev, [key]: true }));
     try {
-      await api("/v1/decisions", {
+      const response = await api<{ ok: boolean; decision: PlannedDecision }>("/v1/decisions", {
         method: "POST",
         body: JSON.stringify({
           actionType: item.actionType,
@@ -95,7 +151,13 @@ export default function WeeklyFocusPage() {
           sources: item.sources,
         }),
       });
-      setPlannedKeys((prev) => (prev.includes(key) ? prev : [...prev, key]));
+      setPlannedDecisions((prev) => ({
+        ...prev,
+        [key]: {
+          id: response.decision.id,
+          dedupeKey: key,
+        },
+      }));
       toast.success("Decision created", {
         description: "The action was added to the Decision Log.",
       });
@@ -179,6 +241,8 @@ export default function WeeklyFocusPage() {
                   <TableBody>
                     {items.map((item, idx) => {
                       const key = itemKey(item);
+                      const plannedDecision = plannedDecisions[key];
+                      const isCreating = creating[key];
                       return (
                         <TableRow
                           key={key}
@@ -198,18 +262,20 @@ export default function WeeklyFocusPage() {
                           {item.rationale}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => createDecision(item)}
-                            disabled={creating[key] || plannedKeys.includes(key)}
-                          >
-                            {plannedKeys.includes(key)
-                              ? "Planned"
-                              : creating[key]
-                                ? "Creating..."
-                                : "Create Decision"}
-                          </Button>
+                          {plannedDecision ? (
+                            <span className="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground opacity-80">
+                              Planned
+                            </span>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => createDecision(item)}
+                              disabled={isCreating}
+                            >
+                              {isCreating ? "Creating..." : "Create Decision"}
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                       );
