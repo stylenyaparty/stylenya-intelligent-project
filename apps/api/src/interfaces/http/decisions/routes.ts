@@ -106,6 +106,11 @@ export async function decisionsRoutes(app: FastifyInstance) {
                     }
                     throw error;
                 }
+            } catch (error) {
+                console.error("Error creating decision:", error);
+                return reply.code(500).send({ 
+                    error: error instanceof Error ? error.message : "Failed to create decision" 
+                });
             }
         }
     );
