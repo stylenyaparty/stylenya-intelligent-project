@@ -13,9 +13,9 @@ import {
     listKeywordJobItems,
     listKeywordJobs,
     listKeywordSeeds,
-    runKeywordJob,
     updateKeywordSeedStatus,
 } from "./keywords.service";
+import { runKeywordJob } from "./keywords-runner.service";
 
 export async function keywordsRoutes(app: FastifyInstance) {
     app.post("/keywords/seeds", { preHandler: requireAuth }, async (request, reply) => {
@@ -49,6 +49,9 @@ export async function keywordsRoutes(app: FastifyInstance) {
     app.post("/keywords/jobs", { preHandler: requireAuth }, async (request, reply) => {
         try {
             const body = keywordJobCreateSchema.parse(request.body);
+            if (body.mode === "AI" && !body.topic) {
+                return reply.code(400).send({ error: "Topic is required for AI mode." });
+            }
             const result = await createKeywordJob(body);
             return reply.code(201).send({ ok: true, ...result });
         } catch (error) {
