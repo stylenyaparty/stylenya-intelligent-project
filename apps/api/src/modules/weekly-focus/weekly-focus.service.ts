@@ -1,4 +1,5 @@
 import { prisma } from "../../infrastructure/db/prisma.js";
+import { buildDedupeKey } from "../decisions/decision-dedupe.js";
 
 export type ActionSuggestion = {
     actionType: "PROMOTE" | "CREATE" | "OPTIMIZE" | "PAUSE";
@@ -8,6 +9,7 @@ export type ActionSuggestion = {
     rationale: string;
     priorityScore: number;
     sources: { keyword: string; signalId: string }[];
+    dedupeKey: string;
 };
 
 type MatchingProduct = {
@@ -54,6 +56,7 @@ export async function buildWeeklyFocusSuggestions(limit = 7): Promise<{
     items: ActionSuggestion[];
 }> {
     const cappedLimit = Math.min(Math.max(limit, 1), 25);
+    const asOf = new Date();
 
     const [signals, products] = await Promise.all([
         prisma.promotedKeywordSignal.findMany({
@@ -84,7 +87,7 @@ export async function buildWeeklyFocusSuggestions(limit = 7): Promise<{
                 hasMatch: false,
             });
 
-            suggestions.push({
+            const suggestion = {
                 actionType: "CREATE",
                 targetType: "KEYWORD",
                 targetId: signal.keyword,
@@ -92,6 +95,16 @@ export async function buildWeeklyFocusSuggestions(limit = 7): Promise<{
                 rationale: `No matching products found for promoted keyword "${signal.keyword}". Consider creating a new SKU or collection.`,
                 priorityScore,
                 sources: [{ keyword: signal.keyword, signalId: signal.id }],
+            } satisfies Omit<ActionSuggestion, "dedupeKey">;
+            suggestions.push({
+                ...suggestion,
+                dedupeKey: buildDedupeKey({
+                    actionType: suggestion.actionType,
+                    targetType: suggestion.targetType,
+                    targetId: suggestion.targetId,
+                    sources: suggestion.sources,
+                    asOf,
+                }),
             });
             continue;
         }
@@ -114,7 +127,7 @@ export async function buildWeeklyFocusSuggestions(limit = 7): Promise<{
             hasMatch: true,
         });
 
-        suggestions.push({
+        const suggestion = {
             actionType,
             targetType: "PRODUCT",
             targetId: match.id,
@@ -126,13 +139,23 @@ export async function buildWeeklyFocusSuggestions(limit = 7): Promise<{
                 : `Keyword "${signal.keyword}" aligns with an existing product. Consider highlighting it as a featured focus.`,
             priorityScore,
             sources: [{ keyword: signal.keyword, signalId: signal.id }],
+        } satisfies Omit<ActionSuggestion, "dedupeKey">;
+        suggestions.push({
+            ...suggestion,
+            dedupeKey: buildDedupeKey({
+                actionType: suggestion.actionType,
+                targetType: suggestion.targetType,
+                targetId: suggestion.targetId,
+                sources: suggestion.sources,
+                asOf,
+            }),
         });
     }
 
     suggestions.sort((a, b) => b.priorityScore - a.priorityScore);
 
     return {
-        asOf: new Date().toISOString(),
+        asOf: asOf.toISOString(),
         limit: cappedLimit,
         items: suggestions.slice(0, cappedLimit),
     };

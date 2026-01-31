@@ -90,5 +90,6 @@ describe("Weekly Focus API", () => {
             targetType: "PRODUCT",
             targetId: product.id,
         });
+        expect(response.body.items[0].dedupeKey).toEqual(expect.any(String));
     });
 });
