@@ -6,7 +6,7 @@ import { createTestServer, getAuthToken, resetDatabase, seedAdmin } from "../hel
 describe("LLM API", () => {
     let app: FastifyInstance;
     let request: ReturnType<typeof supertest>;
-    let cachedHeaders: { Authorization: string } | null = null;
+    let token: string | null = null;
 
     beforeAll(async () => {
         process.env.LLM_PROVIDER = "mock";
@@ -20,15 +20,14 @@ describe("LLM API", () => {
     });
 
     async function authHeader() {
-        if (cachedHeaders) return cachedHeaders;
+        if (token) return { Authorization: `Bearer ${token}` };
 
         const admin = await seedAdmin(app, {
             email: "admin@example.com",
             password: "AdminPass123!",
         });
-        const token = await getAuthToken(app, admin.email, admin.password);
-        cachedHeaders = { Authorization: `Bearer ${token}` };
-        return cachedHeaders;
+        token = await getAuthToken(app, admin.email, admin.password);
+        return { Authorization: `Bearer ${token}` };
     }
 
     it("returns keyword suggestions", async () => {
