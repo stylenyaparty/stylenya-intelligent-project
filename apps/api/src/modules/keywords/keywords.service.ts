@@ -9,10 +9,12 @@ type KeywordSeedInput = {
 type KeywordJobInput = {
     mode: "CUSTOM" | "AUTO" | "HYBRID" | "AI";
     marketplace: "ETSY" | "SHOPIFY" | "GOOGLE";
-    language: "EN" | "ES";
+    language: "en" | "es";
+    engine?: "google" | "etsy" | "shopify";
+    country?: string;
     niche?: string;
     topic?: string;
-    max?: number;
+    maxResults?: number;
     params?: {
         occasion?: string;
         productType?: string;
@@ -29,6 +31,19 @@ function normalizeTerm(raw: string) {
         return null;
     }
     return trimmed.toLowerCase();
+}
+
+function normalizeEngine(input: KeywordJobInput) {
+    return (input.engine ?? input.marketplace).toLowerCase();
+}
+
+function normalizeLanguage(language: KeywordJobInput["language"]) {
+    return language.toLowerCase();
+}
+
+function normalizeCountry(input: KeywordJobInput) {
+    const raw = input.country ?? input.params?.geo ?? "US";
+    return raw.trim().toUpperCase();
 }
 
 function uniqueTerms(terms: string[]) {
@@ -119,6 +134,11 @@ export async function createKeywordJob(input: KeywordJobInput) {
     const niche = input.niche ?? "party decorations";
     const seedIds = input.seedIds ?? [];
     const params = input.params ?? {};
+    const engine = normalizeEngine(input);
+    const language = normalizeLanguage(input.language);
+    const country = normalizeCountry(input);
+    const maxResults = Math.min(input.maxResults ?? 10, 50);
+    const providerUsed = process.env.KEYWORD_PROVIDER ?? "mock";
 
     if (input.mode === "AI") {
         const topic = input.topic?.trim();
@@ -126,16 +146,17 @@ export async function createKeywordJob(input: KeywordJobInput) {
             throw new Error("Topic is required for AI mode.");
         }
 
-        const max = Math.min(input.max ?? 10, 50);
-
         const job = await prisma.keywordJob.create({
             data: {
                 mode: input.mode,
                 marketplace: input.marketplace,
-                language: input.language,
+                language,
+                engine,
+                country,
                 niche,
                 topic,
-                max,
+                maxResults,
+                providerUsed,
                 paramsJson: { params, seedIds },
                 status: "PENDING",
             },
@@ -193,8 +214,12 @@ export async function createKeywordJob(input: KeywordJobInput) {
         data: {
             mode: input.mode,
             marketplace: input.marketplace,
-            language: input.language,
+            language,
+            engine,
+            country,
             niche,
+            maxResults,
+            providerUsed,
             paramsJson: { params, seedIds },
             status: "PENDING",
         },
@@ -231,5 +256,66 @@ export async function listKeywordJobItems(jobId: string) {
     return prisma.keywordJobItem.findMany({
         where: { jobId },
         orderBy: { createdAt: "asc" },
+    });
+}
+
+export async function promoteKeywordJobItem(id: string) {
+    const item = await prisma.keywordJobItem.findUnique({
+        where: { id },
+        include: { job: true },
+    });
+
+    if (!item) {
+        return null;
+    }
+
+    const keyword = item.term;
+    const engine = item.job.engine ?? item.job.marketplace.toLowerCase();
+    const language = item.job.language;
+    const country = item.job.country;
+
+    const existing = await prisma.promotedKeywordSignal.findUnique({
+        where: {
+            keyword_engine_language_country: {
+                keyword,
+                engine,
+                language,
+                country,
+            },
+        },
+    });
+
+    if (existing) {
+        return { created: false, signal: existing };
+    }
+
+    const resultJson = item.resultJson as
+        | { interestScore?: number; competitionScore?: number }
+        | null
+        | undefined;
+
+    const signal = await prisma.promotedKeywordSignal.create({
+        data: {
+            keyword,
+            jobItemId: item.id,
+            engine,
+            language,
+            country,
+            interestScore: typeof resultJson?.interestScore === "number"
+                ? resultJson.interestScore
+                : null,
+            competitionScore: typeof resultJson?.competitionScore === "number"
+                ? resultJson.competitionScore
+                : null,
+            priority: "HIGH",
+        },
+    });
+
+    return { created: true, signal };
+}
+
+export async function listPromotedKeywordSignals() {
+    return prisma.promotedKeywordSignal.findMany({
+        orderBy: { promotedAt: "desc" },
     });
 }
