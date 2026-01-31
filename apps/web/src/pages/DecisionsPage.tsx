@@ -31,14 +31,15 @@ import { format } from "date-fns";
 
 type Decision = {
   id: string;
-  decisionType: string;
+  actionType: string;
   status: DecisionStatus;
-  productId: string;
-  rationale: string;
-  expectedImpact?: string | null;
-  engineVersion?: string | null;
+  targetType?: "KEYWORD" | "PRODUCT" | "THEME" | null;
+  targetId?: string | null;
+  title: string;
+  rationale?: string | null;
+  priorityScore?: number | null;
+  sources?: unknown;
   createdAt: string;
-  product?: { name: string };
 };
 
 type DecisionsResponse = {
@@ -149,11 +150,12 @@ export default function DecisionsPage() {
                   <TableHeader>
                     <TableRow className="bg-muted/50">
                       <TableHead className="w-[140px]">Date</TableHead>
-                      <TableHead className="w-[200px]">Product</TableHead>
-                      <TableHead className="w-[100px]">Type</TableHead>
+                      <TableHead className="w-[200px]">Title</TableHead>
+                      <TableHead className="w-[120px]">Action</TableHead>
+                      <TableHead className="w-[160px]">Target</TableHead>
                       <TableHead className="w-[140px]">Status</TableHead>
                       <TableHead>Rationale</TableHead>
-                      <TableHead className="w-[120px]">Impact</TableHead>
+                      <TableHead className="w-[90px] text-right">Score</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -168,11 +170,16 @@ export default function DecisionsPage() {
                             {format(new Date(d.createdAt), "HH:mm")}
                           </div>
                         </TableCell>
-                        <TableCell className="font-medium">
-                          {d.product?.name ?? d.productId}
+                        <TableCell>
+                          <div className="font-medium">{d.title}</div>
                         </TableCell>
                         <TableCell>
-                          <ActionBadge action={d.decisionType as any} />
+                          <ActionBadge action={d.actionType as any} />
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {d.targetType
+                            ? `${d.targetType}${d.targetId ? `: ${d.targetId}` : ""}`
+                            : "—"}
                         </TableCell>
                         <TableCell>
                           <Select 
@@ -200,10 +207,10 @@ export default function DecisionsPage() {
                           </Select>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground max-w-[300px]">
-                          <p className="line-clamp-2">{d.rationale}</p>
+                          <p className="line-clamp-2">{d.rationale || "—"}</p>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {d.expectedImpact || "—"}
+                        <TableCell className="text-right text-sm text-muted-foreground font-mono">
+                          {d.priorityScore ?? "—"}
                         </TableCell>
                       </TableRow>
                     ))}
