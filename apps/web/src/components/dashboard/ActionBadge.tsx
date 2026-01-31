@@ -1,6 +1,14 @@
 import { cn } from "@/lib/utils";
 
-export type ActionType = "MIGRATE" | "BOOST" | "RETIRE" | "PAUSE" | "KEEP";
+export type ActionType =
+  | "MIGRATE"
+  | "BOOST"
+  | "RETIRE"
+  | "PAUSE"
+  | "KEEP"
+  | "PROMOTE"
+  | "CREATE"
+  | "OPTIMIZE";
 
 interface ActionBadgeProps {
   action: ActionType;
@@ -27,6 +35,18 @@ const actionConfig: Record<ActionType, { label: string; className: string }> = {
   KEEP: {
     label: "Keep",
     className: "bg-muted text-muted-foreground border-border",
+  },
+  PROMOTE: {
+    label: "Promote",
+    className: "bg-primary/15 text-primary border-primary/30",
+  },
+  CREATE: {
+    label: "Create",
+    className: "bg-emerald-500/15 text-emerald-600 border-emerald-500/30",
+  },
+  OPTIMIZE: {
+    label: "Optimize",
+    className: "bg-amber-500/15 text-amber-600 border-amber-500/30",
   },
 };
 
