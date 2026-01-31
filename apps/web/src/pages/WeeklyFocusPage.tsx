@@ -39,6 +39,7 @@ type WeeklyFocusItem = {
     keyword: string;
     signalId: string;
   }[];
+  dedupeKey: string;
 };
 
 type WeeklyFocusResponse = {
@@ -51,6 +52,7 @@ type WeeklyFocusResponse = {
 type PlannedDecision = {
   id: string;
   dedupeKey: string;
+  status: "PLANNED" | "EXECUTED" | "MEASURED" | "CANCELLED";
 };
 
 type DecisionsResponse = {
@@ -65,31 +67,7 @@ export default function WeeklyFocusPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState<Record<string, boolean>>({});
-  const [plannedDecisions, setPlannedDecisions] = useState<Record<string, PlannedDecision>>({});
-
-  function stableStringify(value: unknown): string {
-    if (value === null || typeof value !== "object") {
-      return JSON.stringify(value);
-    }
-
-    if (Array.isArray(value)) {
-      return `[${value.map(stableStringify).join(", ")}]`;
-    }
-
-    const record = value as Record<string, unknown>;
-    const keys = Object.keys(record).sort();
-    return `{${keys
-      .map((key) => `${JSON.stringify(key)}: ${stableStringify(record[key])}`)
-      .join(", ")}}`;
-  }
-
-  function getWeekBucket(date: Date) {
-    const utc = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-    const day = utc.getUTCDay();
-    const diff = (day + 6) % 7;
-    utc.setUTCDate(utc.getUTCDate() - diff);
-    return utc.toISOString().slice(0, 10);
-  }
+  const [decisionByKey, setDecisionByKey] = useState<Record<string, PlannedDecision>>({});
 
   async function load() {
     setBusy(true);
@@ -97,18 +75,18 @@ export default function WeeklyFocusPage() {
     try {
       const [weeklyFocus, decisions] = await Promise.all([
         api<WeeklyFocusResponse>(`/v1/weekly-focus?limit=${limit}`),
-        api<DecisionsResponse>(`/v1/decisions?limit=200&status=PLANNED`),
+        api<DecisionsResponse>(`/v1/decisions?limit=200`),
       ]);
 
       setData(weeklyFocus);
-      const planned = decisions.decisions.reduce<Record<string, PlannedDecision>>(
+      const decisionMap = decisions.decisions.reduce<Record<string, PlannedDecision>>(
         (acc, decision) => {
           acc[decision.dedupeKey] = decision;
           return acc;
         },
         {}
       );
-      setPlannedDecisions(planned);
+      setDecisionByKey(decisionMap);
     } catch (e: unknown) {
       setError((e instanceof Error ? e.message : String(e)) || "Failed to load");
     } finally {
@@ -121,21 +99,10 @@ export default function WeeklyFocusPage() {
   }, [limit]);
 
   const items = useMemo(() => data?.items ?? [], [data]);
-  const itemKey = (item: WeeklyFocusItem) => {
-    const weekBucket = getWeekBucket(data?.asOf ? new Date(data.asOf) : new Date());
-    const normalizedSources = item.sources.map(stableStringify).sort();
-    return [
-      item.actionType,
-      item.targetType,
-      item.targetId,
-      weekBucket,
-      normalizedSources.join(", "),
-    ].join("|");
-  };
 
   async function createDecision(item: WeeklyFocusItem) {
-    const key = itemKey(item);
-    if (creating[key] || plannedDecisions[key]) return;
+    const key = item.dedupeKey;
+    if (creating[key] || decisionByKey[key]) return;
 
     setCreating((prev) => ({ ...prev, [key]: true }));
     try {
@@ -151,12 +118,9 @@ export default function WeeklyFocusPage() {
           sources: item.sources,
         }),
       });
-      setPlannedDecisions((prev) => ({
+      setDecisionByKey((prev) => ({
         ...prev,
-        [key]: {
-          id: response.decision.id,
-          dedupeKey: key,
-        },
+        [key]: response.decision,
       }));
       toast.success("Decision created", {
         description: "The action was added to the Decision Log.",
@@ -240,44 +204,58 @@ export default function WeeklyFocusPage() {
                   </TableHeader>
                   <TableBody>
                     {items.map((item, idx) => {
-                      const key = itemKey(item);
-                      const plannedDecision = plannedDecisions[key];
+                      const key = item.dedupeKey;
+                      const decision = decisionByKey[key];
                       const isCreating = creating[key];
                       return (
                         <TableRow
                           key={key}
                           className={idx === 0 ? "bg-primary/5" : ""}
                         >
-                        <TableCell>
-                          <ActionBadge action={item.actionType} />
-                        </TableCell>
-                        <TableCell className="font-medium">{item.title}</TableCell>
-                        <TableCell className="text-right font-mono">
-                          {item.priorityScore}
-                        </TableCell>
-                        <TableCell>
-                          <SourcePills sources={item.sources} />
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground max-w-[320px]">
-                          {item.rationale}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {plannedDecision ? (
-                            <span className="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground opacity-80">
-                              Planned
-                            </span>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => createDecision(item)}
-                              disabled={isCreating}
-                            >
-                              {isCreating ? "Creating..." : "Create Decision"}
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
+                          <TableCell>
+                            <ActionBadge action={item.actionType} />
+                          </TableCell>
+                          <TableCell className="font-medium">{item.title}</TableCell>
+                          <TableCell className="text-right font-mono">
+                            {item.priorityScore}
+                          </TableCell>
+                          <TableCell>
+                            <SourcePills sources={item.sources} />
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground max-w-[320px]">
+                            {item.rationale}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {decision ? (
+                              <div className="flex items-center justify-end gap-2">
+                                <span className="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground opacity-80">
+                                  {decision.status === "PLANNED"
+                                    ? "Planned"
+                                    : decision.status === "EXECUTED"
+                                      ? "Executed"
+                                      : decision.status === "MEASURED"
+                                        ? "Measured"
+                                        : "Cancelled"}
+                                </span>
+                                <a
+                                  href="/dashboard/decisions"
+                                  className="text-xs font-medium text-primary hover:underline"
+                                >
+                                  View
+                                </a>
+                              </div>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => createDecision(item)}
+                                disabled={isCreating}
+                              >
+                                {isCreating ? "Creating..." : "Create Decision"}
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
                       );
                     })}
                   </TableBody>
