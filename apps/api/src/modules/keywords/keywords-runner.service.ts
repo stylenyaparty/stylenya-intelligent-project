@@ -1,11 +1,30 @@
 import { prisma } from "../../infrastructure/db/prisma.js";
 import { MockKeywordResearchProvider } from "./providers/mockKeywordResearchProvider.js";
+import { GoogleTrendsKeywordResearchProvider, DEFAULT_TIMEFRAME } from "./providers/googleTrendsKeywordResearchProvider.js";
+import type { KeywordSuggestion } from "./providers/providerTypes.js";
 import { suggestKeywords } from "../llm/suggest-keywords.service.js";
 
-const provider = new MockKeywordResearchProvider();
+const mockProvider = new MockKeywordResearchProvider();
+const trendsProvider = new GoogleTrendsKeywordResearchProvider();
 
 function normalizeKeyword(value: string) {
     return value.trim().toLowerCase();
+}
+
+function resolveProvider(providerUsed: string) {
+    if (providerUsed === "trends") {
+        return trendsProvider;
+    }
+    return mockProvider;
+}
+
+function buildResultJson(suggestion: KeywordSuggestion) {
+    return {
+        summary: suggestion.summary,
+        interestScore: suggestion.interestScore,
+        competitionScore: suggestion.competitionScore,
+        ...(suggestion.relatedKeywords ? { relatedKeywords: suggestion.relatedKeywords } : {}),
+    };
 }
 
 export async function runKeywordJob(jobId: string) {
@@ -74,29 +93,93 @@ export async function runKeywordJob(jobId: string) {
             return { job: updatedJob, items };
         }
 
-        const items = await prisma.keywordJobItem.findMany({
+        const seedItems = await prisma.keywordJobItem.findMany({
             where: { jobId },
             orderBy: { createdAt: "asc" },
         });
-        const results = [];
+        const provider = resolveProvider(job.providerUsed);
+        const seeds = seedItems.map((item) => item.term);
+        const existingProviderRequest = job.providerRequest as
+            | { geo?: string; timeframe?: string; seeds?: string[] }
+            | null
+            | undefined;
+        const timeframe =
+            typeof existingProviderRequest?.timeframe === "string"
+                ? existingProviderRequest.timeframe
+                : DEFAULT_TIMEFRAME;
+        const providerRequest = {
+            geo: job.country,
+            timeframe,
+            seeds,
+        };
+        if (job.providerUsed === "trends" && !job.providerRequest) {
+            await prisma.keywordJob.update({
+                where: { id: jobId },
+                data: { providerRequest },
+            });
+        }
 
-        for (const item of items) {
-            const result = provider.research({
-                term: item.term,
+        const suggestions: Array<{
+            term: string;
+            source: "CUSTOM" | "AUTO" | "HYBRID" | "AI";
+            resultJson: ReturnType<typeof buildResultJson>;
+            providerRaw?: unknown;
+        }> = [];
+        const seen = new Set<string>();
+        const maxResults = Math.min(job.maxResults ?? 10, 50);
+
+        for (const item of seedItems) {
+            const results = await provider.getSuggestions({
+                seed: item.term,
                 marketplace: job.marketplace,
                 language: job.language,
+                geo: job.country,
+                timeframe,
             });
 
-            const updated = await prisma.keywordJobItem.update({
-                where: { id: item.id },
-                data: {
-                    status: "DONE",
-                    resultJson: result,
-                },
-            });
-
-            results.push(updated);
+            for (const result of results) {
+                const normalized = normalizeKeyword(result.term);
+                if (seen.has(normalized)) {
+                    continue;
+                }
+                seen.add(normalized);
+                suggestions.push({
+                    term: result.term.trim(),
+                    source: result.isSeed ? item.source : "AUTO",
+                    resultJson: buildResultJson(result),
+                    providerRaw: result.providerRaw,
+                });
+                if (suggestions.length >= maxResults) {
+                    break;
+                }
+            }
+            if (suggestions.length >= maxResults) {
+                break;
+            }
         }
+
+        if (suggestions.length === 0) {
+            throw new Error("No keyword suggestions returned from provider.");
+        }
+
+        await prisma.$transaction([
+            prisma.keywordJobItem.deleteMany({ where: { jobId } }),
+            prisma.keywordJobItem.createMany({
+                data: suggestions.map((suggestion) => ({
+                    jobId,
+                    term: suggestion.term,
+                    source: suggestion.source,
+                    status: "DONE",
+                    resultJson: suggestion.resultJson,
+                    providerRaw: suggestion.providerRaw ?? null,
+                })),
+            }),
+        ]);
+
+        const results = await prisma.keywordJobItem.findMany({
+            where: { jobId },
+            orderBy: { createdAt: "asc" },
+        });
 
         const updatedJob = await prisma.keywordJob.update({
             where: { id: jobId },

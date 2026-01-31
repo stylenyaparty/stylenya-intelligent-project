@@ -92,4 +92,51 @@ describe("Weekly Focus API", () => {
         });
         expect(response.body.items[0].dedupeKey).toEqual(expect.any(String));
     });
+
+    it("skips competition penalty when competitionScore is null", async () => {
+        const headers = await authHeader();
+
+        const job = await prisma.keywordJob.create({
+            data: {
+                mode: "CUSTOM",
+                marketplace: "GOOGLE",
+                language: "en",
+                engine: "google",
+                country: "US",
+                niche: "party decorations",
+                maxResults: 10,
+                providerUsed: "trends",
+                paramsJson: {},
+                status: "DONE",
+            },
+        });
+
+        const item = await prisma.keywordJobItem.create({
+            data: {
+                jobId: job.id,
+                term: "trend keyword",
+                source: "CUSTOM",
+                status: "DONE",
+                resultJson: { interestScore: 80 },
+            },
+        });
+
+        await request
+            .post(`/v1/keywords/job-items/${item.id}/promote`)
+            .set(headers)
+            .send({})
+            .expect(201);
+
+        const response = await request
+            .get("/v1/weekly-focus?limit=7")
+            .set(headers)
+            .expect(200);
+
+        expect(response.body.items[0]).toMatchObject({
+            actionType: "CREATE",
+            targetType: "KEYWORD",
+            priorityScore: 100,
+        });
+        expect(response.body.items[0].rationale).toContain("Competition unavailable");
+    });
 });

@@ -129,6 +129,7 @@ model KeywordJob {
   topic       String?
   maxResults  Int              @default(10)
   providerUsed String
+  providerRequest Json?
   paramsJson  Json
   status      KeywordJobStatus @default(PENDING)
   createdAt   DateTime         @default(now())
@@ -145,6 +146,7 @@ model KeywordJobItem {
   source     KeywordJobItemSource
   status     KeywordJobItemStatus @default(PENDING)
   resultJson Json?
+  providerRaw Json?
   createdAt  DateTime            @default(now())
   updatedAt  DateTime            @updatedAt
 
