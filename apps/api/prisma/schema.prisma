@@ -94,6 +94,7 @@ model Decision {
   actionType    String
   targetType    DecisionTargetType?
   targetId      String?
+  dedupeKey     String   @unique
   title         String
   rationale     String?
   priorityScore Int?
