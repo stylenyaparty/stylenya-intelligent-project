@@ -36,15 +36,15 @@ describe("Keyword AI Jobs", () => {
             .send({
                 mode: "AI",
                 marketplace: "ETSY",
-                language: "EN",
+                language: "en",
                 topic: "party decorations",
-                max: 5,
+                maxResults: 5,
             })
             .expect(201);
 
         expect(response.body.job.mode).toBe("AI");
         expect(response.body.job.topic).toBe("party decorations");
-        expect(response.body.job.max).toBe(5);
+        expect(response.body.job.maxResults).toBe(5);
     });
 
     it("rejects AI job creation without a topic", async () => {
@@ -56,7 +56,7 @@ describe("Keyword AI Jobs", () => {
             .send({
                 mode: "AI",
                 marketplace: "ETSY",
-                language: "EN",
+                language: "en",
             })
             .expect(400);
 
@@ -72,9 +72,9 @@ describe("Keyword AI Jobs", () => {
             .send({
                 mode: "AI",
                 marketplace: "SHOPIFY",
-                language: "EN",
+                language: "en",
                 topic: "custom candles",
-                max: 6,
+                maxResults: 6,
             })
             .expect(201);
 

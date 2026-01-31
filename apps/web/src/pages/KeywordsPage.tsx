@@ -49,9 +49,13 @@ type KeywordSeed = {
 
 type KeywordJob = {
   id: string;
-  mode: "CUSTOM" | "AUTO" | "HYBRID";
+  mode: "CUSTOM" | "AUTO" | "HYBRID" | "AI";
   marketplace: "ETSY" | "SHOPIFY" | "GOOGLE";
-  language: "EN" | "ES";
+  language: "en" | "es";
+  engine: string;
+  country: string;
+  maxResults: number;
+  providerUsed: string;
   niche: string;
   status: "PENDING" | "RUNNING" | "DONE" | "FAILED";
   createdAt: string;
@@ -60,7 +64,7 @@ type KeywordJob = {
 type KeywordJobItem = {
   id: string;
   term: string;
-  source: "CUSTOM" | "AUTO" | "HYBRID";
+  source: "CUSTOM" | "AUTO" | "HYBRID" | "AI";
   status: "PENDING" | "DONE" | "FAILED";
   resultJson?: {
     summary?: string;
@@ -97,6 +101,24 @@ type JobItemsResponse = {
   items: KeywordJobItem[];
 };
 
+type PromotedSignal = {
+  id: string;
+  jobItemId: string;
+  keyword: string;
+  engine: string;
+  language: string;
+  country: string;
+  priority: "LOW" | "MED" | "HIGH";
+  promotedAt: string;
+  interestScore?: number | null;
+  competitionScore?: number | null;
+};
+
+type PromotedSignalsResponse = {
+  ok: boolean;
+  signals: PromotedSignal[];
+};
+
 export default function KeywordsPage() {
   const [activeTab, setActiveTab] = useState("seeds");
   const [seedInput, setSeedInput] = useState("");
@@ -107,12 +129,15 @@ export default function KeywordsPage() {
   const [loadingSeeds, setLoadingSeeds] = useState(false);
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
+  const [loadingPromoted, setLoadingPromoted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [promotedSignals, setPromotedSignals] = useState<PromotedSignal[]>([]);
+  const [promotingId, setPromotingId] = useState<string | null>(null);
 
   const [jobDialogOpen, setJobDialogOpen] = useState(false);
   const [jobMode, setJobMode] = useState<KeywordJob["mode"]>("AUTO");
   const [jobMarketplace, setJobMarketplace] = useState<KeywordJob["marketplace"]>("ETSY");
-  const [jobLanguage, setJobLanguage] = useState<KeywordJob["language"]>("EN");
+  const [jobLanguage, setJobLanguage] = useState<KeywordJob["language"]>("en");
   const [jobNiche, setJobNiche] = useState("party decorations");
   const [jobOccasion, setJobOccasion] = useState("");
   const [jobProductType, setJobProductType] = useState("");
@@ -164,9 +189,22 @@ export default function KeywordsPage() {
     }
   }
 
+  async function loadPromotedSignals() {
+    setLoadingPromoted(true);
+    try {
+      const res = await api<PromotedSignalsResponse>("/v1/keywords/promoted");
+      setPromotedSignals(res.signals);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to load promoted signals");
+    } finally {
+      setLoadingPromoted(false);
+    }
+  }
+
   useEffect(() => {
     void loadSeeds();
     void loadJobs();
+    void loadPromotedSignals();
   }, []);
 
   useEffect(() => {
@@ -274,23 +312,27 @@ export default function KeywordsPage() {
     }
   }
 
-  async function promoteToSeeds(term: string) {
-    setLoadingSeeds(true);
+  async function promoteKeywordItem(itemId: string) {
+    setPromotingId(itemId);
     setError(null);
     try {
-      await api("/v1/keywords/seeds", {
+      await api(`/v1/keywords/job-items/${itemId}/promote`, {
         method: "POST",
-        body: JSON.stringify({ terms: [term] }),
+        body: JSON.stringify({}),
       });
-      await loadSeeds();
+      await loadPromotedSignals();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to promote seed");
+      setError(e instanceof Error ? e.message : "Failed to promote keyword");
     } finally {
-      setLoadingSeeds(false);
+      setPromotingId(null);
     }
   }
 
   const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? null;
+  const promotedIds = useMemo(
+    () => new Set(promotedSignals.map((signal) => signal.jobItemId)),
+    [promotedSignals]
+  );
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -304,6 +346,7 @@ export default function KeywordsPage() {
           onClick={() => {
             void loadSeeds();
             void loadJobs();
+            void loadPromotedSignals();
             if (selectedJobId) {
               void loadItems(selectedJobId);
             }
@@ -321,6 +364,7 @@ export default function KeywordsPage() {
           onRetry={() => {
             void loadSeeds();
             void loadJobs();
+            void loadPromotedSignals();
             if (selectedJobId) {
               void loadItems(selectedJobId);
             }
@@ -446,7 +490,7 @@ export default function KeywordsPage() {
                         <TableRow key={job.id}>
                           <TableCell className="font-medium">{job.mode}</TableCell>
                           <TableCell>{job.marketplace}</TableCell>
-                          <TableCell>{job.language}</TableCell>
+                          <TableCell>{job.language.toUpperCase()}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {job.status}
                           </TableCell>
@@ -500,7 +544,7 @@ export default function KeywordsPage() {
                     <SelectContent className="bg-popover border border-border shadow-lg">
                       {jobs.map((job) => (
                         <SelectItem key={job.id} value={job.id}>
-                          {job.mode} • {job.marketplace} • {job.language}
+                          {job.mode} • {job.marketplace} • {job.language.toUpperCase()}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -575,15 +619,14 @@ export default function KeywordsPage() {
                             {item.resultJson?.relatedKeywords?.length ?? "—"}
                           </TableCell>
                           <TableCell className="text-right">
-                            {item.source !== "CUSTOM" && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => promoteToSeeds(item.term)}
-                              >
-                                Promote
-                              </Button>
-                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={promotedIds.has(item.id) || promotingId === item.id || loadingPromoted}
+                              onClick={() => promoteKeywordItem(item.id)}
+                            >
+                              {promotedIds.has(item.id) ? "Promoted" : "Promote"}
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -647,8 +690,8 @@ export default function KeywordsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border border-border shadow-lg">
-                    <SelectItem value="EN">EN</SelectItem>
-                    <SelectItem value="ES">ES</SelectItem>
+                    <SelectItem value="en">EN</SelectItem>
+                    <SelectItem value="es">ES</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

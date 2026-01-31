@@ -13,6 +13,8 @@ import {
     listKeywordJobItems,
     listKeywordJobs,
     listKeywordSeeds,
+    listPromotedKeywordSignals,
+    promoteKeywordJobItem,
     updateKeywordSeedStatus,
 } from "./keywords.service";
 import { runKeywordJob } from "./keywords-runner.service";
@@ -105,4 +107,45 @@ export async function keywordsRoutes(app: FastifyInstance) {
             }
         }
     );
+
+    app.post(
+        "/keywords/job-items/:id/promote",
+        { preHandler: requireAuth },
+        async (request, reply) => {
+            const params = request.params as { id: string };
+            const result = await promoteKeywordJobItem(params.id);
+            if (!result) {
+                return reply.code(404).send({ error: "Job item not found" });
+            }
+
+            const payload = {
+                promoted: true,
+                signalId: result.signal.id,
+                keyword: result.signal.keyword,
+                priority: result.signal.priority,
+                promotedAt: result.signal.promotedAt,
+            };
+
+            return reply.code(result.created ? 201 : 200).send(payload);
+        }
+    );
+
+    app.get("/keywords/promoted", { preHandler: requireAuth }, async () => {
+        const signals = await listPromotedKeywordSignals();
+        return {
+            ok: true,
+            signals: signals.map((signal) => ({
+                id: signal.id,
+                jobItemId: signal.jobItemId,
+                keyword: signal.keyword,
+                engine: signal.engine,
+                language: signal.language,
+                country: signal.country,
+                priority: signal.priority,
+                promotedAt: signal.promotedAt,
+                interestScore: signal.interestScore,
+                competitionScore: signal.competitionScore,
+            })),
+        };
+    });
 }

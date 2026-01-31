@@ -13,15 +13,30 @@ export const keywordSeedListQuerySchema = z.object({
 
 export const keywordJobModeSchema = z.enum(["CUSTOM", "AUTO", "HYBRID", "AI"]);
 export const keywordMarketplaceSchema = z.enum(["ETSY", "SHOPIFY", "GOOGLE"]);
-export const keywordLanguageSchema = z.enum(["EN", "ES"]);
+export const keywordLanguageSchema = z.preprocess(
+    (value) => (typeof value === "string" ? value.toLowerCase() : value),
+    z.enum(["en", "es"])
+);
+
+export const keywordEngineSchema = z.preprocess(
+    (value) => (typeof value === "string" ? value.toLowerCase() : value),
+    z.enum(["google", "etsy", "shopify"])
+).optional();
+export const keywordCountrySchema = z
+    .string()
+    .min(2)
+    .max(2)
+    .optional();
 
 export const keywordJobCreateSchema = z.object({
     mode: keywordJobModeSchema,
     marketplace: keywordMarketplaceSchema,
     language: keywordLanguageSchema,
+    engine: keywordEngineSchema,
+    country: keywordCountrySchema,
     niche: z.string().min(1).optional(),
     topic: z.string().min(1).optional(),
-    max: z.number().int().min(1).max(50).optional(),
+    maxResults: z.number().int().min(1).max(50).optional(),
     params: z
         .object({
             occasion: z.string().optional(),
