@@ -33,8 +33,6 @@ model Product {
 
   salesRecords      SalesRecord[]
   requests          Request[]
-
-  decisions Decision[]
 }
 
 model SalesRecord {
@@ -99,9 +97,6 @@ model Decision {
   rationale     String?
   priorityScore Int?
   sources       Json?
-
-  productId     String?
-  product       Product? @relation(fields: [productId], references: [id])
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
