@@ -111,4 +111,45 @@ describe("Decisions API", () => {
         expect(response.body.ok).toBe(true);
         expect(response.body.decision.status).toBe("EXECUTED");
     });
+
+    it("dedupes duplicate weekly focus decisions", async () => {
+        const headers = await authHeader();
+
+        const payload = {
+            actionType: "CREATE",
+            targetType: "KEYWORD",
+            targetId: "duplicate-keyword-action",
+            title: "Create product opportunity for duplicate keyword",
+            rationale: "Testing idempotent decision creation",
+            priorityScore: 55,
+            sources: [{ keyword: "duplicate keyword", signalId: "sig-dupe" }],
+        };
+
+        const first = await request
+            .post("/v1/decisions")
+            .set(headers)
+            .send(payload)
+            .expect(201);
+
+        const second = await request
+            .post("/v1/decisions")
+            .set(headers)
+            .send(payload)
+            .expect(200);
+
+        expect(second.body.decision.id).toBe(first.body.decision.id);
+
+        const list = await request
+            .get("/v1/decisions?limit=50")
+            .set(headers)
+            .expect(200);
+
+        const matching = list.body.decisions.filter(
+            (decision: { actionType: string; targetId: string }) =>
+                decision.actionType === payload.actionType &&
+                decision.targetId === payload.targetId
+        );
+
+        expect(matching).toHaveLength(1);
+    });
 });

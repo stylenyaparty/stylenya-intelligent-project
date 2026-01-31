@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../../../infrastructure/db/prisma";
 import { requireAuth, requireRole } from "../middleware/auth";
@@ -6,6 +7,49 @@ import { requireAuth, requireRole } from "../middleware/auth";
 const ActionTypeSchema = z.enum(["PROMOTE", "CREATE", "OPTIMIZE", "PAUSE"]);
 const DecisionStatusSchema = z.enum(["PLANNED", "EXECUTED", "MEASURED", "CANCELLED"]);
 const TargetTypeSchema = z.enum(["KEYWORD", "PRODUCT", "THEME"]);
+
+function stableStringify(value: unknown): string {
+    if (value === null || typeof value !== "object") {
+        return JSON.stringify(value);
+    }
+
+    if (Array.isArray(value)) {
+        return `[${value.map(stableStringify).join(", ")}]`;
+    }
+
+    const record = value as Record<string, unknown>;
+    const keys = Object.keys(record).sort();
+    return `{${keys
+        .map((key) => `${JSON.stringify(key)}: ${stableStringify(record[key])}`)
+        .join(", ")}}`;
+}
+
+function getWeekBucket(date: Date) {
+    const utc = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    const day = utc.getUTCDay();
+    const diff = (day + 6) % 7;
+    utc.setUTCDate(utc.getUTCDate() - diff);
+    return utc.toISOString().slice(0, 10);
+}
+
+function buildDedupeKey(payload: {
+    actionType: string;
+    targetType?: string | null;
+    targetId?: string | null;
+    sources?: unknown[];
+}) {
+    const sources = payload.sources ?? [];
+    const normalizedSources = sources.map(stableStringify).sort();
+    const weekBucket = getWeekBucket(new Date());
+
+    return [
+        payload.actionType,
+        payload.targetType ?? "",
+        payload.targetId ?? "",
+        weekBucket,
+        normalizedSources.join(", "),
+    ].join("|");
+}
 
 export async function decisionsRoutes(app: FastifyInstance) {
     // Create decision
@@ -25,19 +69,42 @@ export async function decisionsRoutes(app: FastifyInstance) {
 
             const body = BodySchema.parse(request.body);
 
-            const created = await prisma.decision.create({
-                data: {
-                    actionType: body.actionType,
-                    targetType: body.targetType,
-                    targetId: body.targetId,
-                    title: body.title,
-                    rationale: body.rationale,
-                    priorityScore: body.priorityScore,
-                    sources: body.sources ?? undefined,
-                },
+            const dedupeKey = buildDedupeKey({
+                actionType: body.actionType,
+                targetType: body.targetType ?? null,
+                targetId: body.targetId ?? null,
+                sources: body.sources ?? [],
             });
 
-            return reply.code(201).send({ ok: true, decision: created });
+            const existing = await prisma.decision.findUnique({ where: { dedupeKey } });
+            if (existing) {
+                return reply.code(200).send({ ok: true, decision: existing });
+            }
+
+            try {
+                const created = await prisma.decision.create({
+                    data: {
+                        actionType: body.actionType,
+                        targetType: body.targetType,
+                        targetId: body.targetId,
+                        title: body.title,
+                        rationale: body.rationale,
+                        priorityScore: body.priorityScore,
+                        sources: body.sources ?? undefined,
+                        dedupeKey,
+                    },
+                });
+
+                return reply.code(201).send({ ok: true, decision: created });
+            } catch (error) {
+                if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+                    const deduped = await prisma.decision.findUnique({ where: { dedupeKey } });
+                    if (deduped) {
+                        return reply.code(200).send({ ok: true, decision: deduped });
+                    }
+                }
+                throw error;
+            }
         }
     );
 
