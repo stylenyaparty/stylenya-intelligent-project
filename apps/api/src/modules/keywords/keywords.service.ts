@@ -1,6 +1,5 @@
 import { prisma } from "../../infrastructure/db/prisma.js";
 import { Prisma } from "@prisma/client";
-import { MockKeywordResearchProvider } from "./providers/mockKeywordResearchProvider.js";
 
 type KeywordSeedInput = {
     terms: string[];
@@ -8,10 +7,12 @@ type KeywordSeedInput = {
 };
 
 type KeywordJobInput = {
-    mode: "CUSTOM" | "AUTO" | "HYBRID";
+    mode: "CUSTOM" | "AUTO" | "HYBRID" | "AI";
     marketplace: "ETSY" | "SHOPIFY" | "GOOGLE";
     language: "EN" | "ES";
     niche?: string;
+    topic?: string;
+    max?: number;
     params?: {
         occasion?: string;
         productType?: string;
@@ -21,7 +22,6 @@ type KeywordJobInput = {
     seedIds?: string[];
 };
 
-const provider = new MockKeywordResearchProvider();
 
 function normalizeTerm(raw: string) {
     const trimmed = raw.trim().replace(/\s+/g, " ");
@@ -120,6 +120,30 @@ export async function createKeywordJob(input: KeywordJobInput) {
     const seedIds = input.seedIds ?? [];
     const params = input.params ?? {};
 
+    if (input.mode === "AI") {
+        const topic = input.topic?.trim();
+        if (!topic) {
+            throw new Error("Topic is required for AI mode.");
+        }
+
+        const max = Math.min(input.max ?? 10, 50);
+
+        const job = await prisma.keywordJob.create({
+            data: {
+                mode: input.mode,
+                marketplace: input.marketplace,
+                language: input.language,
+                niche,
+                topic,
+                max,
+                paramsJson: { params, seedIds },
+                status: "PENDING",
+            },
+        });
+
+        return { job, items: [] };
+    }
+
     if ((input.mode === "CUSTOM" || input.mode === "HYBRID") && seedIds.length === 0) {
         throw new Error("Seed selection is required for CUSTOM or HYBRID mode.");
     }
@@ -208,57 +232,4 @@ export async function listKeywordJobItems(jobId: string) {
         where: { jobId },
         orderBy: { createdAt: "asc" },
     });
-}
-
-export async function runKeywordJob(jobId: string) {
-    const job = await prisma.keywordJob.findUnique({ where: { id: jobId } });
-    if (!job) {
-        return null;
-    }
-
-    if (job.status === "DONE") {
-        const existingItems = await listKeywordJobItems(jobId);
-        return { job, items: existingItems };
-    }
-
-    await prisma.keywordJob.update({
-        where: { id: jobId },
-        data: { status: "RUNNING" },
-    });
-
-    try {
-        const items = await listKeywordJobItems(jobId);
-        const results = [];
-
-        for (const item of items) {
-            const result = provider.research({
-                term: item.term,
-                marketplace: job.marketplace,
-                language: job.language,
-            });
-
-            const updated = await prisma.keywordJobItem.update({
-                where: { id: item.id },
-                data: {
-                    status: "DONE",
-                    resultJson: result,
-                },
-            });
-
-            results.push(updated);
-        }
-
-        const updatedJob = await prisma.keywordJob.update({
-            where: { id: jobId },
-            data: { status: "DONE" },
-        });
-
-        return { job: updatedJob, items: results };
-    } catch (error) {
-        await prisma.keywordJob.update({
-            where: { id: jobId },
-            data: { status: "FAILED" },
-        });
-        throw error;
-    }
 }

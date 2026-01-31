@@ -11,7 +11,7 @@ export const keywordSeedListQuerySchema = z.object({
     status: keywordSeedStatusSchema.optional(),
 });
 
-export const keywordJobModeSchema = z.enum(["CUSTOM", "AUTO", "HYBRID"]);
+export const keywordJobModeSchema = z.enum(["CUSTOM", "AUTO", "HYBRID", "AI"]);
 export const keywordMarketplaceSchema = z.enum(["ETSY", "SHOPIFY", "GOOGLE"]);
 export const keywordLanguageSchema = z.enum(["EN", "ES"]);
 
@@ -20,6 +20,8 @@ export const keywordJobCreateSchema = z.object({
     marketplace: keywordMarketplaceSchema,
     language: keywordLanguageSchema,
     niche: z.string().min(1).optional(),
+    topic: z.string().min(1).optional(),
+    max: z.number().int().min(1).max(50).optional(),
     params: z
         .object({
             occasion: z.string().optional(),
