@@ -42,12 +42,22 @@ function calculatePriorityScore(signal: {
     hasMatch: boolean;
 }) {
     const interest = signal.interestScore ?? 50;
-    const competition = signal.competitionScore ?? 50;
-    const base = interest - competition * 0.5;
+    const competitionPenalty =
+        signal.competitionScore === null || signal.competitionScore === undefined
+            ? 0
+            : signal.competitionScore * 0.5;
+    const base = interest - competitionPenalty;
     const priorityBoost = signal.priority === "HIGH" ? 20 : 0;
     const matchBoost = signal.hasMatch ? 10 : 0;
 
     return Math.round(base + priorityBoost + matchBoost);
+}
+
+function appendCompetitionNote(rationale: string, competitionScore: number | null) {
+    if (competitionScore === null) {
+        return `${rationale} Competition unavailable (trends).`;
+    }
+    return rationale;
 }
 
 export async function buildWeeklyFocusSuggestions(limit = 7): Promise<{
@@ -92,7 +102,10 @@ export async function buildWeeklyFocusSuggestions(limit = 7): Promise<{
                 targetType: "KEYWORD",
                 targetId: signal.keyword,
                 title: `Create product opportunity for "${signal.keyword}"`,
-                rationale: `No matching products found for promoted keyword "${signal.keyword}". Consider creating a new SKU or collection.`,
+                rationale: appendCompetitionNote(
+                    `No matching products found for promoted keyword "${signal.keyword}". Consider creating a new SKU or collection.`,
+                    signal.competitionScore
+                ),
                 priorityScore,
                 sources: [{ keyword: signal.keyword, signalId: signal.id }],
             } satisfies Omit<ActionSuggestion, "dedupeKey">;
@@ -134,9 +147,12 @@ export async function buildWeeklyFocusSuggestions(limit = 7): Promise<{
             title: needsOptimize
                 ? `Optimize "${match.name}" for "${signal.keyword}"`
                 : `Promote "${match.name}" for "${signal.keyword}"`,
-            rationale: needsOptimize
-                ? `Keyword "${signal.keyword}" matches the catalog, but the Shopify listing is missing it in the title.`
-                : `Keyword "${signal.keyword}" aligns with an existing product. Consider highlighting it as a featured focus.`,
+            rationale: appendCompetitionNote(
+                needsOptimize
+                    ? `Keyword "${signal.keyword}" matches the catalog, but the Shopify listing is missing it in the title.`
+                    : `Keyword "${signal.keyword}" aligns with an existing product. Consider highlighting it as a featured focus.`,
+                signal.competitionScore
+            ),
             priorityScore,
             sources: [{ keyword: signal.keyword, signalId: signal.id }],
         } satisfies Omit<ActionSuggestion, "dedupeKey">;
