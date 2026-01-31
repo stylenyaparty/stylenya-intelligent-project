@@ -26,6 +26,7 @@ import {
   type ActionType,
 } from "@/components/dashboard";
 import { RefreshCw, Target } from "lucide-react";
+import { toast } from "@/components/ui/sonner";
 
 type WeeklyFocusItem = {
   actionType: ActionType;
@@ -52,6 +53,8 @@ export default function WeeklyFocusPage() {
   const [data, setData] = useState<WeeklyFocusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [creating, setCreating] = useState<Record<string, boolean>>({});
+  const [plannedKeys, setPlannedKeys] = useState<string[]>([]);
 
   async function load() {
     setBusy(true);
@@ -71,6 +74,39 @@ export default function WeeklyFocusPage() {
   }, [limit]);
 
   const items = useMemo(() => data?.items ?? [], [data]);
+  const itemKey = (item: WeeklyFocusItem) =>
+    `${item.actionType}-${item.targetType}-${item.targetId}`;
+
+  async function createDecision(item: WeeklyFocusItem) {
+    const key = itemKey(item);
+    if (creating[key] || plannedKeys.includes(key)) return;
+
+    setCreating((prev) => ({ ...prev, [key]: true }));
+    try {
+      await api("/v1/decisions", {
+        method: "POST",
+        body: JSON.stringify({
+          actionType: item.actionType,
+          targetType: item.targetType,
+          targetId: item.targetId,
+          title: item.title,
+          rationale: item.rationale,
+          priorityScore: item.priorityScore,
+          sources: item.sources,
+        }),
+      });
+      setPlannedKeys((prev) => (prev.includes(key) ? prev : [...prev, key]));
+      toast.success("Decision created", {
+        description: "The action was added to the Decision Log.",
+      });
+    } catch (e: unknown) {
+      toast.error("Failed to create decision", {
+        description: e instanceof Error ? e.message : "Please try again.",
+      });
+    } finally {
+      setCreating((prev) => ({ ...prev, [key]: false }));
+    }
+  }
 
   return (
     <div className="animate-fade-in">
@@ -137,14 +173,17 @@ export default function WeeklyFocusPage() {
                       <TableHead className="w-[90px] text-right">Score</TableHead>
                       <TableHead className="w-[200px]">Sources</TableHead>
                       <TableHead>Rationale</TableHead>
+                      <TableHead className="w-[160px] text-right">Decision</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {items.map((item, idx) => (
-                      <TableRow
-                        key={`${item.targetType}-${item.targetId}-${idx}`}
-                        className={idx === 0 ? "bg-primary/5" : ""}
-                      >
+                    {items.map((item, idx) => {
+                      const key = itemKey(item);
+                      return (
+                        <TableRow
+                          key={key}
+                          className={idx === 0 ? "bg-primary/5" : ""}
+                        >
                         <TableCell>
                           <ActionBadge action={item.actionType} />
                         </TableCell>
@@ -158,8 +197,23 @@ export default function WeeklyFocusPage() {
                         <TableCell className="text-sm text-muted-foreground max-w-[320px]">
                           {item.rationale}
                         </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => createDecision(item)}
+                            disabled={creating[key] || plannedKeys.includes(key)}
+                          >
+                            {plannedKeys.includes(key)
+                              ? "Planned"
+                              : creating[key]
+                                ? "Creating..."
+                                : "Create Decision"}
+                          </Button>
+                        </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

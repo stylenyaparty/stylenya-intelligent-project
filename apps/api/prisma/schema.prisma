@@ -88,28 +88,23 @@ model DecisionLog {
 }
 
 model Decision {
-  id             String   @id @default(uuid())
+  id            String   @id @default(uuid())
+  status        DecisionStatus @default(PLANNED)
 
-  decisionType   DecisionType
-  status         DecisionStatus @default(PLANNED)
+  actionType    String
+  targetType    DecisionTargetType?
+  targetId      String?
+  title         String
+  rationale     String?
+  priorityScore Int?
+  sources       Json?
 
-  // Target (por ahora solo PRODUCT; luego ampliamos a THEME/COLLECTION si quieres)
-  productId      String
-  product        Product  @relation(fields: [productId], references: [id])
-
-  rationale      String
-  expectedImpact String?
-
-  // Opcional: guardar la recomendación del engine al momento de decidir
-  engineVersion  String   @default("v1")
-  engineSnapshot Json?
-
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([createdAt])
-  @@index([decisionType, status])
-  @@index([productId])
+  @@index([status])
+  @@index([actionType])
 }
 
 model KeywordSeed {
@@ -229,18 +224,9 @@ enum RequestStatus {
 }
 
 enum DecisionTargetType {
+  KEYWORD
   PRODUCT
   THEME
-}
-
-enum DecisionType {
-  MIGRATE
-  BOOST
-  KEEP
-  PAUSE
-  RETIRE
-  LAUNCH
-  PROMOTE
 }
 
 enum DecisionStatus {
