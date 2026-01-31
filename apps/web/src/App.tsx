@@ -6,8 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "./auth/AuthContext";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { PublicOnlyRoute } from "./auth/PublicOnlyRoute";
+import AuthGate from "./auth/AuthGate";
 import { AppLayout } from "./components/layout";
-import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import WeeklyFocusPage from "./pages/WeeklyFocusPage";
 import DecisionsPage from "./pages/DecisionsPage";
@@ -29,7 +29,7 @@ const App = () => (
               path="/login"
               element={
                 <PublicOnlyRoute>
-                  <Login />
+                  <AuthGate />
                 </PublicOnlyRoute>
               }
             />

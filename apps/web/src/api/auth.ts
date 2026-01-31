@@ -12,6 +12,26 @@ export type MeAuth = {
   role: "ADMIN" | "USER";
 };
 
+export type BootstrapStatus = {
+  usersCount: number;
+  bootstrapRequired?: boolean;
+};
+
+export type InitialAdminPayload = {
+  name: string;
+  email: string;
+  password: string;
+};
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 export function getToken() {
   return localStorage.getItem("token");
 }
@@ -69,4 +89,51 @@ export async function fetchMe(): Promise<MeAuth> {
 
   const data = await res.json();
   return data.auth as MeAuth;
+}
+
+export async function fetchBootstrapStatus(): Promise<BootstrapStatus> {
+  let res: Response;
+
+  try {
+    res = await fetch(`/v1/bootstrap-status`);
+  } catch {
+    throw new Error("Backend not reachable");
+  }
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    const message = `Bootstrap status failed (${res.status}) ${txt}`.trim();
+    throw new ApiError(message, res.status);
+  }
+
+  const data = await res.json();
+
+  return {
+    usersCount: data.usersCount ?? data.userCount ?? 0,
+    bootstrapRequired: data.bootstrapRequired ?? data.bootstrap_required ?? false,
+  };
+}
+
+export async function createInitialAdmin(payload: InitialAdminPayload): Promise<void> {
+  let res: Response;
+
+  try {
+    res = await fetch(`/v1/initial-admin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error("Backend not reachable");
+  }
+
+  if (res.status === 409) {
+    throw new ApiError("Initial setup already completed", 409);
+  }
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    const message = `Setup failed (${res.status}) ${txt}`.trim();
+    throw new ApiError(message, res.status);
+  }
 }
