@@ -15,6 +15,7 @@ type KeywordJobInput = {
     niche?: string;
     topic?: string;
     maxResults?: number;
+    providerUsed?: "mock" | "trends";
     params?: {
         occasion?: string;
         productType?: string;
@@ -138,7 +139,7 @@ export async function createKeywordJob(input: KeywordJobInput) {
     const language = normalizeLanguage(input.language);
     const country = normalizeCountry(input);
     const maxResults = Math.min(input.maxResults ?? 10, 50);
-    const providerUsed = process.env.KEYWORD_PROVIDER ?? "mock";
+    const providerUsed = input.providerUsed ?? process.env.KEYWORD_PROVIDER ?? "mock";
 
     if (input.mode === "AI") {
         const topic = input.topic?.trim();
@@ -209,6 +210,14 @@ export async function createKeywordJob(input: KeywordJobInput) {
 
     // ✅ opcional: mantener salida estable / “Top N”
     const finalItems = items.slice(0, 6);
+    const providerRequest =
+        providerUsed === "trends"
+            ? {
+                geo: country,
+                timeframe: "today 12-m",
+                seeds: finalItems.map((item) => item.term),
+            }
+            : undefined;
 
     const job = await prisma.keywordJob.create({
         data: {
@@ -220,6 +229,7 @@ export async function createKeywordJob(input: KeywordJobInput) {
             niche,
             maxResults,
             providerUsed,
+            providerRequest,
             paramsJson: { params, seedIds },
             status: "PENDING",
         },

@@ -37,6 +37,7 @@ export const keywordJobCreateSchema = z.object({
     niche: z.string().min(1).optional(),
     topic: z.string().min(1).optional(),
     maxResults: z.number().int().min(1).max(50).optional(),
+    providerUsed: z.enum(["mock", "trends"]).optional(),
     params: z
         .object({
             occasion: z.string().optional(),
