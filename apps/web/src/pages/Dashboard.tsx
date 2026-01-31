@@ -1,7 +1,9 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { Package, Target, ClipboardList, TrendingUp, Calendar } from "lucide-react";
-import { KPICard, PageHeader } from "@/components/dashboard";
+import { KPICard, PageHeader, ActionBadge, type ActionType } from "@/components/dashboard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { api } from "@/lib/api";
 
 // Mock data - in production this would come from API
 const mockKPIs = {
@@ -12,9 +14,45 @@ const mockKPIs = {
   productOfWeek: "Vintage Lace Collar",
 };
 
+type WeeklyFocusItem = {
+  actionType: ActionType;
+  targetType: "KEYWORD" | "PRODUCT" | "THEME";
+  targetId: string;
+  title: string;
+  rationale: string;
+  priorityScore: number;
+};
+
+type WeeklyFocusResponse = {
+  ok: boolean;
+  items: WeeklyFocusItem[];
+};
+
 export default function Dashboard() {
   const location = useLocation();
   const isRootDashboard = location.pathname === "/dashboard" || location.pathname === "/dashboard/";
+  const [weeklyFocus, setWeeklyFocus] = useState<WeeklyFocusItem[]>([]);
+  const [weeklyFocusError, setWeeklyFocusError] = useState<string | null>(null);
+  const [weeklyFocusLoading, setWeeklyFocusLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isRootDashboard) return;
+
+    async function loadWeeklyFocus() {
+      setWeeklyFocusLoading(true);
+      setWeeklyFocusError(null);
+      try {
+        const response = await api<WeeklyFocusResponse>("/v1/weekly-focus?limit=3");
+        setWeeklyFocus(response.items ?? []);
+      } catch (e: unknown) {
+        setWeeklyFocusError(e instanceof Error ? e.message : "Failed to load weekly focus");
+      } finally {
+        setWeeklyFocusLoading(false);
+      }
+    }
+
+    void loadWeeklyFocus();
+  }, [isRootDashboard]);
 
   // If we're on a nested route, just render the outlet
   if (!isRootDashboard) {
@@ -23,8 +61,8 @@ export default function Dashboard() {
 
   return (
     <div className="animate-fade-in">
-      <PageHeader 
-        title="Dashboard" 
+      <PageHeader
+        title="Dashboard"
         description="Overview of your product intelligence and recommendations"
       />
 
@@ -68,7 +106,7 @@ export default function Dashboard() {
                 <Target className="h-5 w-5 text-primary" />
                 <CardTitle className="text-lg">This Week's Focus</CardTitle>
               </div>
-              <Link 
+              <Link
                 to="/dashboard/weekly-focus"
                 className="text-sm text-primary hover:underline"
               >
@@ -78,22 +116,25 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {/* Preview of top focus items */}
-              <FocusItemPreview 
-                name="Vintage Lace Collar" 
-                action="BOOST" 
-                reason="High demand, low stock"
-              />
-              <FocusItemPreview 
-                name="Summer Floral Dress" 
-                action="MIGRATE" 
-                reason="Strong Etsy sales, not in Shopify"
-              />
-              <FocusItemPreview 
-                name="Winter Wool Scarf" 
-                action="PAUSE" 
-                reason="Off-season, review in Q4"
-              />
+              {weeklyFocusLoading && (
+                <p className="text-sm text-muted-foreground">Loading weekly focus…</p>
+              )}
+              {!weeklyFocusLoading && weeklyFocusError && (
+                <p className="text-sm text-destructive">{weeklyFocusError}</p>
+              )}
+              {!weeklyFocusLoading && !weeklyFocusError && weeklyFocus.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No promoted signals yet. Promote keywords to generate weekly actions.
+                </p>
+              )}
+              {weeklyFocus.map((item) => (
+                <FocusItemPreview
+                  key={`${item.targetType}-${item.targetId}`}
+                  title={item.title}
+                  action={item.actionType}
+                  reason={item.rationale}
+                />
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -126,7 +167,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Link 
+              <Link
                 to="/dashboard/weekly-focus"
                 className="flex items-center gap-3 p-4 rounded-lg border border-border hover:bg-accent transition-colors"
               >
@@ -138,7 +179,7 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground">View prioritized actions</p>
                 </div>
               </Link>
-              <Link 
+              <Link
                 to="/dashboard/decisions"
                 className="flex items-center gap-3 p-4 rounded-lg border border-border hover:bg-accent transition-colors"
               >
@@ -158,33 +199,24 @@ export default function Dashboard() {
   );
 }
 
-// Helper component for focus item preview
-function FocusItemPreview({ 
-  name, 
-  action, 
-  reason 
-}: { 
-  name: string; 
-  action: string; 
-  reason: string 
+function FocusItemPreview({
+  title,
+  action,
+  reason,
+}: {
+  title: string;
+  action: ActionType;
+  reason: string;
 }) {
-  const actionColors: Record<string, string> = {
-    BOOST: "bg-action-boost/15 text-action-boost",
-    MIGRATE: "bg-action-migrate/15 text-action-migrate",
-    RETIRE: "bg-action-retire/15 text-action-retire",
-    PAUSE: "bg-action-pause/15 text-action-pause",
-    KEEP: "bg-muted text-muted-foreground",
-  };
-
   return (
     <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-card">
       <div className="flex items-center gap-3">
-        <span className={`px-2 py-0.5 rounded text-xs font-medium ${actionColors[action] || actionColors.KEEP}`}>
-          {action}
-        </span>
-        <span className="font-medium text-sm">{name}</span>
+        <ActionBadge action={action} />
+        <span className="font-medium text-sm">{title}</span>
       </div>
-      <span className="text-xs text-muted-foreground">{reason}</span>
+      <span className="text-xs text-muted-foreground line-clamp-1 max-w-[200px]">
+        {reason}
+      </span>
     </div>
   );
 }

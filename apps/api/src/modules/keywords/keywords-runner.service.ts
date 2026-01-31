@@ -34,7 +34,7 @@ export async function runKeywordJob(jobId: string) {
                 throw new Error("Topic is required for AI keyword jobs.");
             }
 
-            const max = Math.min(job.max ?? 10, 50);
+            const max = Math.min(job.maxResults ?? 10, 50);
             const keywords = await suggestKeywords(topic, max);
 
             const existingItems = await prisma.keywordJobItem.findMany({
