@@ -153,6 +153,7 @@ model KeywordJobItem {
 
   @@index([jobId])
   @@index([term])
+  @@unique([jobId, term])
 }
 
 enum UserRole {
