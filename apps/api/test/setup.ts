@@ -28,6 +28,7 @@ beforeAll(async () => {
 
     execSync("npx prisma migrate deploy", {
         stdio: "inherit",
+        cwd: path.resolve(__dirname, ".."),
         env: { ...process.env, DATABASE_URL: databaseUrl },
     });
 });
