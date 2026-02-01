@@ -39,10 +39,21 @@ export async function runKeywordJob(jobId: string) {
         return null;
     }
 
+    const originalStatus = job.status;
+    let runStarted = false;
+
     if (job.archivedAt) {
         throw new KeywordJobRunError(
             "JOB_ARCHIVED",
             "Archived jobs cannot be run.",
+            409
+        );
+    }
+
+    if (job.status === "RUNNING") {
+        throw new KeywordJobRunError(
+            "JOB_ALREADY_RUNNING",
+            "Job is already running.",
             409
         );
     }
@@ -93,6 +104,50 @@ export async function runKeywordJob(jobId: string) {
                     "Topic is required for AI keyword jobs."
                 );
             }
+
+            const updateResult = await prisma.keywordJob.updateMany({
+                where: {
+                    id: jobId,
+                    archivedAt: null,
+                    status: { in: ["PENDING", "FAILED"] },
+                },
+                data: { status: "RUNNING" },
+            });
+
+            if (updateResult.count === 0) {
+                const latestJob = await prisma.keywordJob.findUnique({ where: { id: jobId } });
+                if (!latestJob) {
+                    return null;
+                }
+                if (latestJob.archivedAt) {
+                    throw new KeywordJobRunError(
+                        "JOB_ARCHIVED",
+                        "Archived jobs cannot be run.",
+                        409
+                    );
+                }
+                if (latestJob.status === "RUNNING") {
+                    throw new KeywordJobRunError(
+                        "JOB_ALREADY_RUNNING",
+                        "Job is already running.",
+                        409
+                    );
+                }
+                if (latestJob.status === "DONE") {
+                    const existingItems = await prisma.keywordJobItem.findMany({
+                        where: { jobId },
+                        orderBy: { createdAt: "asc" },
+                    });
+                    return { job: latestJob, items: existingItems };
+                }
+                throw new KeywordJobRunError(
+                    "JOB_ALREADY_RUNNING",
+                    "Job is already running.",
+                    409
+                );
+            }
+
+            runStarted = true;
 
             let keywords: string[];
             try {
@@ -179,14 +234,54 @@ export async function runKeywordJob(jobId: string) {
         if (seeds.length === 0) {
             throw new KeywordJobRunError(
                 "NO_SEEDS_MATCHING_JOB",
-                "No active seeds available for this job. Add seed keywords or adjust the job scope."
+                "No active seeds available for this job. Add seed keywords or adjust the job scope.",
+                409
             );
         }
 
-        await prisma.keywordJob.update({
-            where: { id: jobId },
+        const updateResult = await prisma.keywordJob.updateMany({
+            where: {
+                id: jobId,
+                archivedAt: null,
+                status: { in: ["PENDING", "FAILED"] },
+            },
             data: { status: "RUNNING" },
         });
+
+        if (updateResult.count === 0) {
+            const latestJob = await prisma.keywordJob.findUnique({ where: { id: jobId } });
+            if (!latestJob) {
+                return null;
+            }
+            if (latestJob.archivedAt) {
+                throw new KeywordJobRunError(
+                    "JOB_ARCHIVED",
+                    "Archived jobs cannot be run.",
+                    409
+                );
+            }
+            if (latestJob.status === "RUNNING") {
+                throw new KeywordJobRunError(
+                    "JOB_ALREADY_RUNNING",
+                    "Job is already running.",
+                    409
+                );
+            }
+            if (latestJob.status === "DONE") {
+                const existingItems = await prisma.keywordJobItem.findMany({
+                    where: { jobId },
+                    orderBy: { createdAt: "asc" },
+                });
+                return { job: latestJob, items: existingItems };
+            }
+            throw new KeywordJobRunError(
+                "JOB_ALREADY_RUNNING",
+                "Job is already running.",
+                409
+            );
+        }
+
+        runStarted = true;
 
         const provider = trendsProvider;
         const existingProviderRequest = job.providerRequest as
@@ -296,7 +391,14 @@ export async function runKeywordJob(jobId: string) {
             itemsPersisted: results.length,
         };
     } catch (error) {
-        if (!isKeywordJobRunError(error)) {
+        if (isKeywordJobRunError(error)) {
+            if (runStarted) {
+                await prisma.keywordJob.update({
+                    where: { id: jobId },
+                    data: { status: originalStatus },
+                });
+            }
+        } else {
             await prisma.keywordJob.update({
                 where: { id: jobId },
                 data: { status: "FAILED" },
