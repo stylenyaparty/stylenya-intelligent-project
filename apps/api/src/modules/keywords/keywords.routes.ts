@@ -2,11 +2,13 @@ import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../../interfaces/http/middleware/auth";
 import {
     keywordJobCreateSchema,
+    keywordJobListQuerySchema,
     keywordSeedCreateSchema,
     keywordSeedListQuerySchema,
     keywordSeedStatusSchema,
 } from "./keywords.schemas";
 import {
+    archiveKeywordJob,
     createKeywordJob,
     createKeywordSeeds,
     getKeywordJob,
@@ -15,6 +17,7 @@ import {
     listKeywordSeeds,
     listPromotedKeywordSignals,
     promoteKeywordJobItem,
+    restoreKeywordJob,
     updateKeywordSeedStatus,
 } from "./keywords.service";
 import { isKeywordJobRunError, runKeywordJob } from "./keywords-runner.service";
@@ -63,9 +66,14 @@ export async function keywordsRoutes(app: FastifyInstance) {
         }
     });
 
-    app.get("/keywords/jobs", { preHandler: requireAuth }, async () => {
-        const jobs = await listKeywordJobs();
-        return { ok: true, jobs };
+    app.get("/keywords/jobs", { preHandler: requireAuth }, async (request, reply) => {
+        const query = keywordJobListQuerySchema.safeParse(request.query);
+        if (!query.success) {
+            return reply.code(400).send({ error: "Invalid job list query" });
+        }
+        const status = query.data.status ?? "active";
+        const jobs = await listKeywordJobs(status);
+        return reply.send({ ok: true, jobs });
     });
 
     app.get("/keywords/jobs/:id", { preHandler: requireAuth }, async (request, reply) => {
@@ -113,6 +121,47 @@ export async function keywordsRoutes(app: FastifyInstance) {
                     .code(500)
                     .send({ error: "INTERNAL_SERVER_ERROR", message: "Keyword research failed" });
             }
+        }
+    );
+
+    app.post(
+        "/keywords/jobs/:id/archive",
+        { preHandler: requireAuth },
+        async (request, reply) => {
+            const params = request.params as { id: string };
+            const job = await getKeywordJob(params.id);
+            if (!job) {
+                return reply.code(404).send({ error: "Job not found" });
+            }
+            if (job.archivedAt) {
+                return reply.code(409).send({ error: "Job already archived" });
+            }
+            if (job.status === "RUNNING") {
+                return reply
+                    .code(409)
+                    .send({ error: "Job is running and cannot be archived" });
+            }
+
+            const updated = await archiveKeywordJob(params.id);
+            return reply.send({ ok: true, job: updated });
+        }
+    );
+
+    app.post(
+        "/keywords/jobs/:id/restore",
+        { preHandler: requireAuth },
+        async (request, reply) => {
+            const params = request.params as { id: string };
+            const job = await getKeywordJob(params.id);
+            if (!job) {
+                return reply.code(404).send({ error: "Job not found" });
+            }
+            if (!job.archivedAt) {
+                return reply.code(409).send({ error: "Job is not archived" });
+            }
+
+            const updated = await restoreKeywordJob(params.id);
+            return reply.send({ ok: true, job: updated });
         }
     );
 

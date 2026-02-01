@@ -39,6 +39,14 @@ export async function runKeywordJob(jobId: string) {
         return null;
     }
 
+    if (job.archivedAt) {
+        throw new KeywordJobRunError(
+            "JOB_ARCHIVED",
+            "Archived jobs cannot be run.",
+            409
+        );
+    }
+
     if (job.status === "DONE") {
         const existingItems = await prisma.keywordJobItem.findMany({
             where: { jobId },

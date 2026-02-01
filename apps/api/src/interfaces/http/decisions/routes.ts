@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../../../infrastructure/db/prisma";
 import { buildDedupeKey } from "../../../modules/decisions/decision-dedupe";
+import { getDecisionDateRange } from "../../../modules/decisions/decision-date-range";
 import { requireAuth, requireRole } from "../middleware/auth";
 
 const ActionTypeSchema = z.enum(["PROMOTE", "CREATE", "OPTIMIZE", "PAUSE"]);
@@ -66,8 +67,11 @@ export async function decisionsRoutes(app: FastifyInstance) {
                 }
             } catch (error) {
                 console.error("Error creating decision:", error);
-                return reply.code(500).send({ 
-                    error: error instanceof Error ? error.message : "Failed to create decision" 
+                if (error instanceof z.ZodError) {
+                    return reply.code(400).send({ error: "Invalid decision payload" });
+                }
+                return reply.code(500).send({
+                    error: error instanceof Error ? error.message : "Failed to create decision",
                 });
             }
         }
@@ -77,14 +81,43 @@ export async function decisionsRoutes(app: FastifyInstance) {
     app.get(
         "/decisions",
         { preHandler: [requireAuth, requireRole("ADMIN")] },
-        async (request) => {
-            const q = request.query as { limit?: string; status?: string };
+        async (request, reply) => {
+            const QuerySchema = z.object({
+                limit: z.string().optional(),
+                status: DecisionStatusSchema.optional(),
+                range: z.enum(["today", "all"]).optional(),
+                date: z.string().optional(),
+            });
 
-            const parsedLimit = q.limit ? Number(q.limit) : undefined;
+            const query = QuerySchema.safeParse(request.query);
+            if (!query.success) {
+                return reply.code(400).send({ error: "Invalid decisions query" });
+            }
+
+            const parsedLimit = query.data.limit ? Number(query.data.limit) : undefined;
             const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit!, 1), 100) : 50;
 
             const where: any = {};
-            if (q.status) where.status = DecisionStatusSchema.parse(q.status);
+            if (query.data.status) where.status = query.data.status;
+
+            const range = query.data.range ?? "today";
+            const dateFilter =
+                typeof query.data.date === "string"
+                    ? getDecisionDateRange({ date: query.data.date })
+                    : range === "all"
+                        ? null
+                        : getDecisionDateRange();
+
+            if (query.data.date && !dateFilter) {
+                return reply.code(400).send({ error: "Invalid date format" });
+            }
+
+            if (dateFilter) {
+                where.createdAt = {
+                    gte: dateFilter.start,
+                    lt: dateFilter.end,
+                };
+            }
 
             const rows = await prisma.decision.findMany({
                 where,
@@ -101,28 +134,38 @@ export async function decisionsRoutes(app: FastifyInstance) {
         "/decisions/:id",
         { preHandler: [requireAuth, requireRole("ADMIN")] },
         async (request, reply) => {
-            const ParamsSchema = z.object({ id: z.string().uuid() });
-            const BodySchema = z.object({
-                status: DecisionStatusSchema.optional(),
-                title: z.string().min(3).optional(),
-                rationale: z.string().min(3).optional(),
-                priorityScore: z.number().int().optional(),
-            });
+            try {
+                const ParamsSchema = z.object({ id: z.string().uuid() });
+                const BodySchema = z.object({
+                    status: DecisionStatusSchema.optional(),
+                    title: z.string().min(3).optional(),
+                    rationale: z.string().min(3).optional(),
+                    priorityScore: z.number().int().optional(),
+                });
 
-            const params = ParamsSchema.parse(request.params);
-            const body = BodySchema.parse(request.body);
+                const params = ParamsSchema.parse(request.params);
+                const body = BodySchema.parse(request.body);
 
-            const updated = await prisma.decision.update({
-                where: { id: params.id },
-                data: {
-                    status: body.status,
-                    title: body.title,
-                    rationale: body.rationale,
-                    priorityScore: body.priorityScore,
-                },
-            });
+                const updated = await prisma.decision.update({
+                    where: { id: params.id },
+                    data: {
+                        status: body.status,
+                        title: body.title,
+                        rationale: body.rationale,
+                        priorityScore: body.priorityScore,
+                    },
+                });
 
-            return reply.send({ ok: true, decision: updated });
+                return reply.send({ ok: true, decision: updated });
+            } catch (error) {
+                if (error instanceof z.ZodError) {
+                    return reply.code(400).send({ error: "Invalid decision update payload" });
+                }
+                if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+                    return reply.code(404).send({ error: "Decision not found" });
+                }
+                throw error;
+            }
         }
     );
 }

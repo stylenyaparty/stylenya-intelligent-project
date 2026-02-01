@@ -37,6 +37,7 @@ import {
   EmptyState,
 } from "@/components/dashboard";
 import { RefreshCw, Plus, Play, Tags, FolderSearch, Info } from "lucide-react";
+import { toast } from "@/components/ui/sonner";
 
 type KeywordSeed = {
   id: string;
@@ -58,6 +59,7 @@ type KeywordJob = {
   providerUsed: string;
   niche: string;
   status: "PENDING" | "RUNNING" | "DONE" | "FAILED";
+  archivedAt?: string | null;
   createdAt: string;
 };
 
@@ -129,6 +131,8 @@ type PromotedSignalsResponse = {
   signals: PromotedSignal[];
 };
 
+type JobStatusFilter = "active" | "archived" | "all";
+
 export default function KeywordsPage() {
   const defaultJobProviderUsed = "trends";
   const defaultJobMaxResults = 10;
@@ -139,6 +143,8 @@ export default function KeywordsPage() {
   const [jobs, setJobs] = useState<KeywordJob[]>([]);
   const [items, setItems] = useState<KeywordJobItem[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [jobStatusFilter, setJobStatusFilter] = useState<JobStatusFilter>("active");
+  const [jobActionId, setJobActionId] = useState<string | null>(null);
   const [loadingSeeds, setLoadingSeeds] = useState(false);
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
@@ -179,11 +185,13 @@ export default function KeywordsPage() {
     }
   }
 
-  async function loadJobs() {
+  async function loadJobs(statusOverride?: JobStatusFilter) {
     setLoadingJobs(true);
     setError(null);
     try {
-      const res = await api<JobResponse>("/v1/keywords/jobs");
+      const status = statusOverride ?? jobStatusFilter;
+      const query = status ? `?status=${status}` : "";
+      const res = await api<JobResponse>(`/v1/keywords/jobs${query}`);
       setJobs(res.jobs);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load jobs");
@@ -219,9 +227,12 @@ export default function KeywordsPage() {
 
   useEffect(() => {
     void loadSeeds();
-    void loadJobs();
     void loadPromotedSignals();
   }, []);
+
+  useEffect(() => {
+    void loadJobs();
+  }, [jobStatusFilter]);
 
   useEffect(() => {
     if (selectedJobId) {
@@ -229,6 +240,12 @@ export default function KeywordsPage() {
     }
     setRunWarning(null);
   }, [selectedJobId]);
+
+  useEffect(() => {
+    if (selectedJobId && !jobs.some((job) => job.id === selectedJobId)) {
+      setSelectedJobId(null);
+    }
+  }, [jobs, selectedJobId]);
 
   async function submitSeeds() {
     const terms = seedInput
@@ -320,7 +337,7 @@ export default function KeywordsPage() {
       setJobOccasion("");
       setJobProductType("");
       setJobAudience("");
-      setJobs((prev) => [res.job, ...prev]);
+      await loadJobs();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create job");
     } finally {
@@ -346,6 +363,44 @@ export default function KeywordsPage() {
       setError(e instanceof Error ? e.message : "Failed to run job");
     } finally {
       setLoadingItems(false);
+    }
+  }
+
+  async function archiveJob(job: KeywordJob) {
+    setJobActionId(job.id);
+    setError(null);
+    try {
+      await api(`/v1/keywords/jobs/${job.id}/archive`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      toast.success("Job archived", {
+        description: "The job is now in the archived list.",
+      });
+      await loadJobs();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to archive job");
+    } finally {
+      setJobActionId(null);
+    }
+  }
+
+  async function restoreJob(job: KeywordJob) {
+    setJobActionId(job.id);
+    setError(null);
+    try {
+      await api(`/v1/keywords/jobs/${job.id}/restore`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      toast.success("Job restored", {
+        description: "The job is active again.",
+      });
+      await loadJobs();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to restore job");
+    } finally {
+      setJobActionId(null);
     }
   }
 
@@ -514,12 +569,31 @@ export default function KeywordsPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              <Tabs
+                value={jobStatusFilter}
+                onValueChange={(value) => setJobStatusFilter(value as JobStatusFilter)}
+              >
+                <TabsList>
+                  <TabsTrigger value="active">Active Jobs</TabsTrigger>
+                  <TabsTrigger value="archived">Archived Jobs</TabsTrigger>
+                  <TabsTrigger value="all">All Jobs</TabsTrigger>
+                </TabsList>
+              </Tabs>
+
               {loadingJobs && <LoadingState message="Loading jobs..." />}
 
               {!loadingJobs && jobs.length === 0 ? (
                 <EmptyState
-                  title="No keyword jobs yet"
-                  description="Create a job to generate keyword research in CUSTOM, AUTO, or HYBRID mode."
+                  title={
+                    jobStatusFilter === "archived"
+                      ? "No archived keyword jobs"
+                      : "No keyword jobs yet"
+                  }
+                  description={
+                    jobStatusFilter === "archived"
+                      ? "Archived jobs will appear here once you archive a job."
+                      : "Create a job to generate keyword research in CUSTOM, AUTO, or HYBRID mode."
+                  }
                   icon={<FolderSearch className="h-6 w-6 text-muted-foreground" />}
                 />
               ) : (
@@ -533,45 +607,68 @@ export default function KeywordsPage() {
                           <TableHead>Provider</TableHead>
                           <TableHead>Geo</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead className="w-[140px] text-right">Actions</TableHead>
+                          <TableHead className="w-[220px] text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {jobs.map((job) => (
-                        <TableRow key={job.id}>
-                          <TableCell className="font-medium">{job.mode}</TableCell>
-                          <TableCell>{job.marketplace}</TableCell>
-                          <TableCell>{job.language.toUpperCase()}</TableCell>
-                          <TableCell>{renderProviderBadge(job.providerUsed)}</TableCell>
-                          <TableCell>
-                            <span className={chipBase}>{job.country}</span>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {job.status}
-                          </TableCell>
-                          <TableCell className="text-right space-x-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedJobId(job.id);
-                                setActiveTab("results");
-                              }}
-                            >
-                              View
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => runJob(job.id)}
-                              disabled={job.status === "RUNNING"}
-                              className="gap-1"
-                            >
-                              <Play className="h-4 w-4" />
-                              Run
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {jobs.map((job) => {
+                        const isArchived = Boolean(job.archivedAt);
+                        const isRunning = job.status === "RUNNING";
+                        return (
+                          <TableRow key={job.id}>
+                            <TableCell className="font-medium">{job.mode}</TableCell>
+                            <TableCell>{job.marketplace}</TableCell>
+                            <TableCell>{job.language.toUpperCase()}</TableCell>
+                            <TableCell>{renderProviderBadge(job.providerUsed)}</TableCell>
+                            <TableCell>
+                              <span className={chipBase}>{job.country}</span>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {isArchived ? "ARCHIVED" : job.status}
+                            </TableCell>
+                            <TableCell className="text-right space-x-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedJobId(job.id);
+                                  setActiveTab("results");
+                                }}
+                              >
+                                View
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => runJob(job.id)}
+                                disabled={isRunning || isArchived}
+                                className="gap-1"
+                              >
+                                <Play className="h-4 w-4" />
+                                Run
+                              </Button>
+                              {isArchived ? (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => restoreJob(job)}
+                                  disabled={jobActionId === job.id}
+                                >
+                                  Restore
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => archiveJob(job)}
+                                  disabled={isRunning || jobActionId === job.id}
+                                >
+                                  Archive
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -600,6 +697,7 @@ export default function KeywordsPage() {
                       {jobs.map((job) => (
                         <SelectItem key={job.id} value={job.id}>
                           {job.mode} • {job.marketplace} • {job.language.toUpperCase()}
+                          {job.archivedAt ? " • Archived" : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -609,7 +707,7 @@ export default function KeywordsPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => runJob(selectedJob.id)}
-                      disabled={selectedJob.status === "RUNNING"}
+                      disabled={selectedJob.status === "RUNNING" || Boolean(selectedJob.archivedAt)}
                       className="gap-1"
                     >
                       <Play className="h-4 w-4" />
@@ -641,6 +739,11 @@ export default function KeywordsPage() {
                     <span className={chipBase}>Country: {selectedJob.country}</span>
                     <span className={chipBase}>Engine: {selectedJob.engine}</span>
                     <span className={chipBase}>Max: {selectedJob.maxResults}</span>
+                    {selectedJob.archivedAt && (
+                      <span className={`${chipBase} border-amber-200 text-amber-800`}>
+                        Archived
+                      </span>
+                    )}
                   </div>
                 </div>
               )}

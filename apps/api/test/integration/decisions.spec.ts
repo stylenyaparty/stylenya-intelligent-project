@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
-import { createTestServer, getAuthToken, seedAdmin } from "../helpers.js";
+import { createTestServer, getAuthToken, seedAdmin, resetDatabase } from "../helpers.js";
+import { prisma } from "../../src/infrastructure/db/prisma.js";
+import { getDecisionDateRange } from "../../src/modules/decisions/decision-date-range.js";
 
 
 describe("Decisions API", () => {
@@ -10,6 +12,7 @@ describe("Decisions API", () => {
     let cachedHeaders: { Authorization: string } | null = null;
 
     beforeAll(async () => {
+        await resetDatabase();
         app = await createTestServer();
         request = supertest(app.server);
     });
@@ -29,6 +32,32 @@ describe("Decisions API", () => {
         const token = await getAuthToken(app, admin.email, admin.password);
         cachedHeaders = { Authorization: `Bearer ${token}` };
         return cachedHeaders;
+    }
+
+    function buildDecisionPayload() {
+        return {
+            actionType: "PROMOTE",
+            targetType: "KEYWORD",
+            targetId: `keyword-${Math.random().toString(16).slice(2)}`,
+            title: "Promote keyword",
+            rationale: "Testing decision list filters",
+            priorityScore: 50,
+        } as const;
+    }
+
+    function buildDedupeKey() {
+        return `dedupe-${Math.random().toString(16).slice(2)}`;
+    }
+
+    const nyFormatter = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/New_York",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    });
+
+    function formatNyDate(date: Date) {
+        return nyFormatter.format(date);
     }
 
     it("creates a planned decision from weekly focus payload", async () => {
@@ -151,5 +180,161 @@ describe("Decisions API", () => {
         );
 
         expect(matching).toHaveLength(1);
+    });
+
+    it("defaults to today's decisions based on New York time", async () => {
+        const headers = await authHeader();
+
+        const range = getDecisionDateRange({ now: new Date() });
+        expect(range).toBeTruthy();
+        if (!range) return;
+
+        const todayDecision = await prisma.decision.create({
+            data: {
+                ...buildDecisionPayload(),
+                dedupeKey: buildDedupeKey(),
+                createdAt: new Date(range.start.getTime() + 60 * 1000),
+            },
+        });
+
+        const yesterdayDecision = await prisma.decision.create({
+            data: {
+                ...buildDecisionPayload(),
+                dedupeKey: buildDedupeKey(),
+                createdAt: new Date(range.start.getTime() - 60 * 1000),
+            },
+        });
+
+        const response = await request
+            .get("/v1/decisions?limit=50")
+            .set(headers)
+            .expect(200);
+
+        const ids = response.body.decisions.map((d: { id: string }) => d.id);
+        expect(ids).toContain(todayDecision.id);
+        expect(ids).not.toContain(yesterdayDecision.id);
+    });
+
+    it("returns all decisions when range=all", async () => {
+        const headers = await authHeader();
+
+        const range = getDecisionDateRange({ now: new Date() });
+        expect(range).toBeTruthy();
+        if (!range) return;
+
+        const todayDecision = await prisma.decision.create({
+            data: {
+                ...buildDecisionPayload(),
+                dedupeKey: buildDedupeKey(),
+                createdAt: new Date(range.start.getTime() + 2 * 60 * 1000),
+            },
+        });
+
+        const yesterdayDecision = await prisma.decision.create({
+            data: {
+                ...buildDecisionPayload(),
+                dedupeKey: buildDedupeKey(),
+                createdAt: new Date(range.start.getTime() - 2 * 60 * 1000),
+            },
+        });
+
+        const response = await request
+            .get("/v1/decisions?range=all&limit=50")
+            .set(headers)
+            .expect(200);
+
+        const ids = response.body.decisions.map((d: { id: string }) => d.id);
+        expect(ids).toContain(todayDecision.id);
+        expect(ids).toContain(yesterdayDecision.id);
+    });
+
+    it("filters decisions by explicit date", async () => {
+        const headers = await authHeader();
+
+        const todayRange = getDecisionDateRange({ now: new Date() });
+        expect(todayRange).toBeTruthy();
+        if (!todayRange) return;
+
+        const targetDate = formatNyDate(new Date(todayRange.start.getTime() - 60 * 60 * 1000));
+        const targetRange = getDecisionDateRange({ date: targetDate });
+        expect(targetRange).toBeTruthy();
+        if (!targetRange) return;
+
+        const targetDecision = await prisma.decision.create({
+            data: {
+                ...buildDecisionPayload(),
+                dedupeKey: buildDedupeKey(),
+                createdAt: new Date(targetRange.start.getTime() + 5 * 60 * 1000),
+            },
+        });
+
+        const otherDecision = await prisma.decision.create({
+            data: {
+                ...buildDecisionPayload(),
+                dedupeKey: buildDedupeKey(),
+                createdAt: new Date(targetRange.start.getTime() - 5 * 60 * 1000),
+            },
+        });
+
+        const response = await request
+            .get(`/v1/decisions?date=${targetDate}&limit=50`)
+            .set(headers)
+            .expect(200);
+
+        const ids = response.body.decisions.map((d: { id: string }) => d.id);
+        expect(ids).toContain(targetDecision.id);
+        expect(ids).not.toContain(otherDecision.id);
+    });
+
+    it("respects New York day boundaries for date filters", async () => {
+        const headers = await authHeader();
+        const dateString = formatNyDate(new Date());
+
+        const range = getDecisionDateRange({ date: dateString });
+        expect(range).toBeTruthy();
+        if (!range) return;
+
+        const startDecision = await prisma.decision.create({
+            data: {
+                ...buildDecisionPayload(),
+                dedupeKey: buildDedupeKey(),
+                createdAt: new Date(range.start.getTime()),
+            },
+        });
+
+        const endMinusDecision = await prisma.decision.create({
+            data: {
+                ...buildDecisionPayload(),
+                dedupeKey: buildDedupeKey(),
+                createdAt: new Date(range.end.getTime() - 1000),
+            },
+        });
+
+        const beforeDecision = await prisma.decision.create({
+            data: {
+                ...buildDecisionPayload(),
+                dedupeKey: buildDedupeKey(),
+                createdAt: new Date(range.start.getTime() - 1000),
+            },
+        });
+
+        const endDecision = await prisma.decision.create({
+            data: {
+                ...buildDecisionPayload(),
+                dedupeKey: buildDedupeKey(),
+                createdAt: new Date(range.end.getTime()),
+            },
+        });
+
+        const response = await request
+            .get(`/v1/decisions?date=${dateString}&limit=50`)
+            .set(headers)
+            .expect(200);
+
+        const ids = response.body.decisions.map((d: { id: string }) => d.id);
+        expect(ids).toContain(startDecision.id);
+        expect(ids).toContain(endMinusDecision.id);
+        expect(ids).not.toContain(beforeDecision.id);
+        expect(ids).not.toContain(endDecision.id);
     });
 });

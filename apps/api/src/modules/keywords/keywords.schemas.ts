@@ -47,3 +47,9 @@ export const keywordJobCreateSchema = z.object({
         .optional(),
     seedIds: z.array(z.string()).optional(),
 });
+
+export const keywordJobListStatusSchema = z.enum(["active", "archived", "all"]);
+
+export const keywordJobListQuerySchema = z.object({
+    status: keywordJobListStatusSchema.optional(),
+});
