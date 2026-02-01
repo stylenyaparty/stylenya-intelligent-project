@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { 
   Select, 
   SelectContent, 
@@ -9,6 +10,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -52,12 +54,20 @@ export default function DecisionsPage() {
   const [data, setData] = useState<DecisionsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [range, setRange] = useState<"today" | "all">("today");
+  const [selectedDate, setSelectedDate] = useState("");
 
   async function load() {
     setBusy(true);
     setError(null);
     try {
-      const res = await api<DecisionsResponse>(`/v1/decisions?limit=50`);
+      const params = new URLSearchParams({ limit: "50" });
+      if (selectedDate) {
+        params.set("date", selectedDate);
+      } else {
+        params.set("range", range);
+      }
+      const res = await api<DecisionsResponse>(`/v1/decisions?${params.toString()}`);
       setData(res);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load");
@@ -68,7 +78,7 @@ export default function DecisionsPage() {
 
   useEffect(() => { 
     void load(); 
-  }, []);
+  }, [range, selectedDate]);
 
   async function updateStatus(id: string, status: DecisionStatus) {
     setBusy(true);
@@ -87,6 +97,11 @@ export default function DecisionsPage() {
   }
 
   const decisions = data?.decisions ?? [];
+  const hasDayFilter = Boolean(selectedDate) || range === "today";
+  const emptyTitle = hasDayFilter ? "No decisions for this day" : "No decisions yet";
+  const emptyDescription = hasDayFilter
+    ? "Try another date or switch to all time."
+    : "Decisions you create from Weekly Focus will appear here.";
 
   // Group decisions by status for summary
   const statusCounts = decisions.reduce((acc, d) => {
@@ -111,6 +126,42 @@ export default function DecisionsPage() {
           Refresh
         </Button>
       </PageHeader>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <Tabs
+          value={range}
+          onValueChange={(value) => {
+            setRange(value as "today" | "all");
+            setSelectedDate("");
+          }}
+        >
+          <TabsList>
+            <TabsTrigger value="today">Today</TabsTrigger>
+            <TabsTrigger value="all">All time</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">Date</span>
+          <Input
+            type="date"
+            value={selectedDate}
+            onChange={(event) => setSelectedDate(event.target.value)}
+            className="w-[160px]"
+          />
+          {selectedDate && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSelectedDate("");
+                setRange("today");
+              }}
+            >
+              Clear date
+            </Button>
+          )}
+        </div>
+      </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
@@ -139,8 +190,8 @@ export default function DecisionsPage() {
             {decisions.length === 0 ? (
               <div className="p-6">
                 <EmptyState 
-                  title="No decisions yet" 
-                  description="Decisions you create from Weekly Focus will appear here."
+                  title={emptyTitle}
+                  description={emptyDescription}
                   icon={<ClipboardList className="h-6 w-6 text-muted-foreground" />}
                 />
               </div>
