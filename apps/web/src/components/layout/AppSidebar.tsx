@@ -1,5 +1,5 @@
 import { useLocation } from "react-router-dom";
-import { LayoutDashboard, Target, ClipboardList, KeyRound } from "lucide-react";
+import { LayoutDashboard, Target, ClipboardList, KeyRound, Package } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,
@@ -38,6 +38,12 @@ const navigationItems = [
     url: "/dashboard/keywords", 
     icon: KeyRound,
     description: "Keyword research"
+  },
+  { 
+    title: "Products", 
+    url: "/dashboard/products", 
+    icon: Package,
+    description: "Catalog management"
   },
 ];
 
