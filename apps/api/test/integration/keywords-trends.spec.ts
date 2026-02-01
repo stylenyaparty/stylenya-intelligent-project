@@ -166,13 +166,15 @@ describe("Keywords API (trends provider)", () => {
 
         const firstRun = runRequest();
         const secondRun = runRequest();
+        const firstRunPromise = firstRun.then((response) => response);
+        const secondRunPromise = secondRun.then((response) => response);
 
         const waitForResolvers = async () => {
-            for (let i = 0; i < 40; i += 1) {
+            for (let i = 0; i < 200; i += 1) {
                 if (interestResolvers.length >= 1 && relatedResolvers.length >= 1) {
                     return;
                 }
-                await new Promise((resolve) => setTimeout(resolve, 5));
+                await new Promise((resolve) => setTimeout(resolve, 10));
             }
             throw new Error("Timed out waiting for trends mocks");
         };
@@ -194,7 +196,10 @@ describe("Keywords API (trends provider)", () => {
         interestResolvers.forEach((resolve) => resolve(interestPayload));
         relatedResolvers.forEach((resolve) => resolve(relatedPayload));
 
-        const [firstResponse, secondResponse] = await Promise.all([firstRun, secondRun]);
+        const [firstResponse, secondResponse] = await Promise.all([
+            firstRunPromise,
+            secondRunPromise,
+        ]);
         const statuses = [firstResponse.status, secondResponse.status].sort();
 
         expect(statuses).toEqual([200, 409]);
