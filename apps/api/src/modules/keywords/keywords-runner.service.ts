@@ -4,6 +4,7 @@ import {
     DEFAULT_TIMEFRAME,
 } from "./providers/googleTrendsKeywordResearchProvider.js";
 import type { KeywordSuggestion } from "./providers/providerTypes.js";
+import { LLMNotConfiguredError } from "../llm/llm.errors.js";
 import { suggestKeywords } from "../llm/suggest-keywords.service.js";
 
 const trendsProvider = new GoogleTrendsKeywordResearchProvider();
@@ -85,7 +86,18 @@ export async function runKeywordJob(jobId: string) {
                 );
             }
 
-            const keywords = await suggestKeywords(topic, maxResults);
+            let keywords: string[];
+            try {
+                keywords = await suggestKeywords(topic, maxResults);
+            } catch (error) {
+                if (error instanceof LLMNotConfiguredError) {
+                    throw new KeywordJobRunError(
+                        "LLM_NOT_CONFIGURED",
+                        "LLM provider is not configured."
+                    );
+                }
+                throw error;
+            }
 
             const existingItems = await prisma.keywordJobItem.findMany({
                 where: { jobId },
