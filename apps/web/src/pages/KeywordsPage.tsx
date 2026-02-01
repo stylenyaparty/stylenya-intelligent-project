@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -56,7 +56,7 @@ type KeywordJob = {
   engine: string;
   country: string;
   maxResults: number;
-  providerUsed: string;
+  providerUsed: "TRENDS" | "AUTO" | "GOOGLE_ADS" | string;
   niche: string;
   status: "PENDING" | "RUNNING" | "DONE" | "FAILED";
   archivedAt?: string | null;
@@ -137,8 +137,14 @@ type PromotedSignalsResponse = {
 
 type JobStatusFilter = "active" | "archived" | "all";
 
+type KeywordProviderSettings = {
+  trends: { enabled: boolean };
+  googleAds: { enabled: boolean; configured: boolean; customerId?: string };
+  auto: { prefers: string };
+};
+
 export default function KeywordsPage() {
-  const defaultJobProviderUsed = "trends";
+  const defaultJobProviderUsed = "TRENDS";
   const defaultJobMaxResults = 10;
 
   const [activeTab, setActiveTab] = useState("seeds");
@@ -152,12 +158,14 @@ export default function KeywordsPage() {
   const [loadingSeeds, setLoadingSeeds] = useState(false);
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
+  const [loadingProviders, setLoadingProviders] = useState(false);
   const [loadingPromoted, setLoadingPromoted] = useState(false);
   const [runningJobIds, setRunningJobIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [promotedSignals, setPromotedSignals] = useState<PromotedSignal[]>([]);
   const [promotingId, setPromotingId] = useState<string | null>(null);
   const [seedCount, setSeedCount] = useState<number | null>(null);
+  const [providerSettings, setProviderSettings] = useState<KeywordProviderSettings | null>(null);
 
   const [jobDialogOpen, setJobDialogOpen] = useState(false);
   const [jobMode, setJobMode] = useState<KeywordJob["mode"]>("AUTO");
@@ -194,6 +202,18 @@ export default function KeywordsPage() {
       setError(e instanceof Error ? e.message : "Failed to load seeds");
     } finally {
       setLoadingSeeds(false);
+    }
+  }
+
+  async function loadProviderSettings() {
+    setLoadingProviders(true);
+    try {
+      const res = await api<KeywordProviderSettings>("/v1/settings/keyword-providers");
+      setProviderSettings(res);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to load provider settings");
+    } finally {
+      setLoadingProviders(false);
     }
   }
 
@@ -240,6 +260,7 @@ export default function KeywordsPage() {
   useEffect(() => {
     void loadSeeds();
     void loadPromotedSignals();
+    void loadProviderSettings();
   }, []);
 
   useEffect(() => {
@@ -387,6 +408,16 @@ export default function KeywordsPage() {
         await loadItems(jobId);
       }
     } catch (e: unknown) {
+      if (e instanceof ApiError) {
+        if (e.status === 503 && e.code === "PROVIDER_TEMP_BLOCKED") {
+          toast.error("Google Trends temporarily blocked. Try again in 30–60 seconds.");
+          return;
+        }
+        if (e.status === 409 && e.code === "JOB_ALREADY_RUNNING") {
+          toast.warning("Job already running.");
+          return;
+        }
+      }
       setError(e instanceof Error ? e.message : "Failed to run job");
     } finally {
       setLoadingItems(false);
@@ -457,17 +488,50 @@ export default function KeywordsPage() {
     () => new Set(promotedSignals.map((signal) => signal.jobItemId)),
     [promotedSignals]
   );
+  const googleAdsConfigured = Boolean(
+    providerSettings?.googleAds.enabled && providerSettings?.googleAds.configured
+  );
   const providerBadgeBase =
     "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium";
   const chipBase =
     "inline-flex items-center rounded-full border bg-muted/40 px-2 py-0.5 text-xs font-medium text-muted-foreground";
 
+  const normalizeProvider = (providerUsed: string) => {
+    const normalized = providerUsed.trim().toUpperCase();
+    if (normalized === "AUTO") return "AUTO";
+    if (normalized === "GOOGLE_ADS" || normalized === "GOOGLE-ADS") return "GOOGLE_ADS";
+    return "TRENDS";
+  };
+
   const renderProviderBadge = (providerUsed: string) => {
+    const normalized = normalizeProvider(providerUsed);
+    if (normalized === "AUTO") {
+      return (
+        <span className={`${providerBadgeBase} border-emerald-200 text-emerald-700`}>
+          {googleAdsConfigured ? "AUTO (ADS)" : "AUTO (TRENDS)"}
+        </span>
+      );
+    }
+    if (normalized === "GOOGLE_ADS") {
+      return (
+        <span className={`${providerBadgeBase} border-indigo-200 text-indigo-700`}>
+          GOOGLE ADS
+        </span>
+      );
+    }
     return (
       <span className={`${providerBadgeBase} border-primary/30 text-primary`}>
         TRENDS
       </span>
     );
+  };
+
+  const isTrendsProvider = (providerUsed: string) => {
+    const normalized = normalizeProvider(providerUsed);
+    if (normalized === "AUTO") {
+      return !googleAdsConfigured;
+    }
+    return normalized === "TRENDS";
   };
 
   return (
@@ -483,6 +547,7 @@ export default function KeywordsPage() {
             void loadSeeds();
             void loadJobs();
             void loadPromotedSignals();
+            void loadProviderSettings();
             if (selectedJobId) {
               void loadItems(selectedJobId);
             }
@@ -501,6 +566,7 @@ export default function KeywordsPage() {
             void loadSeeds();
             void loadJobs();
             void loadPromotedSignals();
+            void loadProviderSettings();
             if (selectedJobId) {
               void loadItems(selectedJobId);
             }
@@ -839,7 +905,7 @@ export default function KeywordsPage() {
                 />
               ) : null}
 
-              {!loadingItems && selectedJob?.providerUsed === "trends" && (
+              {!loadingItems && selectedJob && isTrendsProvider(selectedJob.providerUsed) && (
                 <div className="flex items-start gap-2 rounded-md border border-muted/60 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
                   <Info className="mt-0.5 h-4 w-4 text-muted-foreground" />
                   <span>
@@ -877,7 +943,7 @@ export default function KeywordsPage() {
                             {item.resultJson?.competitionScore ?? (
                               <span
                                 title={
-                                  selectedJob?.providerUsed === "trends"
+                                  selectedJob && isTrendsProvider(selectedJob.providerUsed)
                                     ? "Not available from Google Trends"
                                     : undefined
                                 }
@@ -990,11 +1056,17 @@ export default function KeywordsPage() {
                     <SelectValue placeholder="Select provider" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border border-border shadow-lg">
-                    <SelectItem value="trends">Google Trends</SelectItem>
+                    <SelectItem value="TRENDS">Google Trends</SelectItem>
+                    <SelectItem value="AUTO">AUTO</SelectItem>
+                    <SelectItem value="GOOGLE_ADS" disabled={!googleAdsConfigured}>
+                      Google Ads
+                    </SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-sm text-muted-foreground">
-                  Real trend-based signals. Competition metrics unavailable.
+                  {loadingProviders
+                    ? "Loading provider settings..."
+                    : "Google Trends is the default. Google Ads requires setup."}
                 </p>
               </div>
               <div className="grid gap-2">

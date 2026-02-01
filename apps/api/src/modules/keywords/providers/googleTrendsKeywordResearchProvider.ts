@@ -4,6 +4,7 @@ import type {
     KeywordSuggestion,
 } from "./providerTypes.js";
 import { TrendsCache } from "./trendsCache.js";
+import { AppError } from "../../../types/app-error.js";
 
 type TrendsClient = {
     interestOverTime: (options: {
@@ -31,6 +32,8 @@ type TrendsSeedResponse = {
 };
 
 const DEFAULT_TIMEFRAME = "today 12-m";
+const TRANSIENT_ERROR_MESSAGES = ["fetch failed"];
+const TRANSIENT_ERROR_CODES = ["ECONNRESET", "ETIMEDOUT"];
 
 function clampScore(value: number) {
     if (Number.isNaN(value)) return 0;
@@ -124,7 +127,7 @@ export class GoogleTrendsKeywordResearchProvider implements KeywordResearchProvi
         const cached = this.cache.get(cacheKey);
         const response =
             cached ??
-            (await this.fetchSeedData({
+            (await this.fetchSeedDataWithRetry({
                 seed: input.seed,
                 geo: input.geo,
                 timeframe,
@@ -171,6 +174,15 @@ export class GoogleTrendsKeywordResearchProvider implements KeywordResearchProvi
                 timeframe: input.timeframe,
             }),
         ]);
+
+        if (this.isBlockedResponse(timelineRaw) || this.isBlockedResponse(relatedRaw)) {
+            throw new AppError(
+                503,
+                "PROVIDER_TEMP_BLOCKED",
+                "Google Trends temporarily blocked. Try again in 30–60 seconds.",
+                { provider: "TRENDS" }
+            );
+        }
 
         return {
             timelineValues: parseTimelineValues(timelineRaw),
@@ -230,6 +242,84 @@ export class GoogleTrendsKeywordResearchProvider implements KeywordResearchProvi
             this.clientPromise = this.clientLoader();
         }
         return this.clientPromise;
+    }
+
+    private async fetchSeedDataWithRetry(input: {
+        seed: string;
+        geo: string;
+        timeframe: string;
+    }): Promise<TrendsSeedResponse> {
+        try {
+            return await this.fetchSeedData(input);
+        } catch (error) {
+            if (this.isProviderBlockedError(error)) {
+                throw error;
+            }
+            if (this.isTransientError(error)) {
+                await this.delay(300);
+                try {
+                    return await this.fetchSeedData(input);
+                } catch (retryError) {
+                    throw this.normalizeProviderError(retryError);
+                }
+            }
+            throw this.normalizeProviderError(error);
+        }
+    }
+
+    private normalizeProviderError(error: unknown) {
+        if (error instanceof AppError) {
+            return error;
+        }
+        if (this.isProviderBlockedError(error)) {
+            return new AppError(
+                503,
+                "PROVIDER_TEMP_BLOCKED",
+                "Google Trends temporarily blocked. Try again in 30–60 seconds.",
+                { provider: "TRENDS" }
+            );
+        }
+        return new AppError(
+            503,
+            "PROVIDER_UNAVAILABLE",
+            "Google Trends is temporarily unavailable. Try again shortly.",
+            { provider: "TRENDS" }
+        );
+    }
+
+    private isTransientError(error: unknown) {
+        if (!error || typeof error !== "object") {
+            return false;
+        }
+        const err = error as { code?: string; message?: string };
+        if (err.code && TRANSIENT_ERROR_CODES.includes(err.code)) {
+            return true;
+        }
+        if (err.message) {
+            const message = err.message.toLowerCase();
+            return TRANSIENT_ERROR_MESSAGES.some((value) => message.includes(value));
+        }
+        return false;
+    }
+
+    private isProviderBlockedError(error: unknown) {
+        if (!error || typeof error !== "object") {
+            return false;
+        }
+        const err = error as { message?: string; requestBody?: string };
+        if (!err.message || !err.message.includes("not valid JSON")) {
+            return false;
+        }
+        const body = err.requestBody ?? "";
+        return this.isBlockedResponse(body);
+    }
+
+    private isBlockedResponse(body: string) {
+        return /<html/i.test(body) || /302 Moved/i.test(body) || /\/sorry\/index/i.test(body);
+    }
+
+    private async delay(ms: number) {
+        await new Promise((resolve) => setTimeout(resolve, ms));
     }
 }
 

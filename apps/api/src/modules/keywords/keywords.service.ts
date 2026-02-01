@@ -1,5 +1,7 @@
 import { prisma } from "../../infrastructure/db/prisma.js";
 import { Prisma } from "@prisma/client";
+import { AppError } from "../../types/app-error.js";
+import { getGoogleAdsStatus } from "../settings/keyword-provider-settings.service.js";
 
 type KeywordSeedInput = {
     terms: string[];
@@ -15,7 +17,7 @@ type KeywordJobInput = {
     niche?: string;
     topic?: string;
     maxResults?: number;
-    providerUsed?: "trends";
+    providerUsed?: "TRENDS" | "AUTO" | "GOOGLE_ADS";
     params?: {
         occasion?: string;
         productType?: string;
@@ -44,6 +46,16 @@ function normalizeEngine(input: KeywordJobInput) {
 
 function normalizeLanguage(language: KeywordJobInput["language"]) {
     return language.toLowerCase();
+}
+
+function normalizeProvider(provider?: string) {
+    if (!provider) return "TRENDS";
+    const normalized = provider.trim().toUpperCase();
+    if (normalized === "AUTO") return "AUTO";
+    if (normalized === "GOOGLE_ADS" || normalized === "GOOGLE-ADS" || normalized === "GOOGLEADS") {
+        return "GOOGLE_ADS";
+    }
+    return "TRENDS";
 }
 
 function uniqueTerms(terms: string[]) {
@@ -121,10 +133,19 @@ export async function createKeywordJob(input: KeywordJobInput) {
     const language = normalizeLanguage(input.language);
     const country = input.country.trim().toUpperCase();
     const maxResults = Math.min(input.maxResults ?? 10, 50);
-    const providerUsed = input.providerUsed ?? process.env.KEYWORD_PROVIDER ?? "trends";
+    const providerUsed = normalizeProvider(
+        input.providerUsed ?? process.env.KEYWORD_PROVIDER ?? "TRENDS"
+    );
+    const googleAdsStatus = await getGoogleAdsStatus();
 
-    if (providerUsed !== "trends") {
-        throw new Error("Provider is not configured.");
+    if (providerUsed === "GOOGLE_ADS") {
+        if (!googleAdsStatus.enabled || !googleAdsStatus.configured) {
+            throw new AppError(
+                400,
+                "GOOGLE_ADS_NOT_CONFIGURED",
+                "Google Ads provider is not configured."
+            );
+        }
     }
 
     if (input.mode === "AI") {
@@ -183,7 +204,7 @@ export async function createKeywordJob(input: KeywordJobInput) {
 
     const finalItems = items;
     const providerRequest =
-        providerUsed === "trends"
+        providerUsed === "TRENDS"
             ? {
                 geo: country,
                 timeframe: "today 12-m",

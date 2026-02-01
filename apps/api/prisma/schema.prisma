@@ -70,6 +70,12 @@ model Settings {
   retireSalesThresholdD180        Int     @default(2)
   requestThemePriorityThreshold   Int     @default(3)
   defaultCurrency                 String  @default("USD")
+  googleAdsEnabled                Boolean @default(false)
+  googleAdsCustomerId             String?
+  googleAdsDeveloperToken         String?
+  googleAdsClientId               String?
+  googleAdsClientSecret           String?
+  googleAdsRefreshToken           String?
 
   updatedAt DateTime @updatedAt
 }

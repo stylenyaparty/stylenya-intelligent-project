@@ -3,26 +3,30 @@ import {
     GoogleTrendsKeywordResearchProvider,
     DEFAULT_TIMEFRAME,
 } from "./providers/googleTrendsKeywordResearchProvider.js";
+import { GoogleAdsKeywordProvider } from "./providers/googleAdsKeywordProvider.js";
 import type { KeywordSuggestion } from "./providers/providerTypes.js";
 import { LLMNotConfiguredError } from "../llm/llm.errors.js";
 import { suggestKeywords } from "../llm/suggest-keywords.service.js";
+import { AppError, isAppError } from "../../types/app-error.js";
+import {
+    getGoogleAdsCredentials,
+    getGoogleAdsStatus,
+} from "../settings/keyword-provider-settings.service.js";
 
 const trendsProvider = new GoogleTrendsKeywordResearchProvider();
-const runningKeywordJobs = new Set<string>();
+const runningKeywordJobs = new Map<string, boolean>();
 
 function normalizeKeyword(value: string) {
     return value.trim().toLowerCase();
 }
 
-class KeywordJobRunError extends Error {
-    code: string;
-    statusCode: number;
-
-    constructor(code: string, message: string, statusCode = 400) {
-        super(message);
-        this.code = code;
-        this.statusCode = statusCode;
+function normalizeProvider(providerUsed: string) {
+    const normalized = providerUsed.trim().toUpperCase();
+    if (normalized === "AUTO") return "AUTO";
+    if (["GOOGLE_ADS", "GOOGLE-ADS", "GOOGLEADS"].includes(normalized)) {
+        return "GOOGLE_ADS";
     }
+    return "TRENDS";
 }
 
 function buildResultJson(suggestion: KeywordSuggestion) {
@@ -35,49 +39,46 @@ function buildResultJson(suggestion: KeywordSuggestion) {
 }
 
 export async function runKeywordJob(jobId: string) {
-    const job = await prisma.keywordJob.findUnique({ where: { id: jobId } });
-    if (!job) {
-        return null;
+    if (runningKeywordJobs.get(jobId)) {
+        throw new AppError(409, "JOB_ALREADY_RUNNING", "Job is already running.");
     }
+    runningKeywordJobs.set(jobId, true);
 
-    const originalStatus = job.status;
+    let originalStatus: "PENDING" | "RUNNING" | "DONE" | "FAILED" | null = null;
     let runStarted = false;
 
-    if (job.archivedAt) {
-        throw new KeywordJobRunError(
-            "JOB_ARCHIVED",
-            "Archived jobs cannot be run.",
-            409
-        );
-    }
-
-    if (job.status === "RUNNING") {
-        throw new KeywordJobRunError(
-            "JOB_ALREADY_RUNNING",
-            "Job is already running.",
-            409
-        );
-    }
-
-    if (job.status === "DONE") {
-        const existingItems = await prisma.keywordJobItem.findMany({
-            where: { jobId },
-            orderBy: { createdAt: "asc" },
-        });
-        return { job, items: existingItems };
-    }
-
-    if (runningKeywordJobs.has(jobId)) {
-        throw new KeywordJobRunError(
-            "JOB_ALREADY_RUNNING",
-            "Job is already running.",
-            409
-        );
-    }
-
-    runningKeywordJobs.add(jobId);
-
     try {
+        const job = await prisma.keywordJob.findUnique({ where: { id: jobId } });
+        if (!job) {
+            return null;
+        }
+
+        originalStatus = job.status;
+
+        if (job.archivedAt) {
+            throw new AppError(
+                409,
+                "JOB_ARCHIVED",
+                "Archived jobs cannot be run."
+            );
+        }
+
+        if (job.status === "RUNNING") {
+            throw new AppError(
+                409,
+                "JOB_ALREADY_RUNNING",
+                "Job is already running."
+            );
+        }
+
+        if (job.status === "DONE") {
+            const existingItems = await prisma.keywordJobItem.findMany({
+                where: { jobId },
+                orderBy: { createdAt: "asc" },
+            });
+            return { job, items: existingItems };
+        }
+
         const missingConfig = [];
         if (!job.engine) missingConfig.push("engine");
         if (!job.language) missingConfig.push("language");
@@ -85,21 +86,37 @@ export async function runKeywordJob(jobId: string) {
         if (!job.maxResults || job.maxResults <= 0) missingConfig.push("maxResults");
         if (!job.providerUsed) missingConfig.push("providerUsed");
         if (missingConfig.length > 0) {
-            throw new KeywordJobRunError(
+            throw new AppError(
+                400,
                 "MISSING_JOB_CONFIG",
                 `Job is missing required config: ${missingConfig.join(", ")}.`
             );
         }
 
-        if (job.providerUsed !== "trends") {
-            throw new KeywordJobRunError(
-                "PROVIDER_NOT_CONFIGURED",
-                "Selected provider is not configured."
-            );
+        const googleAdsStatus = await getGoogleAdsStatus();
+        const normalizedProvider = normalizeProvider(job.providerUsed);
+        const resolvedProvider =
+            normalizedProvider === "AUTO"
+                ? googleAdsStatus.enabled && googleAdsStatus.configured
+                    ? "GOOGLE_ADS"
+                    : "TRENDS"
+                : normalizedProvider === "GOOGLE_ADS"
+                    ? "GOOGLE_ADS"
+                    : "TRENDS";
+
+        if (normalizedProvider === "GOOGLE_ADS") {
+            if (!googleAdsStatus.enabled || !googleAdsStatus.configured) {
+                throw new AppError(
+                    400,
+                    "GOOGLE_ADS_NOT_CONFIGURED",
+                    "Google Ads provider is not configured."
+                );
+            }
         }
 
-        if (process.env.KEYWORD_TRENDS_ENABLED === "false") {
-            throw new KeywordJobRunError(
+        if (resolvedProvider === "TRENDS" && process.env.KEYWORD_TRENDS_ENABLED === "false") {
+            throw new AppError(
+                400,
                 "PROVIDER_NOT_CONFIGURED",
                 "Google Trends provider is disabled."
             );
@@ -110,7 +127,8 @@ export async function runKeywordJob(jobId: string) {
         if (job.mode === "AI") {
             const topic = job.topic?.trim();
             if (!topic) {
-                throw new KeywordJobRunError(
+                throw new AppError(
+                    400,
                     "MISSING_JOB_CONFIG",
                     "Topic is required for AI keyword jobs."
                 );
@@ -131,17 +149,17 @@ export async function runKeywordJob(jobId: string) {
                     return null;
                 }
                 if (latestJob.archivedAt) {
-                    throw new KeywordJobRunError(
+                    throw new AppError(
+                        409,
                         "JOB_ARCHIVED",
-                        "Archived jobs cannot be run.",
-                        409
+                        "Archived jobs cannot be run."
                     );
                 }
                 if (latestJob.status === "RUNNING") {
-                    throw new KeywordJobRunError(
+                    throw new AppError(
+                        409,
                         "JOB_ALREADY_RUNNING",
-                        "Job is already running.",
-                        409
+                        "Job is already running."
                     );
                 }
                 if (latestJob.status === "DONE") {
@@ -151,11 +169,7 @@ export async function runKeywordJob(jobId: string) {
                     });
                     return { job: latestJob, items: existingItems };
                 }
-                throw new KeywordJobRunError(
-                    "JOB_ALREADY_RUNNING",
-                    "Job is already running.",
-                    409
-                );
+                throw new AppError(409, "JOB_ALREADY_RUNNING", "Job is already running.");
             }
 
             runStarted = true;
@@ -165,7 +179,8 @@ export async function runKeywordJob(jobId: string) {
                 keywords = await suggestKeywords(topic, maxResults);
             } catch (error) {
                 if (error instanceof LLMNotConfiguredError) {
-                    throw new KeywordJobRunError(
+                    throw new AppError(
+                        400,
                         "LLM_NOT_CONFIGURED",
                         "LLM provider is not configured."
                     );
@@ -243,10 +258,10 @@ export async function runKeywordJob(jobId: string) {
         const seeds = seedEntries.map((item) => item.term);
 
         if (seeds.length === 0) {
-            throw new KeywordJobRunError(
+            throw new AppError(
+                409,
                 "NO_SEEDS_MATCHING_JOB",
-                "No active seeds available for this job. Add seed keywords or adjust the job scope.",
-                409
+                "No active seeds available for this job. Add seed keywords or adjust the job scope."
             );
         }
 
@@ -265,17 +280,17 @@ export async function runKeywordJob(jobId: string) {
                 return null;
             }
             if (latestJob.archivedAt) {
-                throw new KeywordJobRunError(
+                throw new AppError(
+                    409,
                     "JOB_ARCHIVED",
-                    "Archived jobs cannot be run.",
-                    409
+                    "Archived jobs cannot be run."
                 );
             }
             if (latestJob.status === "RUNNING") {
-                throw new KeywordJobRunError(
+                throw new AppError(
+                    409,
                     "JOB_ALREADY_RUNNING",
-                    "Job is already running.",
-                    409
+                    "Job is already running."
                 );
             }
             if (latestJob.status === "DONE") {
@@ -285,16 +300,23 @@ export async function runKeywordJob(jobId: string) {
                 });
                 return { job: latestJob, items: existingItems };
             }
-            throw new KeywordJobRunError(
-                "JOB_ALREADY_RUNNING",
-                "Job is already running.",
-                409
-            );
+            throw new AppError(409, "JOB_ALREADY_RUNNING", "Job is already running.");
         }
 
         runStarted = true;
 
-        const provider = trendsProvider;
+        let provider = trendsProvider;
+        if (resolvedProvider === "GOOGLE_ADS") {
+            const credentials = await getGoogleAdsCredentials();
+            if (!credentials) {
+                throw new AppError(
+                    400,
+                    "GOOGLE_ADS_NOT_CONFIGURED",
+                    "Google Ads provider is not configured."
+                );
+            }
+            provider = new GoogleAdsKeywordProvider(credentials);
+        }
         const existingProviderRequest = job.providerRequest as
             | { geo?: string; timeframe?: string; seeds?: string[] }
             | null
@@ -308,7 +330,7 @@ export async function runKeywordJob(jobId: string) {
             timeframe,
             seeds,
         };
-        if (job.providerUsed === "trends" && !job.providerRequest) {
+        if (resolvedProvider === "TRENDS" && !job.providerRequest) {
             await prisma.keywordJob.update({
                 where: { id: jobId },
                 data: { providerRequest },
@@ -402,11 +424,12 @@ export async function runKeywordJob(jobId: string) {
             itemsPersisted: results.length,
         };
     } catch (error) {
-        if (isKeywordJobRunError(error)) {
-            if (runStarted) {
+        if (isAppError(error)) {
+            if (runStarted && originalStatus) {
+                const nextStatus = error.statusCode >= 500 ? "FAILED" : originalStatus;
                 await prisma.keywordJob.update({
                     where: { id: jobId },
-                    data: { status: originalStatus },
+                    data: { status: nextStatus },
                 });
             }
         } else {
@@ -419,8 +442,4 @@ export async function runKeywordJob(jobId: string) {
     } finally {
         runningKeywordJobs.delete(jobId);
     }
-}
-
-export function isKeywordJobRunError(error: unknown): error is KeywordJobRunError {
-    return error instanceof KeywordJobRunError;
 }
