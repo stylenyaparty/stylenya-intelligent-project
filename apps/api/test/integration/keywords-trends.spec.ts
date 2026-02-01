@@ -87,7 +87,7 @@ describe("Keywords API (trends provider)", () => {
                 language: "en",
                 country: "us",
                 seedIds: [seedId],
-                providerUsed: "trends",
+                providerUsed: "TRENDS",
             })
             .expect(201);
 
@@ -96,7 +96,7 @@ describe("Keywords API (trends provider)", () => {
             .set(headers)
             .expect(200);
 
-        expect(run.body.job.providerUsed).toBe("trends");
+        expect(run.body.job.providerUsed).toBe("TRENDS");
         expect(run.body.seedCount).toBeGreaterThan(0);
         expect(run.body.items.length).toBeGreaterThan(0);
 
@@ -154,7 +154,7 @@ describe("Keywords API (trends provider)", () => {
                 language: "en",
                 country: "us",
                 seedIds: [seedId],
-                providerUsed: "trends",
+                providerUsed: "TRENDS",
             })
             .expect(201);
 
@@ -207,7 +207,46 @@ describe("Keywords API (trends provider)", () => {
 
         const conflictResponse =
             firstResponse.status === 409 ? firstResponse : secondResponse;
-        expect(conflictResponse.body.error).toBe("JOB_ALREADY_RUNNING");
+        expect(conflictResponse.body.code).toBe("JOB_ALREADY_RUNNING");
+    });
+
+    it("returns PROVIDER_TEMP_BLOCKED when trends responds with a block page", async () => {
+        const headers = await authHeader();
+
+        mockInterestOverTime.mockResolvedValue("<HTML>302 Moved /sorry/index</HTML>");
+        mockRelatedQueries.mockResolvedValue(
+            JSON.stringify({
+                default: { rankedList: [{ rankedKeyword: [] }, { rankedKeyword: [] }] },
+            })
+        );
+
+        const seeds = await request
+            .post("/v1/keywords/seeds")
+            .set(headers)
+            .send({ terms: ["blocked seed"] })
+            .expect(201);
+
+        const seedId = seeds.body.created[0].id as string;
+
+        const job = await request
+            .post("/v1/keywords/jobs")
+            .set(headers)
+            .send({
+                mode: "CUSTOM",
+                marketplace: "GOOGLE",
+                language: "en",
+                country: "us",
+                seedIds: [seedId],
+                providerUsed: "TRENDS",
+            })
+            .expect(201);
+
+        const run = await request
+            .post(`/v1/keywords/jobs/${job.body.job.id}/run`)
+            .set(headers)
+            .expect(503);
+
+        expect(run.body.code).toBe("PROVIDER_TEMP_BLOCKED");
     });
 
     it("returns NO_SEEDS_MATCHING_JOB when no active seeds exist", async () => {
@@ -229,7 +268,7 @@ describe("Keywords API (trends provider)", () => {
                 marketplace: "GOOGLE",
                 language: "en",
                 country: "us",
-                providerUsed: "trends",
+                providerUsed: "TRENDS",
             })
             .expect(201);
 
@@ -244,7 +283,7 @@ describe("Keywords API (trends provider)", () => {
             .set(headers)
             .expect(409);
 
-        expect(run.body.error).toBe("NO_SEEDS_MATCHING_JOB");
+        expect(run.body.code).toBe("NO_SEEDS_MATCHING_JOB");
     });
 
     it("returns PROVIDER_NOT_CONFIGURED when trends provider is disabled", async () => {
@@ -270,7 +309,7 @@ describe("Keywords API (trends provider)", () => {
                     language: "en",
                     country: "us",
                     seedIds: [seedId],
-                    providerUsed: "trends",
+                    providerUsed: "TRENDS",
                 })
                 .expect(201);
 
@@ -279,7 +318,7 @@ describe("Keywords API (trends provider)", () => {
                 .set(headers)
                 .expect(400);
 
-            expect(run.body.error).toBe("PROVIDER_NOT_CONFIGURED");
+            expect(run.body.code).toBe("PROVIDER_NOT_CONFIGURED");
         } finally {
             if (previous === undefined) {
                 delete process.env.KEYWORD_TRENDS_ENABLED;

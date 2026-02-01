@@ -72,7 +72,7 @@ describe("Weekly Focus API", () => {
                 language: "en",
                 country: "US",
                 seedIds: [seedId],
-                providerUsed: "trends",
+                providerUsed: "TRENDS",
             })
             .expect(201);
 
@@ -110,7 +110,7 @@ describe("Weekly Focus API", () => {
                 country: "US",
                 niche: "party decorations",
                 maxResults: 10,
-                providerUsed: "trends",
+                providerUsed: "TRENDS",
                 paramsJson: {},
                 status: "DONE",
             },

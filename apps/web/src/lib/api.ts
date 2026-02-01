@@ -1,4 +1,15 @@
-type ApiError = { error?: string; message?: string };
+type ApiErrorBody = { error?: string; message?: string; code?: string };
+
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
 
 function getToken(): string | null {
   return localStorage.getItem("token");
@@ -18,14 +29,15 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   });
 
   if (!res.ok) {
-    let body: ApiError | null = null;
+    let body: ApiErrorBody | null = null;
     try {
       body = await res.json();
     } catch {
       // ignore JSON parse errors
     }
-    const msg = body?.error || body?.message || `HTTP ${res.status}`;
-    throw new Error(msg);
+    const msg = body?.message || body?.error || body?.code || `HTTP ${res.status}`;
+    const code = body?.code || body?.error;
+    throw new ApiError(msg, res.status, code);
   }
 
   // ✅ handle empty responses
@@ -34,4 +46,3 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
   return JSON.parse(text) as T;
 }
-
