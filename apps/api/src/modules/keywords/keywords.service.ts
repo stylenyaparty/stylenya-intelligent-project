@@ -25,6 +25,10 @@ type KeywordJobInput = {
     seedIds?: string[];
 };
 
+export async function countActiveKeywordSeeds() {
+    return prisma.keywordSeed.count({ where: { status: "ACTIVE" } });
+}
+
 
 function normalizeTerm(raw: string) {
     const trimmed = raw.trim().replace(/\s+/g, " ");

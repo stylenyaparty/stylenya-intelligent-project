@@ -74,6 +74,96 @@ describe("Keywords API", () => {
         expect(second.body.existing[0].term).toBe("party decorations");
     });
 
+    it("blocks AUTO/HYBRID job creation when no active seeds exist and exposes counts", async () => {
+        const headers = await authHeader();
+
+        await prisma.keywordSeed.deleteMany();
+
+        const emptyCount = await request
+            .get("/v1/keyword-seeds/count")
+            .set(headers)
+            .expect(200);
+
+        expect(emptyCount.body.count).toBe(0);
+
+        const archivedSeed = await request
+            .post("/v1/keywords/seeds")
+            .set(headers)
+            .send({ terms: ["archived seed"] })
+            .expect(201);
+
+        const archivedId = archivedSeed.body.created[0].id as string;
+
+        await request
+            .patch(`/v1/keywords/seeds/${archivedId}`)
+            .set(headers)
+            .send({ status: "ARCHIVED" })
+            .expect(200);
+
+        const archivedCount = await request
+            .get("/v1/keyword-seeds/count")
+            .set(headers)
+            .expect(200);
+
+        expect(archivedCount.body.count).toBe(0);
+
+        await request
+            .post("/v1/keywords/jobs")
+            .set(headers)
+            .send({
+                mode: "AUTO",
+                marketplace: "ETSY",
+                language: "en",
+                country: "us",
+            })
+            .expect(409)
+            .then((response) => {
+                expect(response.body.code).toBe("SEEDS_REQUIRED");
+            });
+
+        await request
+            .post("/v1/keywords/jobs")
+            .set(headers)
+            .send({
+                mode: "HYBRID",
+                marketplace: "ETSY",
+                language: "en",
+                country: "us",
+                seedIds: [archivedId],
+            })
+            .expect(409)
+            .then((response) => {
+                expect(response.body.code).toBe("SEEDS_REQUIRED");
+            });
+
+        const customJob = await request
+            .post("/v1/keywords/jobs")
+            .set(headers)
+            .send({
+                mode: "CUSTOM",
+                marketplace: "ETSY",
+                language: "en",
+                country: "us",
+                seedIds: [archivedId],
+            })
+            .expect(201);
+
+        expect(customJob.body.job.mode).toBe("CUSTOM");
+
+        await request
+            .post("/v1/keywords/seeds")
+            .set(headers)
+            .send({ terms: ["active seed"] })
+            .expect(201);
+
+        const activeCount = await request
+            .get("/v1/keyword-seeds/count")
+            .set(headers)
+            .expect(200);
+
+        expect(activeCount.body.count).toBeGreaterThan(0);
+    });
+
     it("creates a CUSTOM job with seed items", async () => {
         const headers = await authHeader();
 
