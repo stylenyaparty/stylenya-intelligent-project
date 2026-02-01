@@ -85,6 +85,7 @@ describe("Keywords API (trends provider)", () => {
                 mode: "CUSTOM",
                 marketplace: "GOOGLE",
                 language: "en",
+                country: "us",
                 seedIds: [seedId],
                 providerUsed: "trends",
             })
@@ -96,6 +97,7 @@ describe("Keywords API (trends provider)", () => {
             .expect(200);
 
         expect(run.body.job.providerUsed).toBe("trends");
+        expect(run.body.seedCount).toBeGreaterThan(0);
         expect(run.body.items.length).toBeGreaterThan(0);
 
         const item = run.body.items[0];
@@ -114,5 +116,70 @@ describe("Keywords API (trends provider)", () => {
             .expect(200);
 
         expect(rerun.body.items).toEqual(run.body.items);
+    });
+
+    it("returns NO_SEEDS_MATCHING_JOB when no active seeds exist", async () => {
+        const headers = await authHeader();
+
+        const job = await request
+            .post("/v1/keywords/jobs")
+            .set(headers)
+            .send({
+                mode: "AUTO",
+                marketplace: "GOOGLE",
+                language: "en",
+                country: "us",
+                providerUsed: "trends",
+            })
+            .expect(201);
+
+        const run = await request
+            .post(`/v1/keywords/jobs/${job.body.job.id}/run`)
+            .set(headers)
+            .expect(400);
+
+        expect(run.body.error).toBe("NO_SEEDS_MATCHING_JOB");
+    });
+
+    it("returns PROVIDER_NOT_CONFIGURED when trends provider is disabled", async () => {
+        const headers = await authHeader();
+        const previous = process.env.KEYWORD_TRENDS_ENABLED;
+        process.env.KEYWORD_TRENDS_ENABLED = "false";
+
+        try {
+            const seeds = await request
+                .post("/v1/keywords/seeds")
+                .set(headers)
+                .send({ terms: ["banner decor"] })
+                .expect(201);
+
+            const seedId = seeds.body.created[0].id as string;
+
+            const job = await request
+                .post("/v1/keywords/jobs")
+                .set(headers)
+                .send({
+                    mode: "CUSTOM",
+                    marketplace: "GOOGLE",
+                    language: "en",
+                    country: "us",
+                    seedIds: [seedId],
+                    providerUsed: "trends",
+                })
+                .expect(201);
+
+            const run = await request
+                .post(`/v1/keywords/jobs/${job.body.job.id}/run`)
+                .set(headers)
+                .expect(400);
+
+            expect(run.body.error).toBe("PROVIDER_NOT_CONFIGURED");
+        } finally {
+            if (previous === undefined) {
+                delete process.env.KEYWORD_TRENDS_ENABLED;
+            } else {
+                process.env.KEYWORD_TRENDS_ENABLED = previous;
+            }
+        }
     });
 });

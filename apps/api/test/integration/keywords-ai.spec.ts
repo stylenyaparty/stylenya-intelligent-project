@@ -37,6 +37,7 @@ describe("Keyword AI Jobs", () => {
                 mode: "AI",
                 marketplace: "ETSY",
                 language: "en",
+                country: "us",
                 topic: "party decorations",
                 maxResults: 5,
             })
@@ -57,6 +58,7 @@ describe("Keyword AI Jobs", () => {
                 mode: "AI",
                 marketplace: "ETSY",
                 language: "en",
+                country: "us",
             })
             .expect(400);
 
@@ -73,6 +75,7 @@ describe("Keyword AI Jobs", () => {
                 mode: "AI",
                 marketplace: "SHOPIFY",
                 language: "en",
+                country: "us",
                 topic: "custom candles",
                 maxResults: 6,
             })
