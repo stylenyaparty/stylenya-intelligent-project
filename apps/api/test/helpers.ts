@@ -12,7 +12,7 @@ type SeedUserInput = {
 };
 
 export async function createTestServer() {
-    const app = await createApp({ logger: false });
+    const app = await createApp();
     await app.ready();
     return app;
 }
