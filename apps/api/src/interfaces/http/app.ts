@@ -17,6 +17,13 @@ export async function createApp(options: CreateAppOptions = {}) {
     await app.register(jwt, {
         secret: process.env.JWT_SECRET!,
     });
+    app.addContentTypeParser(
+        /^multipart\/form-data/,
+        { parseAs: "buffer" },
+        (request, body, done) => {
+            done(null, body);
+        }
+    );
     await app.register(authGuardPlugin);
     await registerRoutes(app);
 
