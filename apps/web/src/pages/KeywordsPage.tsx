@@ -36,7 +36,7 @@ import {
   ErrorState,
   EmptyState,
 } from "@/components/dashboard";
-import { RefreshCw, Plus, Play, Tags, FolderSearch, Info } from "lucide-react";
+import { RefreshCw, Plus, Play, Tags, FolderSearch, Info, Loader2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 
 type KeywordSeed = {
@@ -153,6 +153,7 @@ export default function KeywordsPage() {
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
   const [loadingPromoted, setLoadingPromoted] = useState(false);
+  const [runningJobIds, setRunningJobIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [promotedSignals, setPromotedSignals] = useState<PromotedSignal[]>([]);
   const [promotingId, setPromotingId] = useState<string | null>(null);
@@ -367,6 +368,11 @@ export default function KeywordsPage() {
   }
 
   async function runJob(jobId: string) {
+    setRunningJobIds((prev) => {
+      const next = new Set(prev);
+      next.add(jobId);
+      return next;
+    });
     setLoadingItems(true);
     setError(null);
     try {
@@ -384,6 +390,11 @@ export default function KeywordsPage() {
       setError(e instanceof Error ? e.message : "Failed to run job");
     } finally {
       setLoadingItems(false);
+      setRunningJobIds((prev) => {
+        const next = new Set(prev);
+        next.delete(jobId);
+        return next;
+      });
     }
   }
 
@@ -652,6 +663,7 @@ export default function KeywordsPage() {
                       {jobs.map((job) => {
                         const isArchived = Boolean(job.archivedAt);
                         const isRunning = job.status === "RUNNING";
+                        const isRunPending = runningJobIds.has(job.id);
                         return (
                           <TableRow key={job.id}>
                             <TableCell className="font-medium">{job.mode}</TableCell>
@@ -678,11 +690,20 @@ export default function KeywordsPage() {
                               <Button
                                 size="sm"
                                 onClick={() => runJob(job.id)}
-                                disabled={isRunning || isArchived}
+                                disabled={isRunning || isArchived || isRunPending}
                                 className="gap-1"
                               >
-                                <Play className="h-4 w-4" />
-                                Run
+                                {isRunPending ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Running
+                                  </>
+                                ) : (
+                                  <>
+                                    <Play className="h-4 w-4" />
+                                    Run
+                                  </>
+                                )}
                               </Button>
                               {isArchived ? (
                                 <Button
@@ -745,11 +766,24 @@ export default function KeywordsPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => runJob(selectedJob.id)}
-                      disabled={selectedJob.status === "RUNNING" || Boolean(selectedJob.archivedAt)}
+                      disabled={
+                        selectedJob.status === "RUNNING" ||
+                        Boolean(selectedJob.archivedAt) ||
+                        runningJobIds.has(selectedJob.id)
+                      }
                       className="gap-1"
                     >
-                      <Play className="h-4 w-4" />
-                      Run
+                      {runningJobIds.has(selectedJob.id) ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Running
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-4 w-4" />
+                          Run
+                        </>
+                      )}
                     </Button>
                   )}
                 </div>
