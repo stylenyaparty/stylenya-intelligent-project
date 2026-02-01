@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../../interfaces/http/middleware/auth";
+import { LLMNotConfiguredError } from "./llm.errors";
 import { suggestKeywords } from "./suggest-keywords.service";
 
 const suggestKeywordsSchema = z.object({
@@ -19,8 +20,15 @@ export async function llmRoutes(app: FastifyInstance) {
             const max = parsed.data.max ?? 10;
             const keywords = await suggestKeywords(parsed.data.topic, max);
             return { ok: true, keywords };
-        } catch {
-            return reply.code(500).send({ error: "LLM provider error" });
+        } catch (error) {
+            if (error instanceof LLMNotConfiguredError) {
+                return reply
+                    .code(400)
+                    .send({ errorCode: "LLM_NOT_CONFIGURED", message: error.message });
+            }
+            return reply
+                .code(500)
+                .send({ errorCode: "LLM_PROVIDER_ERROR", message: "LLM provider error" });
         }
     });
 }
