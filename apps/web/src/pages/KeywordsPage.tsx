@@ -101,6 +101,16 @@ type JobItemsResponse = {
   items: KeywordJobItem[];
 };
 
+type JobRunResponse = {
+  ok: boolean;
+  job: KeywordJob;
+  items: KeywordJobItem[];
+  seedCount?: number;
+  keywordsGenerated?: number;
+  itemsPersisted?: number;
+  warning?: string;
+};
+
 type PromotedSignal = {
   id: string;
   jobItemId: string;
@@ -141,14 +151,15 @@ export default function KeywordsPage() {
   const [jobMode, setJobMode] = useState<KeywordJob["mode"]>("AUTO");
   const [jobMarketplace, setJobMarketplace] = useState<KeywordJob["marketplace"]>("ETSY");
   const [jobLanguage, setJobLanguage] = useState<KeywordJob["language"]>("en");
-  const [jobNiche, setJobNiche] = useState("party decorations");
+  const [jobCountry, setJobCountry] = useState("");
+  const [jobNiche, setJobNiche] = useState("");
   const [jobOccasion, setJobOccasion] = useState("");
   const [jobProductType, setJobProductType] = useState("");
   const [jobAudience, setJobAudience] = useState("");
-  const [jobGeo, setJobGeo] = useState("");
   const [jobSeedIds, setJobSeedIds] = useState<string[]>([]);
   const [jobProviderUsed, setJobProviderUsed] = useState(defaultJobProviderUsed);
   const [jobMaxResults, setJobMaxResults] = useState(defaultJobMaxResults);
+  const [runWarning, setRunWarning] = useState<string | null>(null);
 
   const activeSeeds = useMemo(
     () => seeds.filter((seed) => seed.status === "ACTIVE"),
@@ -216,6 +227,7 @@ export default function KeywordsPage() {
     if (selectedJobId) {
       void loadItems(selectedJobId);
     }
+    setRunWarning(null);
   }, [selectedJobId]);
 
   async function submitSeeds() {
@@ -266,23 +278,32 @@ export default function KeywordsPage() {
       setError("Select at least one seed for this mode.");
       return;
     }
+    if (!jobCountry.trim()) {
+      setError("Country is required (2-letter code).");
+      return;
+    }
 
     setLoadingJobs(true);
     setError(null);
     try {
+      const paramsPayload =
+        jobOccasion || jobProductType || jobAudience
+          ? {
+              occasion: jobOccasion || undefined,
+              productType: jobProductType || undefined,
+              audience: jobAudience || undefined,
+            }
+          : undefined;
+
       const payload = {
         mode: jobMode,
         marketplace: jobMarketplace,
         language: jobLanguage,
+        country: jobCountry.trim(),
         providerUsed: jobProviderUsed,
         maxResults: jobMaxResults,
         niche: jobNiche || undefined,
-        params: {
-          occasion: jobOccasion || undefined,
-          productType: jobProductType || undefined,
-          audience: jobAudience || undefined,
-          geo: jobGeo || undefined,
-        },
+        params: paramsPayload,
         seedIds: jobMode === "AUTO" ? undefined : jobSeedIds,
       };
 
@@ -294,6 +315,11 @@ export default function KeywordsPage() {
       setJobSeedIds([]);
       setJobProviderUsed(defaultJobProviderUsed);
       setJobMaxResults(defaultJobMaxResults);
+      setJobCountry("");
+      setJobNiche("");
+      setJobOccasion("");
+      setJobProductType("");
+      setJobAudience("");
       setJobs((prev) => [res.job, ...prev]);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create job");
@@ -306,10 +332,12 @@ export default function KeywordsPage() {
     setLoadingItems(true);
     setError(null);
     try {
-      await api(`/v1/keywords/jobs/${jobId}/run`, {
-      method: "POST", body: JSON.stringify({}),
+      const result = await api<JobRunResponse>(`/v1/keywords/jobs/${jobId}/run`, {
+        method: "POST",
+        body: JSON.stringify({}),
       });
-      
+
+      setRunWarning(result.warning ?? null);
       await loadJobs();
       if (selectedJobId === jobId) {
         await loadItems(jobId);
@@ -348,14 +376,6 @@ export default function KeywordsPage() {
     "inline-flex items-center rounded-full border bg-muted/40 px-2 py-0.5 text-xs font-medium text-muted-foreground";
 
   const renderProviderBadge = (providerUsed: string) => {
-    if (providerUsed === "mock") {
-      return (
-        <span className={`${providerBadgeBase} border-muted text-muted-foreground`}>
-          MOCK
-        </span>
-      );
-    }
-
     return (
       <span className={`${providerBadgeBase} border-primary/30 text-primary`}>
         TRENDS
@@ -421,7 +441,7 @@ export default function KeywordsPage() {
                 <Label htmlFor="seed-input">Add keywords (one per line)</Label>
                 <Textarea
                   id="seed-input"
-                  placeholder="birthday banner\nbridal shower decor"
+                  placeholder="Enter one keyword per line"
                   value={seedInput}
                   onChange={(event) => setSeedInput(event.target.value)}
                   rows={4}
@@ -618,17 +638,28 @@ export default function KeywordsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={chipBase}>Source</span>
                     {renderProviderBadge(selectedJob.providerUsed)}
-                    <span className={chipBase}>Geo: {selectedJob.country}</span>
+                    <span className={chipBase}>Country: {selectedJob.country}</span>
                     <span className={chipBase}>Engine: {selectedJob.engine}</span>
                     <span className={chipBase}>Max: {selectedJob.maxResults}</span>
                   </div>
                 </div>
               )}
 
+              {!loadingItems && runWarning && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-200/70 bg-amber-50/60 px-3 py-2 text-sm text-amber-900">
+                  <Info className="mt-0.5 h-4 w-4 text-amber-700" />
+                  <span>{runWarning}</span>
+                </div>
+              )}
+
               {!loadingItems && selectedJob && items.length === 0 ? (
                 <EmptyState
                   title="No results yet"
-                  description="Run the job to generate keyword insights."
+                  description={
+                    runWarning
+                      ? "The last run completed without results. Check provider settings or try different seeds."
+                      : "Run the job to generate keyword insights."
+                  }
                   icon={<FolderSearch className="h-6 w-6 text-muted-foreground" />}
                 />
               ) : null}
@@ -682,7 +713,7 @@ export default function KeywordsPage() {
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground max-w-[320px]">
                             <p className="line-clamp-2">
-                              {item.resultJson?.summary ?? "Run the job to view insights."}
+                              {item.resultJson?.summary ?? "No summary available yet."}
                             </p>
                           </TableCell>
                           <TableCell className="text-right">
@@ -775,14 +806,11 @@ export default function KeywordsPage() {
                     <SelectValue placeholder="Select provider" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border border-border shadow-lg">
-                    <SelectItem value="trends">Google Trends (real)</SelectItem>
-                    <SelectItem value="mock">Mock (tests/dev)</SelectItem>
+                    <SelectItem value="trends">Google Trends</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-sm text-muted-foreground">
-                  {jobProviderUsed === "mock"
-                    ? "Dev/test only. Values may be simulated."
-                    : "Real trend-based signals. Competition metrics unavailable."}
+                  Real trend-based signals. Competition metrics unavailable.
                 </p>
               </div>
               <div className="grid gap-2">
@@ -804,12 +832,22 @@ export default function KeywordsPage() {
             </div>
 
             <div className="grid gap-2">
+              <Label htmlFor="job-country">Country</Label>
+              <Input
+                id="job-country"
+                value={jobCountry}
+                onChange={(event) => setJobCountry(event.target.value)}
+                placeholder="2-letter code"
+              />
+            </div>
+
+            <div className="grid gap-2">
               <Label htmlFor="job-niche">Niche</Label>
               <Input
                 id="job-niche"
                 value={jobNiche}
                 onChange={(event) => setJobNiche(event.target.value)}
-                placeholder="party decorations"
+                placeholder="Optional"
               />
             </div>
 
@@ -819,7 +857,7 @@ export default function KeywordsPage() {
                 <Input
                   value={jobOccasion}
                   onChange={(event) => setJobOccasion(event.target.value)}
-                  placeholder="birthday"
+                  placeholder="Optional"
                 />
               </div>
               <div className="grid gap-2">
@@ -827,7 +865,7 @@ export default function KeywordsPage() {
                 <Input
                   value={jobProductType}
                   onChange={(event) => setJobProductType(event.target.value)}
-                  placeholder="banner"
+                  placeholder="Optional"
                 />
               </div>
               <div className="grid gap-2">
@@ -835,15 +873,7 @@ export default function KeywordsPage() {
                 <Input
                   value={jobAudience}
                   onChange={(event) => setJobAudience(event.target.value)}
-                  placeholder="kids"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Geo</Label>
-                <Input
-                  value={jobGeo}
-                  onChange={(event) => setJobGeo(event.target.value)}
-                  placeholder="US"
+                  placeholder="Optional"
                 />
               </div>
             </div>

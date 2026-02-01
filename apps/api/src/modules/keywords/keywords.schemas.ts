@@ -25,8 +25,7 @@ export const keywordEngineSchema = z.preprocess(
 export const keywordCountrySchema = z
     .string()
     .min(2)
-    .max(2)
-    .optional();
+    .max(2);
 
 export const keywordJobCreateSchema = z.object({
     mode: keywordJobModeSchema,
@@ -37,7 +36,7 @@ export const keywordJobCreateSchema = z.object({
     niche: z.string().min(1).optional(),
     topic: z.string().min(1).optional(),
     maxResults: z.number().int().min(1).max(50).optional(),
-    providerUsed: z.enum(["mock", "trends"]).optional(),
+    providerUsed: z.enum(["trends"]).optional(),
     params: z
         .object({
             occasion: z.string().optional(),

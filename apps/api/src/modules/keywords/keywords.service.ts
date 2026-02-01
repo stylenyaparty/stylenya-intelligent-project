@@ -11,11 +11,11 @@ type KeywordJobInput = {
     marketplace: "ETSY" | "SHOPIFY" | "GOOGLE";
     language: "en" | "es";
     engine?: "google" | "etsy" | "shopify";
-    country?: string;
+    country: string;
     niche?: string;
     topic?: string;
     maxResults?: number;
-    providerUsed?: "mock" | "trends";
+    providerUsed?: "trends";
     params?: {
         occasion?: string;
         productType?: string;
@@ -42,11 +42,6 @@ function normalizeLanguage(language: KeywordJobInput["language"]) {
     return language.toLowerCase();
 }
 
-function normalizeCountry(input: KeywordJobInput) {
-    const raw = input.country ?? input.params?.geo ?? "US";
-    return raw.trim().toUpperCase();
-}
-
 function uniqueTerms(terms: string[]) {
     const normalized = terms
         .map(normalizeTerm)
@@ -60,23 +55,6 @@ function uniqueTerms(terms: string[]) {
         }
     }
     return unique;
-}
-
-function buildAutoCandidates(params: KeywordJobInput["params"], niche: string) {
-    const normalizedNiche = normalizeTerm(niche) ?? "party decorations";
-    const occasion = normalizeTerm(params?.occasion ?? "") ?? "seasonal";
-    const productType = normalizeTerm(params?.productType ?? "") ?? "decor";
-    const audience = normalizeTerm(params?.audience ?? "") ?? "shoppers";
-    const geo = normalizeTerm(params?.geo ?? "") ?? "global";
-
-    return uniqueTerms([
-        `${occasion} ${productType}`,
-        `${normalizedNiche} ${productType}`,
-        `${audience} ${normalizedNiche}`,
-        `${geo} ${normalizedNiche} ${productType}`,
-        `${normalizedNiche} ideas`,
-        `${normalizedNiche} trends`,
-    ]);
 }
 
 export async function createKeywordSeeds(input: KeywordSeedInput) {
@@ -132,14 +110,18 @@ export async function updateKeywordSeedStatus(id: string, status: "ACTIVE" | "AR
 }
 
 export async function createKeywordJob(input: KeywordJobInput) {
-    const niche = input.niche ?? "party decorations";
+    const niche = input.niche?.trim() ?? "";
     const seedIds = input.seedIds ?? [];
     const params = input.params ?? {};
     const engine = normalizeEngine(input);
     const language = normalizeLanguage(input.language);
-    const country = normalizeCountry(input);
+    const country = input.country.trim().toUpperCase();
     const maxResults = Math.min(input.maxResults ?? 10, 50);
-    const providerUsed = input.providerUsed ?? process.env.KEYWORD_PROVIDER ?? "mock";
+    const providerUsed = input.providerUsed ?? process.env.KEYWORD_PROVIDER ?? "trends";
+
+    if (providerUsed !== "trends") {
+        throw new Error("Provider is not configured.");
+    }
 
     if (input.mode === "AI") {
         const topic = input.topic?.trim();
@@ -181,10 +163,6 @@ export async function createKeywordJob(input: KeywordJobInput) {
         throw new Error("One or more seeds could not be found.");
     }
 
-    const autoCandidates =
-        input.mode === "AUTO" || input.mode === "HYBRID" ? buildAutoCandidates(params, niche) : [];
-
-    // 🔧 FIX #1: source no incluye "HYBRID"
     const items: { term: string; source: "CUSTOM" | "AUTO" }[] = [];
     const seen = new Set<string>();
 
@@ -195,21 +173,11 @@ export async function createKeywordJob(input: KeywordJobInput) {
         items.push({ term: normalized, source: "CUSTOM" });
     }
 
-    for (const candidate of autoCandidates) {
-        const normalized = normalizeTerm(candidate);
-        if (!normalized || seen.has(normalized)) continue;
-        seen.add(normalized);
-
-        // 🔧 FIX #2: candidatos siempre "AUTO" (aunque el job sea HYBRID)
-        items.push({ term: normalized, source: "AUTO" });
+    if (items.length === 0 && (input.mode === "CUSTOM" || input.mode === "HYBRID")) {
+        throw new Error("No active seeds available for this job.");
     }
 
-    if (items.length === 0) {
-        throw new Error("No keyword items available for the job.");
-    }
-
-    // ✅ opcional: mantener salida estable / “Top N”
-    const finalItems = items.slice(0, 6);
+    const finalItems = items;
     const providerRequest =
         providerUsed === "trends"
             ? {
@@ -235,14 +203,16 @@ export async function createKeywordJob(input: KeywordJobInput) {
         },
     });
 
-    await prisma.keywordJobItem.createMany({
-        data: finalItems.map((item) => ({
-            jobId: job.id,
-            term: item.term,
-            source: item.source,
-            status: "PENDING",
-        })),
-    });
+    if (finalItems.length > 0) {
+        await prisma.keywordJobItem.createMany({
+            data: finalItems.map((item) => ({
+                jobId: job.id,
+                term: item.term,
+                source: item.source,
+                status: "PENDING",
+            })),
+        });
+    }
 
     const createdItems = await prisma.keywordJobItem.findMany({
         where: { jobId: job.id },

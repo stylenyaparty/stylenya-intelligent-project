@@ -55,23 +55,28 @@ describe("Weekly Focus API", () => {
             },
         });
 
+        const seeds = await request
+            .post("/v1/keywords/seeds")
+            .set(headers)
+            .send({ terms: ["birthday banner"] })
+            .expect(201);
+
+        const seedId = seeds.body.created[0].id as string;
+
         const job = await request
             .post("/v1/keywords/jobs")
             .set(headers)
             .send({
-                mode: "AUTO",
+                mode: "CUSTOM",
                 marketplace: "GOOGLE",
                 language: "en",
                 country: "US",
-                params: { occasion: "birthday", productType: "banner" },
+                seedIds: [seedId],
+                providerUsed: "trends",
             })
             .expect(201);
 
-        const keywordItem = job.body.items.find(
-            (item: { term: string }) => item.term === "birthday banner"
-        );
-
-        expect(keywordItem).toBeTruthy();
+        const keywordItem = job.body.items[0];
 
         await request
             .post(`/v1/keywords/job-items/${keywordItem.id}/promote`)

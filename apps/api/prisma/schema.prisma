@@ -125,7 +125,7 @@ model KeywordJob {
   language    String
   engine      String
   country     String
-  niche       String           @default("party decorations")
+  niche       String           @default("")
   topic       String?
   maxResults  Int              @default(10)
   providerUsed String
