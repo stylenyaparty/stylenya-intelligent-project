@@ -17,7 +17,7 @@ import {
     promoteKeywordJobItem,
     updateKeywordSeedStatus,
 } from "./keywords.service";
-import { runKeywordJob } from "./keywords-runner.service";
+import { isKeywordJobRunError, runKeywordJob } from "./keywords-runner.service";
 
 export async function keywordsRoutes(app: FastifyInstance) {
     app.post("/keywords/seeds", { preHandler: requireAuth }, async (request, reply) => {
@@ -103,7 +103,15 @@ export async function keywordsRoutes(app: FastifyInstance) {
                 }
                 return reply.send({ ok: true, ...result });
             } catch (error) {
-                return reply.code(500).send({ error: "Keyword research failed" });
+                request.log.error({ err: error }, "keywords job run failed");
+                if (isKeywordJobRunError(error)) {
+                    return reply
+                        .code(error.statusCode)
+                        .send({ error: error.code, message: error.message });
+                }
+                return reply
+                    .code(500)
+                    .send({ error: "INTERNAL_SERVER_ERROR", message: "Keyword research failed" });
             }
         }
     );

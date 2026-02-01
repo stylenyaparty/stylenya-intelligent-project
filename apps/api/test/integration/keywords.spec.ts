@@ -77,6 +77,7 @@ describe("Keywords API", () => {
                 mode: "CUSTOM",
                 marketplace: "ETSY",
                 language: "en",
+                country: "us",
                 seedIds,
             })
             .expect(201);
@@ -96,15 +97,12 @@ describe("Keywords API", () => {
                 mode: "AUTO",
                 marketplace: "SHOPIFY",
                 language: "en",
-                params: { occasion: "birthday", productType: "banner", audience: "kids" },
+                country: "us",
             })
-        console.log("AUTO job status/body:", response.status, response.body);
-        //.expect(201);
-            expect(response.status).toBe(201);
+            .expect(201);
 
         expect(response.body.job.mode).toBe("AUTO");
-        expect(response.body.items.length).toBeGreaterThan(0);
-        expect(response.body.items.every((item: { source: string }) => item.source === "AUTO")).toBe(true);
+        expect(response.body.items).toHaveLength(0);
     });
 
     it("stores google-ready fields for keyword jobs", async () => {
@@ -127,11 +125,11 @@ describe("Keywords API", () => {
             language: "en",
             country: "US",
             maxResults: 12,
-            providerUsed: "mock",
+            providerUsed: "trends",
         });
     });
 
-    it("creates a HYBRID job with deduped items", async () => {
+    it("creates a HYBRID job with seed items", async () => {
         const headers = await authHeader();
 
         const seeds = await request
@@ -151,18 +149,15 @@ describe("Keywords API", () => {
                 mode: "HYBRID",
                 marketplace: "ETSY",
                 language: "en",
-                niche: "party decorations",
-                params: { productType: "banner" },
+                country: "us",
                 seedIds,
             })
-        console.log("HYBRID status/body:", response.status, response.body);
-        expect(response.status).toBe(201);
-           // .expect(201);
+            .expect(201);
 
         const terms = response.body.items.map((item: { term: string }) => item.term);
         const uniqueTerms = new Set(terms);
 
-        expect(response.body.items.length).toBe(6);
+        expect(response.body.items.length).toBe(seedIds.length);
         expect(uniqueTerms.size).toBe(response.body.items.length);
         expect(
             response.body.items.find(
@@ -172,60 +167,30 @@ describe("Keywords API", () => {
         ).toBeTruthy();
     });
 
-    it("runs a job and stores results deterministically", async () => {
-        const headers = await authHeader();
-
-        const job = await request
-            .post("/v1/keywords/jobs")
-            .set(headers)
-            .send({
-                mode: "AUTO",
-                marketplace: "GOOGLE",
-                language: "es",
-                params: { occasion: "navidad", productType: "ornamentos" },
-            })
-            .expect(201);
-
-        const jobId = job.body.job.id;
-
-        const run = await request
-            .post(`/v1/keywords/jobs/${jobId}/run`)
-            .set(headers)
-            .expect(200);
-
-        expect(run.body.job.status).toBe("DONE");
-        expect(run.body.items[0].status).toBe("DONE");
-        expect(run.body.items[0].resultJson).toMatchObject({
-            summary: expect.any(String),
-            interestScore: expect.any(Number),
-            competitionScore: expect.any(Number),
-            relatedKeywords: expect.any(Array),
-        });
-
-        const rerun = await request
-            .post(`/v1/keywords/jobs/${jobId}/run`)
-            .set(headers)
-            .expect(200);
-
-        expect(rerun.body.job.status).toBe("DONE");
-        expect(rerun.body.items).toEqual(run.body.items);
-    });
-
     it("promotes a keyword job item and dedupes signals", async () => {
         const headers = await authHeader();
 
-        const job = await request
+        const seeds = await request
+            .post("/v1/keywords/seeds")
+            .set(headers)
+            .send({ terms: ["spring banner"] })
+            .expect(201);
+
+        const seedId = seeds.body.created[0].id as string;
+
+        const customJob = await request
             .post("/v1/keywords/jobs")
             .set(headers)
             .send({
-                mode: "AUTO",
+                mode: "CUSTOM",
                 marketplace: "GOOGLE",
                 language: "en",
-                params: { occasion: "birthday", productType: "banner" },
+                country: "us",
+                seedIds: [seedId],
             })
             .expect(201);
 
-        const itemId = job.body.items[0].id as string;
+        const itemId = customJob.body.items[0].id as string;
 
         const first = await request
             .post(`/v1/keywords/job-items/${itemId}/promote`)
@@ -234,7 +199,7 @@ describe("Keywords API", () => {
             .expect(201);
 
         expect(first.body.promoted).toBe(true);
-        expect(first.body.keyword).toBe(job.body.items[0].term);
+        expect(first.body.keyword).toBe(customJob.body.items[0].term);
 
         const second = await request
             .post(`/v1/keywords/job-items/${itemId}/promote`)

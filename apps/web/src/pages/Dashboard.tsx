@@ -5,13 +5,12 @@ import { KPICard, PageHeader, ActionBadge, type ActionType } from "@/components/
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/lib/api";
 
-// Mock data - in production this would come from API
-const mockKPIs = {
-  activeProducts: 127,
-  weeklyFocusItems: 7,
-  pendingDecisions: 12,
-  recentDecisions: 5,
-  productOfWeek: "Vintage Lace Collar",
+type DashboardKpis = {
+  activeProducts: number;
+  weeklyFocusItems: number;
+  pendingDecisions: number;
+  recentDecisions: number;
+  productOfWeek: string | null;
 };
 
 type WeeklyFocusItem = {
@@ -34,9 +33,38 @@ export default function Dashboard() {
   const [weeklyFocus, setWeeklyFocus] = useState<WeeklyFocusItem[]>([]);
   const [weeklyFocusError, setWeeklyFocusError] = useState<string | null>(null);
   const [weeklyFocusLoading, setWeeklyFocusLoading] = useState(false);
+  const [kpis, setKpis] = useState<DashboardKpis>({
+    activeProducts: 0,
+    weeklyFocusItems: 0,
+    pendingDecisions: 0,
+    recentDecisions: 0,
+    productOfWeek: null,
+  });
+  const [kpisLoading, setKpisLoading] = useState(false);
+  const [kpisError, setKpisError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isRootDashboard) return;
+
+    async function loadKpis() {
+      setKpisLoading(true);
+      setKpisError(null);
+      try {
+        const response = await api<DashboardKpis>("/v1/dashboard/kpis");
+        setKpis(response);
+      } catch (e: unknown) {
+        setKpisError(e instanceof Error ? e.message : "Failed to load KPIs");
+        setKpis({
+          activeProducts: 0,
+          weeklyFocusItems: 0,
+          pendingDecisions: 0,
+          recentDecisions: 0,
+          productOfWeek: null,
+        });
+      } finally {
+        setKpisLoading(false);
+      }
+    }
 
     async function loadWeeklyFocus() {
       setWeeklyFocusLoading(true);
@@ -51,6 +79,7 @@ export default function Dashboard() {
       }
     }
 
+    void loadKpis();
     void loadWeeklyFocus();
   }, [isRootDashboard]);
 
@@ -67,32 +96,36 @@ export default function Dashboard() {
       />
 
       {/* KPI Grid */}
+      {kpisError && (
+        <p className="mb-3 text-sm text-destructive">
+          KPI data unavailable: {kpisError}
+        </p>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <KPICard
           title="Active Products"
-          value={mockKPIs.activeProducts}
+          value={kpisLoading ? "—" : kpis.activeProducts}
           description="In Shopify catalog"
           icon={Package}
         />
         <KPICard
           title="Weekly Focus Items"
-          value={mockKPIs.weeklyFocusItems}
+          value={kpisLoading ? "—" : kpis.weeklyFocusItems}
           description="Prioritized actions"
           icon={Target}
           variant="highlight"
         />
         <KPICard
           title="Pending Decisions"
-          value={mockKPIs.pendingDecisions}
+          value={kpisLoading ? "—" : kpis.pendingDecisions}
           description="Awaiting execution"
           icon={ClipboardList}
         />
         <KPICard
           title="Decisions This Week"
-          value={mockKPIs.recentDecisions}
+          value={kpisLoading ? "—" : kpis.recentDecisions}
           description="Last 7 days"
           icon={TrendingUp}
-          trend={{ value: 25, label: "vs last week" }}
         />
       </div>
 
@@ -152,9 +185,11 @@ export default function Dashboard() {
               <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-3">
                 <Package className="h-8 w-8 text-primary" />
               </div>
-              <p className="font-medium text-foreground">{mockKPIs.productOfWeek}</p>
+              <p className="font-medium text-foreground">
+                {kpis.productOfWeek ?? "—"}
+              </p>
               <p className="text-sm text-muted-foreground mt-1">
-                Top performer based on sales velocity
+                Not available yet
               </p>
             </div>
           </CardContent>

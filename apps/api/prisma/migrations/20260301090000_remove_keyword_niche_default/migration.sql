@@ -1,0 +1,1 @@
+ALTER TABLE "KeywordJob" ALTER COLUMN "niche" SET DEFAULT '';
