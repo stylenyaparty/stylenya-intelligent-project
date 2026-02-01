@@ -179,7 +179,7 @@ export async function runKeywordJob(jobId: string) {
         if (seeds.length === 0) {
             throw new KeywordJobRunError(
                 "NO_SEEDS_MATCHING_JOB",
-                "No active seeds available for this job."
+                "No active seeds available for this job. Add seed keywords or adjust the job scope."
             );
         }
 
