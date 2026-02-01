@@ -81,6 +81,10 @@ type SeedResponse = {
   seeds: KeywordSeed[];
 };
 
+type SeedCountResponse = {
+  count: number;
+};
+
 type SeedCreateResponse = {
   ok: boolean;
   created: KeywordSeed[];
@@ -152,6 +156,7 @@ export default function KeywordsPage() {
   const [error, setError] = useState<string | null>(null);
   const [promotedSignals, setPromotedSignals] = useState<PromotedSignal[]>([]);
   const [promotingId, setPromotingId] = useState<string | null>(null);
+  const [seedCount, setSeedCount] = useState<number | null>(null);
 
   const [jobDialogOpen, setJobDialogOpen] = useState(false);
   const [jobMode, setJobMode] = useState<KeywordJob["mode"]>("AUTO");
@@ -171,13 +176,19 @@ export default function KeywordsPage() {
     () => seeds.filter((seed) => seed.status === "ACTIVE"),
     [seeds]
   );
+  const activeSeedCount = seedCount ?? activeSeeds.length;
+  const hasNoActiveSeeds = activeSeedCount === 0;
 
   async function loadSeeds() {
     setLoadingSeeds(true);
     setError(null);
     try {
-      const res = await api<SeedResponse>("/v1/keywords/seeds");
-      setSeeds(res.seeds);
+      const [seedResponse, countResponse] = await Promise.all([
+        api<SeedResponse>("/v1/keywords/seeds"),
+        api<SeedCountResponse>("/v1/keyword-seeds/count"),
+      ]);
+      setSeeds(seedResponse.seeds);
+      setSeedCount(countResponse.count);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load seeds");
     } finally {
@@ -247,6 +258,12 @@ export default function KeywordsPage() {
     }
   }, [jobs, selectedJobId]);
 
+  useEffect(() => {
+    if (hasNoActiveSeeds && (jobMode === "AUTO" || jobMode === "HYBRID")) {
+      setJobMode("CUSTOM");
+    }
+  }, [hasNoActiveSeeds, jobMode]);
+
   async function submitSeeds() {
     const terms = seedInput
       .split("\n")
@@ -291,6 +308,10 @@ export default function KeywordsPage() {
   }
 
   async function createJob() {
+    if (hasNoActiveSeeds && (jobMode === "AUTO" || jobMode === "HYBRID")) {
+      setError("Create seeds before creating an AUTO or HYBRID job.");
+      return;
+    }
     if ((jobMode === "CUSTOM" || jobMode === "HYBRID") && jobSeedIds.length === 0) {
       setError("Select at least one seed for this mode.");
       return;
@@ -569,6 +590,23 @@ export default function KeywordsPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {hasNoActiveSeeds && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-200/70 bg-amber-50/60 px-3 py-2 text-sm text-amber-900">
+                  <div className="flex items-start gap-2">
+                    <Info className="mt-0.5 h-4 w-4 text-amber-700" />
+                    <span>
+                      Create seeds before creating/running an AUTO or HYBRID job.
+                    </span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActiveTab("seeds")}
+                  >
+                    Go to Seeds
+                  </Button>
+                </div>
+              )}
               <Tabs
                 value={jobStatusFilter}
                 onValueChange={(value) => setJobStatusFilter(value as JobStatusFilter)}
@@ -861,10 +899,19 @@ export default function KeywordsPage() {
                 </SelectTrigger>
                 <SelectContent className="bg-popover border border-border shadow-lg">
                   <SelectItem value="CUSTOM">CUSTOM</SelectItem>
-                  <SelectItem value="AUTO">AUTO</SelectItem>
-                  <SelectItem value="HYBRID">HYBRID</SelectItem>
+                  <SelectItem value="AUTO" disabled={hasNoActiveSeeds}>
+                    {hasNoActiveSeeds ? "AUTO (Requires seeds)" : "AUTO"}
+                  </SelectItem>
+                  <SelectItem value="HYBRID" disabled={hasNoActiveSeeds}>
+                    {hasNoActiveSeeds ? "HYBRID (Requires seeds)" : "HYBRID"}
+                  </SelectItem>
                 </SelectContent>
               </Select>
+              {hasNoActiveSeeds && (
+                <p className="text-sm text-muted-foreground">
+                  Add seeds to enable AUTO and HYBRID modes.
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
