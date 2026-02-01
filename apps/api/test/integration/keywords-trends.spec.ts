@@ -118,6 +118,93 @@ describe("Keywords API (trends provider)", () => {
         expect(rerun.body.items).toEqual(run.body.items);
     });
 
+    it("handles concurrent run requests without returning 500s", async () => {
+        const headers = await authHeader();
+
+        const interestResolvers: Array<(value: string) => void> = [];
+        const relatedResolvers: Array<(value: string) => void> = [];
+
+        mockInterestOverTime.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    interestResolvers.push(resolve);
+                })
+        );
+        mockRelatedQueries.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    relatedResolvers.push(resolve);
+                })
+        );
+
+        const seeds = await request
+            .post("/v1/keywords/seeds")
+            .set(headers)
+            .send({ terms: ["concurrent seed"] })
+            .expect(201);
+
+        const seedId = seeds.body.created[0].id as string;
+
+        const job = await request
+            .post("/v1/keywords/jobs")
+            .set(headers)
+            .send({
+                mode: "CUSTOM",
+                marketplace: "GOOGLE",
+                language: "en",
+                country: "us",
+                seedIds: [seedId],
+                providerUsed: "trends",
+            })
+            .expect(201);
+
+        const runRequest = () =>
+            request
+                .post(`/v1/keywords/jobs/${job.body.job.id}/run`)
+                .set(headers)
+                .send({});
+
+        const firstRun = runRequest();
+        const secondRun = runRequest();
+
+        const waitForResolvers = async () => {
+            for (let i = 0; i < 40; i += 1) {
+                if (interestResolvers.length >= 1 && relatedResolvers.length >= 1) {
+                    return;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 5));
+            }
+            throw new Error("Timed out waiting for trends mocks");
+        };
+
+        await waitForResolvers();
+
+        const interestPayload = JSON.stringify({
+            default: { timelineData: [{ value: [12] }, { value: [40] }, { value: [70] }] },
+        });
+        const relatedPayload = JSON.stringify({
+            default: {
+                rankedList: [
+                    { rankedKeyword: [{ query: "concurrent idea", value: 55 }] },
+                    { rankedKeyword: [{ query: "concurrent idea 2", value: "Breakout" }] },
+                ],
+            },
+        });
+
+        interestResolvers.forEach((resolve) => resolve(interestPayload));
+        relatedResolvers.forEach((resolve) => resolve(relatedPayload));
+
+        const [firstResponse, secondResponse] = await Promise.all([firstRun, secondRun]);
+        const statuses = [firstResponse.status, secondResponse.status].sort();
+
+        expect(statuses).toEqual([200, 409]);
+        expect([firstResponse.status, secondResponse.status]).not.toContain(500);
+
+        const conflictResponse =
+            firstResponse.status === 409 ? firstResponse : secondResponse;
+        expect(conflictResponse.body.error).toBe("JOB_ALREADY_RUNNING");
+    });
+
     it("returns NO_SEEDS_MATCHING_JOB when no active seeds exist", async () => {
         const headers = await authHeader();
 
@@ -150,7 +237,7 @@ describe("Keywords API (trends provider)", () => {
         const run = await request
             .post(`/v1/keywords/jobs/${job.body.job.id}/run`)
             .set(headers)
-            .expect(400);
+            .expect(409);
 
         expect(run.body.error).toBe("NO_SEEDS_MATCHING_JOB");
     });
