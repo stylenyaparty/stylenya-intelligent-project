@@ -121,6 +121,14 @@ describe("Keywords API (trends provider)", () => {
     it("returns NO_SEEDS_MATCHING_JOB when no active seeds exist", async () => {
         const headers = await authHeader();
 
+        const seeds = await request
+            .post("/v1/keywords/seeds")
+            .set(headers)
+            .send({ terms: ["empty run seed"] })
+            .expect(201);
+
+        const seedId = seeds.body.created[0].id as string;
+
         const job = await request
             .post("/v1/keywords/jobs")
             .set(headers)
@@ -132,6 +140,12 @@ describe("Keywords API (trends provider)", () => {
                 providerUsed: "trends",
             })
             .expect(201);
+
+        await request
+            .patch(`/v1/keywords/seeds/${seedId}`)
+            .set(headers)
+            .send({ status: "ARCHIVED" })
+            .expect(200);
 
         const run = await request
             .post(`/v1/keywords/jobs/${job.body.job.id}/run`)

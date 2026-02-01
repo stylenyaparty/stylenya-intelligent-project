@@ -34,6 +34,12 @@ describe("Keywords API", () => {
     }
 
     async function createAutoJob(headers: { Authorization: string }) {
+        await request
+            .post("/v1/keywords/seeds")
+            .set(headers)
+            .send({ terms: [`auto seed ${Date.now()}-${Math.random()}`] })
+            .expect(201);
+
         const response = await request
             .post("/v1/keywords/jobs")
             .set(headers)
@@ -197,6 +203,12 @@ describe("Keywords API", () => {
     it("creates an AUTO job with generated items", async () => {
         const headers = await authHeader();
 
+        await request
+            .post("/v1/keywords/seeds")
+            .set(headers)
+            .send({ terms: [`auto seed ${Date.now()}-${Math.random()}`] })
+            .expect(201);
+
         const response = await request
             .post("/v1/keywords/jobs")
             .set(headers)
@@ -214,6 +226,12 @@ describe("Keywords API", () => {
 
     it("stores google-ready fields for keyword jobs", async () => {
         const headers = await authHeader();
+
+        await request
+            .post("/v1/keywords/seeds")
+            .set(headers)
+            .send({ terms: [`auto seed ${Date.now()}-${Math.random()}`] })
+            .expect(201);
 
         const response = await request
             .post("/v1/keywords/jobs")
