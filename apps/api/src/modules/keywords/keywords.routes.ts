@@ -21,7 +21,8 @@ import {
     restoreKeywordJob,
     updateKeywordSeedStatus,
 } from "./keywords.service";
-import { isKeywordJobRunError, runKeywordJob } from "./keywords-runner.service";
+import { runKeywordJob } from "./keywords-runner.service";
+import { isAppError } from "../../types/app-error.js";
 
 export async function keywordsRoutes(app: FastifyInstance) {
     app.get("/keyword-seeds/count", { preHandler: requireAuth }, async () => {
@@ -76,6 +77,11 @@ export async function keywordsRoutes(app: FastifyInstance) {
             const result = await createKeywordJob(body);
             return reply.code(201).send({ ok: true, ...result });
         } catch (error) {
+            if (isAppError(error)) {
+                return reply
+                    .code(error.statusCode)
+                    .send({ code: error.code, message: error.message });
+            }
             const message =
                 error instanceof Error ? error.message : "Invalid keyword job payload";
             return reply.code(400).send({ error: message });
@@ -128,10 +134,10 @@ export async function keywordsRoutes(app: FastifyInstance) {
                 return reply.send({ ok: true, ...result });
             } catch (error) {
                 request.log.error({ err: error }, "keywords job run failed");
-                if (isKeywordJobRunError(error)) {
+                if (isAppError(error)) {
                     return reply
                         .code(error.statusCode)
-                        .send({ error: error.code, message: error.message });
+                        .send({ code: error.code, message: error.message });
                 }
                 return reply
                     .code(500)
