@@ -98,10 +98,39 @@ export async function productsRoutes(app: FastifyInstance) {
         "/products/import-csv",
         { preHandler: requireAuth },
         async (request, reply) => {
-            const rawBody = request.body as Buffer | undefined;
-            const file = rawBody
-                ? extractMultipartFile(rawBody, request.headers["content-type"], "file")
-                : null;
+            const multipartFile =
+                typeof (request as { file?: () => Promise<{ toBuffer: () => Promise<Buffer> }> }).file ===
+                "function"
+                    ? await (request as { file: () => Promise<{ toBuffer: () => Promise<Buffer> }> }).file()
+                    : null;
+
+            const rawBody = request.body as unknown;
+            let buffer = Buffer.isBuffer(rawBody)
+                ? rawBody
+                : rawBody instanceof Uint8Array
+                    ? Buffer.from(rawBody)
+                    : typeof rawBody === "string"
+                        ? Buffer.from(rawBody, "utf8")
+                        : null;
+
+            if (!buffer && !multipartFile) {
+                const chunks: Buffer[] = [];
+                for await (const chunk of request.raw) {
+                    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+                }
+                if (chunks.length > 0) {
+                    buffer = Buffer.concat(chunks);
+                }
+            }
+
+            const file = multipartFile
+                ? {
+                    filename: "upload.csv",
+                    buffer: await multipartFile.toBuffer(),
+                }
+                : buffer
+                    ? extractMultipartFile(buffer, request.headers["content-type"], "file")
+                    : null;
 
             if (!file) {
                 return reply.code(400).send({ error: "File is required" });

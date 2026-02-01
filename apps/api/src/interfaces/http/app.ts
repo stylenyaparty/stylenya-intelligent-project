@@ -1,6 +1,7 @@
 import Fastify, { type FastifyLoggerOptions } from "fastify";
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
+import multipart from "@fastify/multipart";
 import { registerRoutes } from "./routes.js";
 import authGuardPlugin from "../../plugins/auth-guard.js";
 
@@ -17,13 +18,7 @@ export async function createApp(options: CreateAppOptions = {}) {
     await app.register(jwt, {
         secret: process.env.JWT_SECRET!,
     });
-    app.addContentTypeParser(
-        /^multipart\/form-data/,
-        { parseAs: "buffer" },
-        (request, body, done) => {
-            done(null, body);
-        }
-    );
+    await app.register(multipart);
     await app.register(authGuardPlugin);
     await registerRoutes(app);
 
