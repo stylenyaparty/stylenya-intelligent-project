@@ -8,6 +8,7 @@ import { LLMNotConfiguredError } from "../llm/llm.errors.js";
 import { suggestKeywords } from "../llm/suggest-keywords.service.js";
 
 const trendsProvider = new GoogleTrendsKeywordResearchProvider();
+const runningKeywordJobs = new Set<string>();
 
 function normalizeKeyword(value: string) {
     return value.trim().toLowerCase();
@@ -65,6 +66,16 @@ export async function runKeywordJob(jobId: string) {
         });
         return { job, items: existingItems };
     }
+
+    if (runningKeywordJobs.has(jobId)) {
+        throw new KeywordJobRunError(
+            "JOB_ALREADY_RUNNING",
+            "Job is already running.",
+            409
+        );
+    }
+
+    runningKeywordJobs.add(jobId);
 
     try {
         const missingConfig = [];
@@ -405,6 +416,8 @@ export async function runKeywordJob(jobId: string) {
             });
         }
         throw error;
+    } finally {
+        runningKeywordJobs.delete(jobId);
     }
 }
 
