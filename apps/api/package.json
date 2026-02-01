@@ -11,7 +11,9 @@
     "start": "node dist/interfaces/http/server.js",
     "build": "tsc -p tsconfig.json",
     "prisma:generate": "prisma generate",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "prisma:shadow:reset": "node ./scripts/reset-shadow-db.mjs",
+    "prisma:migrate:dev": "node ./scripts/reset-shadow-db.mjs && prisma migrate dev"
   },
   "keywords": [],
   "author": "",
