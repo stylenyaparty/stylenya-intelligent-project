@@ -222,9 +222,31 @@ export async function createKeywordJob(input: KeywordJobInput) {
     return { job, items: createdItems };
 }
 
-export async function listKeywordJobs() {
+export async function listKeywordJobs(status: "active" | "archived" | "all" = "active") {
+    const where =
+        status === "all"
+            ? undefined
+            : status === "archived"
+                ? { archivedAt: { not: null } }
+                : { archivedAt: null };
+
     return prisma.keywordJob.findMany({
+        where,
         orderBy: { createdAt: "desc" },
+    });
+}
+
+export async function archiveKeywordJob(id: string) {
+    return prisma.keywordJob.update({
+        where: { id },
+        data: { archivedAt: new Date() },
+    });
+}
+
+export async function restoreKeywordJob(id: string) {
+    return prisma.keywordJob.update({
+        where: { id },
+        data: { archivedAt: null },
     });
 }
 
