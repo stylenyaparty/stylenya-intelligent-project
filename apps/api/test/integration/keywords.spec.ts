@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
 import { createTestServer, getAuthToken, seedAdmin, resetDatabase } from "../helpers.js";
+import { prisma } from "../../src/infrastructure/db/prisma.js";
 
 describe("Keywords API", () => {
     let app: FastifyInstance;
@@ -10,6 +11,7 @@ describe("Keywords API", () => {
     let cachedHeaders: { Authorization: string } | null = null;
 
     beforeAll(async () => {
+        await resetDatabase();
         app = await createTestServer();
         request = supertest(app.server);
     });
@@ -29,6 +31,21 @@ describe("Keywords API", () => {
         const token = await getAuthToken(app, admin.email, admin.password);
         cachedHeaders = { Authorization: `Bearer ${token}` };
         return cachedHeaders;
+    }
+
+    async function createAutoJob(headers: { Authorization: string }) {
+        const response = await request
+            .post("/v1/keywords/jobs")
+            .set(headers)
+            .send({
+                mode: "AUTO",
+                marketplace: "ETSY",
+                language: "en",
+                country: "us",
+            })
+            .expect(201);
+
+        return response.body.job as { id: string };
     }
 
     it("creates seeds with normalization and dedupe", async () => {
@@ -208,5 +225,131 @@ describe("Keywords API", () => {
             .expect(200);
 
         expect(second.body.signalId).toBe(first.body.signalId);
+    });
+
+    it("archives a job and hides it from the default list", async () => {
+        const headers = await authHeader();
+
+        const job = await createAutoJob(headers);
+
+        await request
+            .post(`/v1/keywords/jobs/${job.id}/archive`)
+            .set(headers)
+            .send({})
+            .expect(200);
+
+        const list = await request
+            .get("/v1/keywords/jobs")
+            .set(headers)
+            .expect(200);
+
+        expect(list.body.jobs.find((row: { id: string }) => row.id === job.id)).toBeFalsy();
+    });
+
+    it("lists archived jobs when status=archived and returns all jobs when status=all", async () => {
+        const headers = await authHeader();
+
+        const archivedJob = await createAutoJob(headers);
+        await request
+            .post(`/v1/keywords/jobs/${archivedJob.id}/archive`)
+            .set(headers)
+            .send({})
+            .expect(200);
+
+        const activeJob = await createAutoJob(headers);
+
+        const archivedList = await request
+            .get("/v1/keywords/jobs?status=archived")
+            .set(headers)
+            .expect(200);
+
+        expect(
+            archivedList.body.jobs.find((row: { id: string }) => row.id === archivedJob.id)
+        ).toBeTruthy();
+
+        const allList = await request
+            .get("/v1/keywords/jobs?status=all")
+            .set(headers)
+            .expect(200);
+
+        const allIds = allList.body.jobs.map((row: { id: string }) => row.id);
+        expect(allIds).toContain(archivedJob.id);
+        expect(allIds).toContain(activeJob.id);
+    });
+
+    it("prevents double archive and restores archived jobs", async () => {
+        const headers = await authHeader();
+
+        const job = await createAutoJob(headers);
+
+        await request
+            .post(`/v1/keywords/jobs/${job.id}/archive`)
+            .set(headers)
+            .send({})
+            .expect(200);
+
+        await request
+            .post(`/v1/keywords/jobs/${job.id}/archive`)
+            .set(headers)
+            .send({})
+            .expect(409);
+
+        await request
+            .post(`/v1/keywords/jobs/${job.id}/restore`)
+            .set(headers)
+            .send({})
+            .expect(200);
+
+        const list = await request
+            .get("/v1/keywords/jobs")
+            .set(headers)
+            .expect(200);
+
+        expect(list.body.jobs.find((row: { id: string }) => row.id === job.id)).toBeTruthy();
+    });
+
+    it("returns 409 when restoring an active job", async () => {
+        const headers = await authHeader();
+
+        const job = await createAutoJob(headers);
+
+        await request
+            .post(`/v1/keywords/jobs/${job.id}/restore`)
+            .set(headers)
+            .send({})
+            .expect(409);
+    });
+
+    it("returns 409 when running an archived job", async () => {
+        const headers = await authHeader();
+
+        const job = await createAutoJob(headers);
+
+        await request
+            .post(`/v1/keywords/jobs/${job.id}/archive`)
+            .set(headers)
+            .send({})
+            .expect(200);
+
+        await request
+            .post(`/v1/keywords/jobs/${job.id}/run`)
+            .set(headers)
+            .expect(409);
+    });
+
+    it("returns 409 when archiving a running job", async () => {
+        const headers = await authHeader();
+
+        const job = await createAutoJob(headers);
+        await prisma.keywordJob.update({
+            where: { id: job.id },
+            data: { status: "RUNNING" },
+        });
+
+        await request
+            .post(`/v1/keywords/jobs/${job.id}/archive`)
+            .set(headers)
+            .send({})
+            .expect(409);
     });
 });
