@@ -1,11 +1,11 @@
+-- Convert DecisionType enum column to TEXT first, then drop the enum
+ALTER TABLE "Decision" ALTER COLUMN "decisionType" TYPE TEXT USING "decisionType"::text;
+
 -- DropIndex
-DROP INDEX "Decision_decisionType_status_idx";
+DROP INDEX IF EXISTS "Decision_decisionType_status_idx";
 
 -- DropEnum
-DROP TYPE "DecisionType";
+DROP TYPE IF EXISTS "DecisionType";
 
--- CreateIndex
-CREATE INDEX "Decision_status_idx" ON "Decision"("status");
-
--- CreateIndex
-CREATE INDEX "Decision_actionType_idx" ON "Decision"("actionType");
+-- CreateIndex for status (actionType will be added later when column exists)
+CREATE INDEX IF NOT EXISTS "Decision_status_idx" ON "Decision"("status");
