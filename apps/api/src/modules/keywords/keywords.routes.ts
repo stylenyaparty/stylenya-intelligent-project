@@ -9,6 +9,7 @@ import {
 } from "./keywords.schemas";
 import {
     archiveKeywordJob,
+    countActiveKeywordSeeds,
     createKeywordJob,
     createKeywordSeeds,
     getKeywordJob,
@@ -23,6 +24,11 @@ import {
 import { isKeywordJobRunError, runKeywordJob } from "./keywords-runner.service";
 
 export async function keywordsRoutes(app: FastifyInstance) {
+    app.get("/keyword-seeds/count", { preHandler: requireAuth }, async () => {
+        const count = await countActiveKeywordSeeds();
+        return { count };
+    });
+
     app.post("/keywords/seeds", { preHandler: requireAuth }, async (request, reply) => {
         try {
             const body = keywordSeedCreateSchema.parse(request.body);
@@ -56,6 +62,16 @@ export async function keywordsRoutes(app: FastifyInstance) {
             const body = keywordJobCreateSchema.parse(request.body);
             if (body.mode === "AI" && !body.topic) {
                 return reply.code(400).send({ error: "Topic is required for AI mode." });
+            }
+            if (body.mode === "AUTO" || body.mode === "HYBRID") {
+                const activeSeedCount = await countActiveKeywordSeeds();
+                if (activeSeedCount === 0) {
+                    return reply.code(409).send({
+                        code: "SEEDS_REQUIRED",
+                        message:
+                            "Create seed keywords before creating or running an AUTO/HYBRID job.",
+                    });
+                }
             }
             const result = await createKeywordJob(body);
             return reply.code(201).send({ ok: true, ...result });
