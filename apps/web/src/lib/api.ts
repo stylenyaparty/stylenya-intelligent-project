@@ -46,3 +46,32 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
   return JSON.parse(text) as T;
 }
+
+export type KeywordProviderSettings = {
+  trends: { enabled: boolean };
+  googleAds: { enabled: boolean; configured: boolean; customerId?: string };
+  auto: { prefers: string };
+};
+
+export type GoogleAdsSettingsPayload = {
+  enabled: boolean;
+  customerId?: string;
+  developerToken?: string;
+  clientId?: string;
+  clientSecret?: string;
+  refreshToken?: string;
+};
+
+export async function getKeywordProviderSettings() {
+  return api<KeywordProviderSettings>("/v1/settings/keyword-providers");
+}
+
+export async function updateKeywordProviderSettings(payload: GoogleAdsSettingsPayload) {
+  return api<{ ok: boolean; googleAds: KeywordProviderSettings["googleAds"] }>(
+    "/v1/settings/google-ads",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
