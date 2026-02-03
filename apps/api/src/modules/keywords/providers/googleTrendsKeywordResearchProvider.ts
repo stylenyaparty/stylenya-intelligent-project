@@ -36,6 +36,14 @@ const FALLBACK_TIMEFRAME = "today 3-m";
 const TRANSIENT_ERROR_MESSAGES = ["fetch failed"];
 const TRANSIENT_ERROR_CODES = ["ECONNRESET", "ETIMEDOUT"];
 const DEBUG_TRENDS = process.env.KEYWORD_TRENDS_DEBUG === "true";
+const CIRCUIT_BREAKER_MINUTES = Number(
+    process.env.KEYWORD_TRENDS_CIRCUIT_MINUTES ?? "5"
+);
+const MIN_REQUEST_INTERVAL_MS = Number(
+    process.env.KEYWORD_TRENDS_MIN_INTERVAL_MS ?? "800"
+);
+const MAX_RETRIES = Number(process.env.KEYWORD_TRENDS_MAX_RETRIES ?? "1");
+const BASE_BACKOFF_MS = Number(process.env.KEYWORD_TRENDS_BACKOFF_MS ?? "300");
 
 function clampScore(value: number) {
     if (Number.isNaN(value)) return 0;
@@ -116,6 +124,8 @@ function buildProviderRaw(seed: string, response: TrendsSeedResponse) {
 }
 
 export class GoogleTrendsKeywordResearchProvider implements KeywordResearchProvider {
+    private static blockedUntil = 0;
+    private static lastRequestAt = 0;
     private readonly clientLoader: TrendsClientLoader;
     private clientPromise?: Promise<TrendsClient>;
     private readonly cache: TrendsCache<TrendsSeedResponse>;
@@ -171,17 +181,12 @@ export class GoogleTrendsKeywordResearchProvider implements KeywordResearchProvi
             return suggestions;
         }
 
-        const interestScore = buildInterestScoreFromTimeline(response.timelineValues);
-        return [
-            {
-                term: input.seed,
-                interestScore,
-                competitionScore: null,
-                summary: `Google Trends interest for "${input.seed}" averages ${interestScore}/100 in ${input.geo}.`,
-                providerRaw,
-                isSeed: true,
-            },
-        ];
+        throw new AppError(
+            422,
+            "TRENDS_NO_RESULTS",
+            "Google Trends returned no results for this search. Try different keywords or try again later.",
+            { provider: "TRENDS", seed: input.seed, geo, timeframe }
+        );
     }
 
     private async fetchSeedData(input: {
@@ -189,6 +194,8 @@ export class GoogleTrendsKeywordResearchProvider implements KeywordResearchProvi
         geo: string;
         timeframe: string;
     }): Promise<TrendsSeedResponse> {
+        await this.assertNotBlocked();
+        await this.enforceRateLimit();
         const client = await this.getClient();
         const [timelineRaw, relatedRaw] = await Promise.all([
             client.interestOverTime({
@@ -204,6 +211,7 @@ export class GoogleTrendsKeywordResearchProvider implements KeywordResearchProvi
         ]);
 
         if (this.isBlockedResponse(timelineRaw) || this.isBlockedResponse(relatedRaw)) {
+            this.recordBlocked();
             throw new AppError(
                 503,
                 "PROVIDER_TEMP_BLOCKED",
@@ -277,21 +285,23 @@ export class GoogleTrendsKeywordResearchProvider implements KeywordResearchProvi
         geo: string;
         timeframe: string;
     }): Promise<TrendsSeedResponse> {
-        try {
-            return await this.fetchSeedData(input);
-        } catch (error) {
-            if (this.isProviderBlockedError(error)) {
-                throw error;
-            }
-            if (this.isTransientError(error)) {
-                await this.delay(300);
-                try {
-                    return await this.fetchSeedData(input);
-                } catch (retryError) {
-                    throw this.normalizeProviderError(retryError);
+        let attempt = 0;
+        while (true) {
+            try {
+                return await this.fetchSeedData(input);
+            } catch (error) {
+                if (this.isProviderBlockedError(error)) {
+                    throw this.normalizeProviderError(error);
                 }
+                if (this.isTransientError(error) && attempt < MAX_RETRIES) {
+                    const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt);
+                    const jitter = Math.floor(Math.random() * 100);
+                    await this.delay(backoff + jitter);
+                    attempt += 1;
+                    continue;
+                }
+                throw this.normalizeProviderError(error);
             }
-            throw this.normalizeProviderError(error);
         }
     }
 
@@ -300,6 +310,7 @@ export class GoogleTrendsKeywordResearchProvider implements KeywordResearchProvi
             return error;
         }
         if (this.isProviderBlockedError(error)) {
+            this.recordBlocked();
             return new AppError(
                 503,
                 "PROVIDER_TEMP_BLOCKED",
@@ -344,6 +355,35 @@ export class GoogleTrendsKeywordResearchProvider implements KeywordResearchProvi
 
     private isBlockedResponse(body: string) {
         return /<html/i.test(body) || /302 Moved/i.test(body) || /\/sorry\/index/i.test(body);
+    }
+
+    private recordBlocked() {
+        const cooldownMs = Math.max(CIRCUIT_BREAKER_MINUTES, 1) * 60 * 1000;
+        GoogleTrendsKeywordResearchProvider.blockedUntil = Date.now() + cooldownMs;
+    }
+
+    private async assertNotBlocked() {
+        const now = Date.now();
+        if (GoogleTrendsKeywordResearchProvider.blockedUntil > now) {
+            const retryAt = new Date(
+                GoogleTrendsKeywordResearchProvider.blockedUntil
+            ).toISOString();
+            throw new AppError(
+                503,
+                "PROVIDER_TEMP_BLOCKED",
+                `Google Trends temporarily blocked. Retry after ${retryAt}.`,
+                { provider: "TRENDS", retryAt }
+            );
+        }
+    }
+
+    private async enforceRateLimit() {
+        const now = Date.now();
+        const delta = now - GoogleTrendsKeywordResearchProvider.lastRequestAt;
+        if (delta < MIN_REQUEST_INTERVAL_MS) {
+            await this.delay(MIN_REQUEST_INTERVAL_MS - delta);
+        }
+        GoogleTrendsKeywordResearchProvider.lastRequestAt = Date.now();
     }
 
     private logDebug(

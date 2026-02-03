@@ -348,15 +348,76 @@ export async function runKeywordJob(jobId: string, options?: { force?: boolean }
             providerRaw?: unknown;
         }> = [];
         const seen = new Set<string>();
+        let fallbackWarning: string | null = null;
+
+        const params =
+            (
+                job as {
+                    params?: {
+                        occasion?: string;
+                        productType?: string;
+                        audience?: string;
+                    };
+                }
+            ).params ?? {};
+        const fallbackTopic = [
+            job.niche,
+            params.occasion,
+            params.productType,
+            params.audience,
+            seeds[0],
+        ]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
 
         for (const item of seedEntries) {
-            const results = await provider.getSuggestions({
-                seed: item.term,
-                marketplace: job.marketplace,
-                language: job.language,
-                geo: job.country,
-                timeframe,
-            });
+            let results: KeywordSuggestion[] = [];
+            try {
+                results = await provider.getSuggestions({
+                    seed: item.term,
+                    marketplace: job.marketplace,
+                    language: job.language,
+                    geo: job.country,
+                    timeframe,
+                });
+            } catch (error) {
+                if (
+                    resolvedProvider === "TRENDS" &&
+                    isAppError(error) &&
+                    [
+                        "PROVIDER_TEMP_BLOCKED",
+                        "PROVIDER_UNAVAILABLE",
+                        "TRENDS_NO_RESULTS",
+                    ].includes(error.code)
+                ) {
+                    const topic = fallbackTopic || item.term;
+                    try {
+                        const keywords = await suggestKeywords(topic, maxResults);
+                        fallbackWarning =
+                            "Google Trends unavailable. Falling back to AI suggestions.";
+                        keywords.forEach((keyword) => {
+                            const normalized = normalizeKeyword(keyword);
+                            if (seen.has(normalized)) return;
+                            seen.add(normalized);
+                            suggestions.push({
+                                term: keyword.trim(),
+                                source: "AI",
+                                resultJson: {
+                                    summary: `AI fallback suggestion for "${keyword}".`,
+                                    interestScore: 0,
+                                    competitionScore: 0,
+                                },
+                                providerRaw: { fallback: "AI", reason: error.code },
+                            });
+                        });
+                        break;
+                    } catch (aiError) {
+                        throw aiError;
+                    }
+                }
+                throw error;
+            }
 
             const normalizedSeed = normalizeKeyword(item.term);
             for (const result of results) {
@@ -395,7 +456,7 @@ export async function runKeywordJob(jobId: string, options?: { force?: boolean }
                 seedCount: seeds.length,
                 keywordsGenerated: 0,
                 itemsPersisted: 0,
-                warning: "Provider returned 0 results",
+                warning: fallbackWarning ?? "Provider returned 0 results",
             };
         }
 
@@ -430,6 +491,7 @@ export async function runKeywordJob(jobId: string, options?: { force?: boolean }
             seedCount: seeds.length,
             keywordsGenerated: suggestions.length,
             itemsPersisted: results.length,
+            warning: fallbackWarning ?? undefined,
         };
     } catch (error) {
         if (isAppError(error)) {
