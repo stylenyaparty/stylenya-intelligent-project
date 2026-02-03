@@ -24,8 +24,8 @@ describe("Products API", () => {
         if (cachedHeaders) return cachedHeaders;
 
         const admin = await seedAdmin(app, {
-            email: "products-admin@example.com",
-            password: "AdminPass123!",
+            email: "stylenya.party@gmail.com",
+            password: "D3s4rr0ll0",
         });
 
         const token = await getAuthToken(app, admin.email, admin.password);
@@ -43,7 +43,7 @@ describe("Products API", () => {
         ].join("\n");
 
         const response = await request
-            .post("/v1/products/import-csv")
+            .post("/products/import-csv")
             .set(headers)
             .attach("file", Buffer.from(csv), "shopify.csv")
             .expect(200);
@@ -61,7 +61,7 @@ describe("Products API", () => {
         ].join("\n");
 
         const updateResponse = await request
-            .post("/v1/products/import-csv")
+            .post("/products/import-csv")
             .set(headers)
             .attach("file", Buffer.from(updatedCsv), "shopify.csv")
             .expect(200);
@@ -84,7 +84,7 @@ describe("Products API", () => {
         ].join("\n");
 
         const response = await request
-            .post("/v1/products/import-csv")
+            .post("/products/import-csv")
             .set(headers)
             .attach("file", Buffer.from(csv), "etsy.csv")
             .expect(200);
@@ -103,7 +103,7 @@ describe("Products API", () => {
         const headers = await authHeader();
 
         const createResponse = await request
-            .post("/v1/products")
+            .post("/products")
             .set(headers)
             .send({
                 name: "Manual Product",
@@ -117,19 +117,19 @@ describe("Products API", () => {
         const productId = createResponse.body.product.id as string;
 
         const archiveResponse = await request
-            .post(`/v1/products/${productId}/archive`)
+            .post(`/products/${productId}/archive`)
             .set(headers)
             .expect(200);
         expect(archiveResponse.body.product.archivedAt).toBeTruthy();
 
         const restoreResponse = await request
-            .post(`/v1/products/${productId}/restore`)
+            .post(`/products/${productId}/restore`)
             .set(headers)
             .expect(200);
         expect(restoreResponse.body.product.archivedAt).toBeNull();
 
         await request
-            .delete(`/v1/products/${productId}`)
+            .delete(`/products/${productId}`)
             .set(headers)
             .send({ confirm: true })
             .expect(200);

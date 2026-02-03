@@ -74,8 +74,8 @@ export default function WeeklyFocusPage() {
     setError(null);
     try {
       const [weeklyFocus, decisions] = await Promise.all([
-        api<WeeklyFocusResponse>(`/v1/weekly-focus?limit=${limit}`),
-        api<DecisionsResponse>(`/v1/decisions?limit=200&range=all`),
+        api<WeeklyFocusResponse>(`/weekly-focus?limit=${limit}`),
+        api<DecisionsResponse>(`/decisions?limit=200&range=all`),
       ]);
 
       setData(weeklyFocus);
@@ -106,7 +106,7 @@ export default function WeeklyFocusPage() {
 
     setCreating((prev) => ({ ...prev, [key]: true }));
     try {
-      const response = await api<{ ok: boolean; decision: PlannedDecision }>("/v1/decisions", {
+      const response = await api<{ ok: boolean; decision: PlannedDecision }>("/decisions", {
         method: "POST",
         body: JSON.stringify({
           actionType: item.actionType,

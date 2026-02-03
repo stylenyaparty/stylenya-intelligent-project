@@ -193,8 +193,8 @@ export default function KeywordsPage() {
     setError(null);
     try {
       const [seedResponse, countResponse] = await Promise.all([
-        api<SeedResponse>("/v1/keywords/seeds"),
-        api<SeedCountResponse>("/v1/keyword-seeds/count"),
+        api<SeedResponse>("/keywords/seeds"),
+        api<SeedCountResponse>("/keyword-seeds/count"),
       ]);
       setSeeds(seedResponse.seeds);
       setSeedCount(countResponse.count);
@@ -208,7 +208,7 @@ export default function KeywordsPage() {
   async function loadProviderSettings() {
     setLoadingProviders(true);
     try {
-      const res = await api<KeywordProviderSettings>("/v1/settings/keyword-providers");
+      const res = await api<KeywordProviderSettings>("/settings/keyword-providers");
       setProviderSettings(res);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load provider settings");
@@ -223,7 +223,7 @@ export default function KeywordsPage() {
     try {
       const status = statusOverride ?? jobStatusFilter;
       const query = status ? `?status=${status}` : "";
-      const res = await api<JobResponse>(`/v1/keywords/jobs${query}`);
+      const res = await api<JobResponse>(`/keywords/jobs${query}`);
       setJobs(res.jobs);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load jobs");
@@ -236,7 +236,7 @@ export default function KeywordsPage() {
     setLoadingItems(true);
     setError(null);
     try {
-      const res = await api<JobItemsResponse>(`/v1/keywords/jobs/${jobId}/items`);
+      const res = await api<JobItemsResponse>(`/keywords/jobs/${jobId}/items`);
       setItems(res.items);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load results");
@@ -248,7 +248,7 @@ export default function KeywordsPage() {
   async function loadPromotedSignals() {
     setLoadingPromoted(true);
     try {
-      const res = await api<PromotedSignalsResponse>("/v1/keywords/promoted");
+      const res = await api<PromotedSignalsResponse>("/keywords/promoted");
       setPromotedSignals(res.signals);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load promoted signals");
@@ -297,7 +297,7 @@ export default function KeywordsPage() {
     setLoadingSeeds(true);
     setError(null);
     try {
-      const res = await api<SeedCreateResponse>("/v1/keywords/seeds", {
+      const res = await api<SeedCreateResponse>("/keywords/seeds", {
         method: "POST",
         body: JSON.stringify({ terms }),
       });
@@ -315,7 +315,7 @@ export default function KeywordsPage() {
     setLoadingSeeds(true);
     setError(null);
     try {
-      await api(`/v1/keywords/seeds/${seed.id}`, {
+      await api(`/keywords/seeds/${seed.id}`, {
         method: "PATCH",
         body: JSON.stringify({
           status: seed.status === "ACTIVE" ? "ARCHIVED" : "ACTIVE",
@@ -367,7 +367,7 @@ export default function KeywordsPage() {
         seedIds: jobMode === "AUTO" ? undefined : jobSeedIds,
       };
 
-      const res = await api<JobCreateResponse>("/v1/keywords/jobs", {
+      const res = await api<JobCreateResponse>("/keywords/jobs", {
         method: "POST",
         body: JSON.stringify(payload),
       });
@@ -397,7 +397,7 @@ export default function KeywordsPage() {
     setLoadingItems(true);
     setError(null);
     try {
-      const result = await api<JobRunResponse>(`/v1/keywords/jobs/${jobId}/run`, {
+      const result = await api<JobRunResponse>(`/keywords/jobs/${jobId}/run`, {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -433,7 +433,7 @@ export default function KeywordsPage() {
     setJobActionId(job.id);
     setError(null);
     try {
-      await api(`/v1/keywords/jobs/${job.id}/archive`, {
+      await api(`/keywords/jobs/${job.id}/archive`, {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -452,7 +452,7 @@ export default function KeywordsPage() {
     setJobActionId(job.id);
     setError(null);
     try {
-      await api(`/v1/keywords/jobs/${job.id}/restore`, {
+      await api(`/keywords/jobs/${job.id}/restore`, {
         method: "POST",
         body: JSON.stringify({}),
       });
@@ -471,7 +471,7 @@ export default function KeywordsPage() {
     setPromotingId(itemId);
     setError(null);
     try {
-      await api(`/v1/keywords/job-items/${itemId}/promote`, {
+      await api(`/keywords/job-items/${itemId}/promote`, {
         method: "POST",
         body: JSON.stringify({}),
       });

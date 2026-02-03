@@ -63,12 +63,12 @@ export type GoogleAdsSettingsPayload = {
 };
 
 export async function getKeywordProviderSettings() {
-  return api<KeywordProviderSettings>("/v1/settings/keyword-providers");
+  return api<KeywordProviderSettings>("/settings/keyword-providers");
 }
 
 export async function updateKeywordProviderSettings(payload: GoogleAdsSettingsPayload) {
   return api<{ ok: boolean; googleAds: KeywordProviderSettings["googleAds"] }>(
-    "/v1/settings/google-ads",
+    "/settings/google-ads",
     {
       method: "POST",
       body: JSON.stringify(payload),

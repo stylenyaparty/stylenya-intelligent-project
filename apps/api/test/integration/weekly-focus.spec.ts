@@ -22,8 +22,8 @@ describe("Weekly Focus API", () => {
         if (cachedHeaders) return cachedHeaders;
 
         const admin = await seedAdmin(app, {
-            email: "admin-weekly@example.com",
-            password: "AdminPass123!",
+            email: "stylenya.party@gmail.com",
+            password: "D3s4rr0ll0",
         });
 
         const token = await getAuthToken(app, admin.email, admin.password);
@@ -35,7 +35,7 @@ describe("Weekly Focus API", () => {
         const headers = await authHeader();
 
         const response = await request
-            .get("/v1/weekly-focus?limit=7")
+            .get("/weekly-focus?limit=7")
             .set(headers)
             .expect(200);
 
@@ -56,7 +56,7 @@ describe("Weekly Focus API", () => {
         });
 
         const seeds = await request
-            .post("/v1/keywords/seeds")
+            .post("/keywords/seeds")
             .set(headers)
             .send({ terms: ["birthday banner"] })
             .expect(201);
@@ -64,7 +64,7 @@ describe("Weekly Focus API", () => {
         const seedId = seeds.body.created[0].id as string;
 
         const job = await request
-            .post("/v1/keywords/jobs")
+            .post("/keywords/jobs")
             .set(headers)
             .send({
                 mode: "CUSTOM",
@@ -79,13 +79,13 @@ describe("Weekly Focus API", () => {
         const keywordItem = job.body.items[0];
 
         await request
-            .post(`/v1/keywords/job-items/${keywordItem.id}/promote`)
+            .post(`/keywords/job-items/${keywordItem.id}/promote`)
             .set(headers)
             .send({})
             .expect(201);
 
         const response = await request
-            .get("/v1/weekly-focus?limit=7")
+            .get("/weekly-focus?limit=7")
             .set(headers)
             .expect(200);
 
@@ -127,13 +127,13 @@ describe("Weekly Focus API", () => {
         });
 
         await request
-            .post(`/v1/keywords/job-items/${item.id}/promote`)
+            .post(`/keywords/job-items/${item.id}/promote`)
             .set(headers)
             .send({})
             .expect(201);
 
         const response = await request
-            .get("/v1/weekly-focus?limit=7")
+            .get("/weekly-focus?limit=7")
             .set(headers)
             .expect(200);
 

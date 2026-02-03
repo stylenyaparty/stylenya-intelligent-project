@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { Package, Search, Upload, Pencil, Archive, RotateCcw, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -134,7 +134,7 @@ export default function ProductsPage() {
     return "No active products yet. Import your catalog to compare decisions.";
   }, [statusScope]);
 
-  async function load() {
+  const load = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
@@ -142,18 +142,18 @@ export default function ProductsPage() {
       if (search.trim()) {
         params.set("search", search.trim());
       }
-      const res = await api<ProductsResponse>(`/v1/products?${params.toString()}`);
+      const res = await api<ProductsResponse>(`/products?${params.toString()}`);
       setData(res);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load products");
     } finally {
       setBusy(false);
     }
-  }
+  }, [search, statusScope]);
 
   useEffect(() => {
     void load();
-  }, [statusScope]);
+  }, [load]);
 
   async function handleSearchSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -183,7 +183,7 @@ export default function ProductsPage() {
     setError(null);
     try {
       if (editingProduct) {
-        await api(`/v1/products/${editingProduct.id}`, {
+        await api(`/products/${editingProduct.id}`, {
           method: "PATCH",
           body: JSON.stringify({
             name: formState.name,
@@ -193,7 +193,7 @@ export default function ProductsPage() {
           }),
         });
       } else {
-        await api(`/v1/products`, {
+        await api(`/products`, {
           method: "POST",
           body: JSON.stringify(formState),
         });
@@ -211,7 +211,7 @@ export default function ProductsPage() {
     setBusy(true);
     setError(null);
     try {
-      await api(`/v1/products/${product.id}/archive`, { method: "POST" });
+      await api(`/products/${product.id}/archive`, { method: "POST" });
       await load();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to archive product");
@@ -224,7 +224,7 @@ export default function ProductsPage() {
     setBusy(true);
     setError(null);
     try {
-      await api(`/v1/products/${product.id}/restore`, { method: "POST" });
+      await api(`/products/${product.id}/restore`, { method: "POST" });
       await load();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to restore product");
@@ -237,7 +237,7 @@ export default function ProductsPage() {
     setBusy(true);
     setError(null);
     try {
-      await api(`/v1/products/${product.id}`, {
+      await api(`/products/${product.id}`, {
         method: "DELETE",
         body: JSON.stringify({ confirm: true }),
       });
@@ -260,7 +260,7 @@ export default function ProductsPage() {
     setError(null);
 
     try {
-      const res = await fetch(`${API_URL}/v1/products/import-csv`, {
+      const res = await fetch(`${API_URL}/products/import-csv`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         body: formData,
@@ -302,6 +302,8 @@ export default function ProductsPage() {
           ref={fileInputRef}
           type="file"
           accept=".csv"
+          title="Import CSV"
+          aria-label="Import CSV"
           className="hidden"
           onChange={(event) => {
             const file = event.target.files?.[0];

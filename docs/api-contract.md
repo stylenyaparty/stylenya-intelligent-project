@@ -117,7 +117,7 @@ Response:
 
 ### 5.2 Imports (Data Ingestion)
 
-#### POST /api/v1/imports/etsy
+#### POST /api/imports/etsy
 
 Purpose: import Etsy orders using a simplified JSON representation (MVP).
 
@@ -147,7 +147,7 @@ Errors:
 
 ---
 
-#### GET /api/v1/imports
+#### GET /api/imports
 
 Purpose: list previous import executions for audit and debugging.
 
@@ -160,7 +160,7 @@ Supports filtering by:
 
 ### 5.3 Products (Catalog)
 
-#### GET /api/v1/products
+#### GET /api/products
 
 Purpose: list canonical products.
 
@@ -182,7 +182,7 @@ Returns:
 
 ---
 
-#### POST /api/v1/products
+#### POST /api/products
 
 Purpose: create or update a canonical product (admin / ingestion support).
 
@@ -196,7 +196,7 @@ Behavior:
 
 ### 5.4 KPIs (Dashboard Metrics)
 
-#### GET /api/v1/kpis/products
+#### GET /api/kpis/products
 
 Purpose: compute product performance metrics for a given date range.
 
@@ -227,7 +227,7 @@ Notes:
 
 ### 5.5 Insights
 
-#### GET /api/v1/insights
+#### GET /api/insights
 
 Purpose: retrieve generated insights.
 
@@ -251,7 +251,7 @@ Each insight includes:
 
 ### 5.6 Decisions (Recommendations)
 
-#### GET /api/v1/decisions
+#### GET /api/decisions
 
 Purpose: list decision records (recommended actions).
 
@@ -274,7 +274,7 @@ Each decision includes:
 
 ---
 
-#### GET /api/v1/decisions/{id}
+#### GET /api/decisions/{id}
 
 Purpose: retrieve a single decision with full traceability.
 

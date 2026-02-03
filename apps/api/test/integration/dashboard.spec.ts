@@ -21,8 +21,8 @@ describe("Dashboard KPIs API", () => {
         if (cachedHeaders) return cachedHeaders;
 
         const admin = await seedAdmin(app, {
-            email: "admin-dashboard@example.com",
-            password: "AdminPass123!",
+            email: "stylenya.party@gmail.com",
+            password: "D3s4rr0ll0",
         });
 
         const token = await getAuthToken(app, admin.email, admin.password);
@@ -34,7 +34,7 @@ describe("Dashboard KPIs API", () => {
         const headers = await authHeader();
 
         const response = await request
-            .get("/v1/dashboard/kpis")
+            .get("/dashboard/kpis")
             .set(headers)
             .expect(200);
 

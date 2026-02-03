@@ -13,8 +13,7 @@ vi.mock(
             interestOverTime: (...args: unknown[]) => mockInterestOverTime(...args),
             relatedQueries: (...args: unknown[]) => mockRelatedQueries(...args),
         },
-    }),
-    { virtual: true }
+    })
 );
 
 describe("Keywords provider selection", () => {
@@ -36,8 +35,8 @@ describe("Keywords provider selection", () => {
         if (cachedHeaders) return cachedHeaders;
 
         const admin = await seedAdmin(app, {
-            email: "admin-providers@example.com",
-            password: "AdminPass123!",
+            email: "stylenya.party@gmail.com",
+            password: "D3s4rr0ll0",
         });
 
         const token = await getAuthToken(app, admin.email, admin.password);
@@ -50,7 +49,7 @@ describe("Keywords provider selection", () => {
         enabled: boolean
     ) {
         await request
-            .post("/v1/settings/google-ads")
+            .post("/settings/google-ads")
             .set(headers)
             .send({
                 enabled,
@@ -65,7 +64,7 @@ describe("Keywords provider selection", () => {
 
     async function createSeed(headers: { Authorization: string }, term: string) {
         const seeds = await request
-            .post("/v1/keywords/seeds")
+            .post("/keywords/seeds")
             .set(headers)
             .send({ terms: [term] })
             .expect(201);
@@ -95,7 +94,7 @@ describe("Keywords provider selection", () => {
         const seedId = await createSeed(headers, "auto provider seed");
 
         const job = await request
-            .post("/v1/keywords/jobs")
+            .post("/keywords/jobs")
             .set(headers)
             .send({
                 mode: "CUSTOM",
@@ -108,7 +107,7 @@ describe("Keywords provider selection", () => {
             .expect(201);
 
         const run = await request
-            .post(`/v1/keywords/jobs/${job.body.job.id}/run`)
+            .post(`/keywords/jobs/${job.body.job.id}/run`)
             .set(headers)
             .expect(200);
 
@@ -123,7 +122,7 @@ describe("Keywords provider selection", () => {
         const seedId = await createSeed(headers, "auto ads seed");
 
         const job = await request
-            .post("/v1/keywords/jobs")
+            .post("/keywords/jobs")
             .set(headers)
             .send({
                 mode: "CUSTOM",
@@ -136,7 +135,7 @@ describe("Keywords provider selection", () => {
             .expect(201);
 
         const run = await request
-            .post(`/v1/keywords/jobs/${job.body.job.id}/run`)
+            .post(`/keywords/jobs/${job.body.job.id}/run`)
             .set(headers)
             .expect(503);
 
@@ -150,7 +149,7 @@ describe("Keywords provider selection", () => {
         const seedId = await createSeed(headers, "ads explicit seed");
 
         const response = await request
-            .post("/v1/keywords/jobs")
+            .post("/keywords/jobs")
             .set(headers)
             .send({
                 mode: "CUSTOM",
