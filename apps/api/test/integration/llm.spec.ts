@@ -23,8 +23,8 @@ describe("LLM API", () => {
         if (token) return { Authorization: `Bearer ${token}` };
 
         const admin = await seedAdmin(app, {
-            email: "admin@example.com",
-            password: "AdminPass123!",
+            email: "stylenya.party@gmail.com",
+            password: "D3s4rr0ll0",
         });
         token = await getAuthToken(app, admin.email, admin.password);
         return { Authorization: `Bearer ${token}` };
@@ -33,7 +33,7 @@ describe("LLM API", () => {
     it("returns keyword suggestions", async () => {
         const headers = await authHeader();
         const response = await request
-            .post("/v1/ai/suggest-keywords")
+            .post("/ai/suggest-keywords")
             .set(headers)
             .send({ topic: "party decorations", max: 10 })
             .expect(200);
@@ -47,7 +47,7 @@ describe("LLM API", () => {
     it("rejects missing topic", async () => {
         const headers = await authHeader();
         const response = await request
-            .post("/v1/ai/suggest-keywords")
+            .post("/ai/suggest-keywords")
             .set(headers)
             .send({ max: 10 })
             .expect(400);
@@ -58,7 +58,7 @@ describe("LLM API", () => {
     it("rejects max above limit", async () => {
         const headers = await authHeader();
         const response = await request
-            .post("/v1/ai/suggest-keywords")
+            .post("/ai/suggest-keywords")
             .set(headers)
             .send({ topic: "party decorations", max: 100 })
             .expect(400);
@@ -69,13 +69,13 @@ describe("LLM API", () => {
     it("returns deterministic suggestions", async () => {
         const headers = await authHeader();
         const first = await request
-            .post("/v1/ai/suggest-keywords")
+            .post("/ai/suggest-keywords")
             .set(headers)
             .send({ topic: "party decorations", max: 10 })
             .expect(200);
 
         const second = await request
-            .post("/v1/ai/suggest-keywords")
+            .post("/ai/suggest-keywords")
             .set(headers)
             .send({ topic: "party decorations", max: 10 })
             .expect(200);

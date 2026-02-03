@@ -20,8 +20,8 @@ describe("Keyword AI Jobs", () => {
 
     async function authHeader() {
         const admin = await seedAdmin(app, {
-            email: "admin@example.com",
-            password: "AdminPass123!",
+            email: "stylenya.party@gmail.com",
+            password: "D3s4rr0ll0",
         });
         const token = await getAuthToken(app, admin.email, admin.password);
         return { Authorization: `Bearer ${token}` };
@@ -31,7 +31,7 @@ describe("Keyword AI Jobs", () => {
         const headers = await authHeader();
 
         const response = await request
-            .post("/v1/keywords/jobs")
+            .post("/keywords/jobs")
             .set(headers)
             .send({
                 mode: "AI",
@@ -52,7 +52,7 @@ describe("Keyword AI Jobs", () => {
         const headers = await authHeader();
 
         const response = await request
-            .post("/v1/keywords/jobs")
+            .post("/keywords/jobs")
             .set(headers)
             .send({
                 mode: "AI",
@@ -69,7 +69,7 @@ describe("Keyword AI Jobs", () => {
         const headers = await authHeader();
 
         const job = await request
-            .post("/v1/keywords/jobs")
+            .post("/keywords/jobs")
             .set(headers)
             .send({
                 mode: "AI",
@@ -84,7 +84,7 @@ describe("Keyword AI Jobs", () => {
         const jobId = job.body.job.id;
 
         const run = await request
-            .post(`/v1/keywords/jobs/${jobId}/run`)
+            .post(`/keywords/jobs/${jobId}/run`)
             .set(headers)
             .expect(200);
 

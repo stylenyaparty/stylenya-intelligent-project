@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,21 +19,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { 
-  PageHeader, 
-  ActionBadge, 
+import {
+  PageHeader,
+  ActionBadge,
   StatusBadge,
-  LoadingState, 
-  ErrorState, 
+  LoadingState,
+  ErrorState,
   EmptyState,
-  type DecisionStatus 
+  type DecisionStatus,
 } from "@/components/dashboard";
+import type { ActionType } from "@/components/dashboard/ActionBadge";
 import { RefreshCw, ClipboardList, Calendar } from "lucide-react";
 import { format } from "date-fns";
 
 type Decision = {
   id: string;
-  actionType: string;
+  actionType: ActionType | string;
   status: DecisionStatus;
   targetType?: "KEYWORD" | "PRODUCT" | "THEME" | null;
   targetId?: string | null;
@@ -57,7 +58,7 @@ export default function DecisionsPage() {
   const [range, setRange] = useState<"today" | "all">("today");
   const [selectedDate, setSelectedDate] = useState("");
 
-  async function load() {
+  const load = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
@@ -67,24 +68,24 @@ export default function DecisionsPage() {
       } else {
         params.set("range", range);
       }
-      const res = await api<DecisionsResponse>(`/v1/decisions?${params.toString()}`);
+      const res = await api<DecisionsResponse>(`/decisions?${params.toString()}`);
       setData(res);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
       setBusy(false);
     }
-  }
-
-  useEffect(() => { 
-    void load(); 
   }, [range, selectedDate]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   async function updateStatus(id: string, status: DecisionStatus) {
     setBusy(true);
     setError(null);
     try {
-      await api(`/v1/decisions/${id}`, {
+      await api(`/decisions/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       });
@@ -225,7 +226,9 @@ export default function DecisionsPage() {
                           <div className="font-medium">{d.title}</div>
                         </TableCell>
                         <TableCell>
-                          <ActionBadge action={d.actionType as any} />
+                          <ActionBadge
+                            action={isActionType(d.actionType) ? d.actionType : "KEEP"}
+                          />
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {d.targetType
@@ -274,6 +277,21 @@ export default function DecisionsPage() {
       )}
     </div>
   );
+}
+
+const ACTION_TYPES: ActionType[] = [
+  "MIGRATE",
+  "BOOST",
+  "RETIRE",
+  "PAUSE",
+  "KEEP",
+  "PROMOTE",
+  "CREATE",
+  "OPTIMIZE",
+];
+
+function isActionType(value: string): value is ActionType {
+  return ACTION_TYPES.includes(value as ActionType);
 }
 
 // Summary card component

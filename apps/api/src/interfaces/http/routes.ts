@@ -82,7 +82,7 @@ export async function registerRoutes(app: FastifyInstance) {
     );
     
     app.get(
-        "/v1/decisions/weekly-focus/latest",
+        "/decisions/weekly-focus/latest",
         { preHandler: [requireAuth, requireRole("ADMIN")] },
         async () => {
             const row = await decisionLogRepo.findLatest("v1");
@@ -121,7 +121,7 @@ export async function registerRoutes(app: FastifyInstance) {
     });
 
     app.post(
-        "/v1/decisions/weekly-focus/generate",
+        "/decisions/weekly-focus/generate",
         { preHandler: [requireAuth, requireRole("ADMIN")] },
         async (request, reply) => {
             const row = await generateWeeklySnapshot.execute();

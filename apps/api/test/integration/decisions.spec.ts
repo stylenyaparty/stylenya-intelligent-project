@@ -25,8 +25,8 @@ describe("Decisions API", () => {
         if (cachedHeaders) return cachedHeaders;
 
         const admin = await seedAdmin(app, {
-            email: "decisions-admin@example.com",
-            password: "AdminPass123!",
+            email: "stylenya.party@gmail.com",
+            password: "D3s4rr0ll0",
         });
 
         const token = await getAuthToken(app, admin.email, admin.password);
@@ -64,7 +64,7 @@ describe("Decisions API", () => {
         const headers = await authHeader();
 
         const response = await request
-            .post("/v1/decisions")
+            .post("/decisions")
             .set(headers)
             .send({
                 actionType: "PROMOTE",
@@ -93,7 +93,7 @@ describe("Decisions API", () => {
         const headers = await authHeader();
 
         const created = await request
-            .post("/v1/decisions")
+            .post("/decisions")
             .set(headers)
             .send({
                 actionType: "PAUSE",
@@ -106,7 +106,7 @@ describe("Decisions API", () => {
             .expect(201);
 
         const response = await request
-            .get("/v1/decisions?limit=10")
+            .get("/decisions?limit=10")
             .set(headers)
             .expect(200);
 
@@ -119,7 +119,7 @@ describe("Decisions API", () => {
         const headers = await authHeader();
 
         const created = await request
-            .post("/v1/decisions")
+            .post("/decisions")
             .set(headers)
             .send({
                 actionType: "OPTIMIZE",
@@ -132,7 +132,7 @@ describe("Decisions API", () => {
             .expect(201);
 
         const response = await request
-            .patch(`/v1/decisions/${created.body.decision.id}`)
+            .patch(`/decisions/${created.body.decision.id}`)
             .set(headers)
             .send({ status: "EXECUTED" })
             .expect(200);
@@ -155,13 +155,13 @@ describe("Decisions API", () => {
         };
 
         const first = await request
-            .post("/v1/decisions")
+            .post("/decisions")
             .set(headers)
             .send(payload)
             .expect(201);
 
         const second = await request
-            .post("/v1/decisions")
+            .post("/decisions")
             .set(headers)
             .send(payload)
             .expect(200);
@@ -169,7 +169,7 @@ describe("Decisions API", () => {
         expect(second.body.decision.id).toBe(first.body.decision.id);
 
         const list = await request
-            .get("/v1/decisions?limit=50")
+            .get("/decisions?limit=50")
             .set(headers)
             .expect(200);
 
@@ -206,7 +206,7 @@ describe("Decisions API", () => {
         });
 
         const response = await request
-            .get("/v1/decisions?limit=50")
+            .get("/decisions?limit=50")
             .set(headers)
             .expect(200);
 
@@ -239,7 +239,7 @@ describe("Decisions API", () => {
         });
 
         const response = await request
-            .get("/v1/decisions?range=all&limit=50")
+            .get("/decisions?range=all&limit=50")
             .set(headers)
             .expect(200);
 
@@ -277,7 +277,7 @@ describe("Decisions API", () => {
         });
 
         const response = await request
-            .get(`/v1/decisions?date=${targetDate}&limit=50`)
+            .get(`/decisions?date=${targetDate}&limit=50`)
             .set(headers)
             .expect(200);
 
@@ -327,7 +327,7 @@ describe("Decisions API", () => {
         });
 
         const response = await request
-            .get(`/v1/decisions?date=${dateString}&limit=50`)
+            .get(`/decisions?date=${dateString}&limit=50`)
             .set(headers)
             .expect(200);
 
