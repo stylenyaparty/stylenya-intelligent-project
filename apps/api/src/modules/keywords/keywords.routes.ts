@@ -126,8 +126,12 @@ export async function keywordsRoutes(app: FastifyInstance) {
         { preHandler: requireAuth },
         async (request, reply) => {
             const params = request.params as { id: string };
+            const query = request.query as { force?: string | boolean };
+            const forceRun =
+                query?.force === true ||
+                (typeof query?.force === "string" && query.force.toLowerCase() === "true");
             try {
-                const result = await runKeywordJob(params.id);
+                const result = await runKeywordJob(params.id, { force: forceRun });
                 if (!result) {
                     return reply.code(404).send({ error: "Job not found" });
                 }

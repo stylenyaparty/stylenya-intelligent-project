@@ -32,8 +32,10 @@ type TrendsSeedResponse = {
 };
 
 const DEFAULT_TIMEFRAME = "today 12-m";
+const FALLBACK_TIMEFRAME = "today 3-m";
 const TRANSIENT_ERROR_MESSAGES = ["fetch failed"];
 const TRANSIENT_ERROR_CODES = ["ECONNRESET", "ETIMEDOUT"];
+const DEBUG_TRENDS = process.env.KEYWORD_TRENDS_DEBUG === "true";
 
 function clampScore(value: number) {
     if (Number.isNaN(value)) return 0;
@@ -54,9 +56,19 @@ function parseRelatedQueries(raw: string) {
     const parsed = JSON.parse(raw) as {
         default?: { rankedList?: Array<{ rankedKeyword?: RankedKeyword[] }> };
     };
-    const rankedList = parsed?.default?.rankedList ?? [];
-    const top = rankedList[0]?.rankedKeyword ?? [];
-    const rising = rankedList[1]?.rankedKeyword ?? [];
+    const rankedList = parsed?.default?.rankedList;
+    let top: RankedKeyword[] = [];
+    let rising: RankedKeyword[] = [];
+    if (Array.isArray(rankedList)) {
+        top = rankedList[0]?.rankedKeyword ?? [];
+        rising = rankedList[1]?.rankedKeyword ?? [];
+    } else if (
+        rankedList &&
+        typeof rankedList === "object" &&
+        Array.isArray((rankedList as { rankedKeyword?: RankedKeyword[] }).rankedKeyword)
+    ) {
+        top = (rankedList as { rankedKeyword?: RankedKeyword[] }).rankedKeyword ?? [];
+    }
     return { top, rising };
 }
 
@@ -122,14 +134,15 @@ export class GoogleTrendsKeywordResearchProvider implements KeywordResearchProvi
     }
 
     async getSuggestions(input: KeywordResearchSeedInput): Promise<KeywordSuggestion[]> {
-        const timeframe = input.timeframe || DEFAULT_TIMEFRAME;
-        const cacheKey = `${input.seed}|${input.geo}|${timeframe}`;
+        const timeframe = input.timeframe?.trim() || DEFAULT_TIMEFRAME;
+        const geo = input.geo?.toUpperCase() ?? "";
+        const cacheKey = `${input.seed}|${geo}|${timeframe}`;
         const cached = this.cache.get(cacheKey);
-        const response =
+        let response =
             cached ??
             (await this.fetchSeedDataWithRetry({
                 seed: input.seed,
-                geo: input.geo,
+                geo,
                 timeframe,
             }));
 
@@ -137,8 +150,23 @@ export class GoogleTrendsKeywordResearchProvider implements KeywordResearchProvi
             this.cache.set(cacheKey, response);
         }
 
-        const providerRaw = buildProviderRaw(input.seed, response);
-        const suggestions = this.buildSuggestions(input.seed, response, providerRaw, input.geo);
+        let providerRaw = buildProviderRaw(input.seed, response);
+        this.logDebug(input.seed, geo, timeframe, response);
+        let suggestions = this.buildSuggestions(input.seed, response, providerRaw, geo);
+        if (
+            suggestions.length === 0 &&
+            DEBUG_TRENDS &&
+            timeframe !== FALLBACK_TIMEFRAME
+        ) {
+            response = await this.fetchSeedDataWithRetry({
+                seed: input.seed,
+                geo,
+                timeframe: FALLBACK_TIMEFRAME,
+            });
+            providerRaw = buildProviderRaw(input.seed, response);
+            this.logDebug(input.seed, geo, FALLBACK_TIMEFRAME, response, true);
+            suggestions = this.buildSuggestions(input.seed, response, providerRaw, geo);
+        }
         if (suggestions.length > 0) {
             return suggestions;
         }
@@ -316,6 +344,33 @@ export class GoogleTrendsKeywordResearchProvider implements KeywordResearchProvi
 
     private isBlockedResponse(body: string) {
         return /<html/i.test(body) || /302 Moved/i.test(body) || /\/sorry\/index/i.test(body);
+    }
+
+    private logDebug(
+        seed: string,
+        geo: string,
+        timeframe: string,
+        response: TrendsSeedResponse,
+        fallback = false
+    ) {
+        if (!DEBUG_TRENDS) {
+            return;
+        }
+        const topSample = response.relatedQueries.top.slice(0, 3).map((item) => item.query);
+        const risingSample = response.relatedQueries.rising
+            .slice(0, 3)
+            .map((item) => item.query);
+        console.info("[keyword-trends]", {
+            seed,
+            geo,
+            timeframe,
+            fallback,
+            timelinePoints: response.timelineValues.length,
+            topCount: response.relatedQueries.top.length,
+            risingCount: response.relatedQueries.rising.length,
+            topSample,
+            risingSample,
+        });
     }
 
     private async delay(ms: number) {
