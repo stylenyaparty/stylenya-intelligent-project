@@ -60,10 +60,18 @@ export async function keywordsRoutes(app: FastifyInstance) {
 
     app.post("/keywords/jobs", { preHandler: requireAuth }, async (request, reply) => {
         try {
-            const body = keywordJobCreateSchema.parse(request.body);
-            if (body.mode === "AI" && !body.topic) {
-                return reply.code(400).send({ error: "Topic is required for AI mode." });
+            const parsed = keywordJobCreateSchema.safeParse(request.body);
+            if (!parsed.success) {
+                const rawMode = (request.body as { mode?: string } | undefined)?.mode;
+                if (rawMode === "AI") {
+                    return reply.code(400).send({
+                        code: "INVALID_JOB_MODE",
+                        message: "AI mode is not supported for keyword jobs.",
+                    });
+                }
+                return reply.code(400).send({ error: "Invalid keyword job payload" });
             }
+            const body = parsed.data;
             if (body.mode === "AUTO" || body.mode === "HYBRID") {
                 const activeSeedCount = await countActiveKeywordSeeds();
                 if (activeSeedCount === 0) {
