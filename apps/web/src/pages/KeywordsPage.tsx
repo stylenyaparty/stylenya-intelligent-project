@@ -50,7 +50,7 @@ type KeywordSeed = {
 
 type KeywordJob = {
   id: string;
-  mode: "CUSTOM" | "AUTO" | "HYBRID" | "AI";
+  mode: "CUSTOM" | "AUTO" | "HYBRID";
   marketplace: "ETSY" | "SHOPIFY" | "GOOGLE";
   language: "en" | "es";
   engine: string;
@@ -66,7 +66,7 @@ type KeywordJob = {
 type KeywordJobItem = {
   id: string;
   term: string;
-  source: "CUSTOM" | "AUTO" | "HYBRID" | "AI";
+  source: "CUSTOM" | "AUTO" | "HYBRID";
   status: "PENDING" | "DONE" | "FAILED";
   resultJson?: {
     summary?: string;

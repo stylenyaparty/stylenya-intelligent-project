@@ -20,3 +20,7 @@ export function getLLMProvider(): LLMProvider {
         "LLM provider is not configured. Set LLM_PROVIDER=openai and OPENAI_API_KEY."
     );
 }
+
+export function resetLLMProviderCache() {
+    cached = null;
+}

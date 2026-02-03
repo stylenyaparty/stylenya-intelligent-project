@@ -3,6 +3,7 @@ export type GenerateTextInput = {
     user: string;
     temperature?: number;
     maxTokens?: number;
+    responseFormat?: "json_object" | "text";
 };
 
 export interface LLMProvider {

@@ -6,8 +6,6 @@ import {
 import { GoogleAdsKeywordProvider } from "./providers/googleAdsKeywordProvider.js";
 import type { KeywordResearchProvider, KeywordSuggestion } from "./providers/providerTypes.js";
 import { Prisma } from "@prisma/client";
-import { LLMNotConfiguredError } from "../llm/llm.errors.js";
-import { suggestKeywords } from "../llm/suggest-keywords.service.js";
 import { AppError, isAppError } from "../../types/app-error.js";
 import {
     getGoogleAdsCredentials,
@@ -126,113 +124,6 @@ export async function runKeywordJob(jobId: string, options?: { force?: boolean }
 
         const maxResults = Math.min(job.maxResults ?? 10, 50);
 
-        if (job.mode === "AI") {
-            const topic = job.topic?.trim();
-            if (!topic) {
-                throw new AppError(
-                    400,
-                    "MISSING_JOB_CONFIG",
-                    "Topic is required for AI keyword jobs."
-                );
-            }
-
-            const updateResult = await prisma.keywordJob.updateMany({
-                where: {
-                    id: jobId,
-                    archivedAt: null,
-                    status: { in: forceRun ? ["PENDING", "FAILED", "DONE"] : ["PENDING", "FAILED"] },
-                },
-                data: { status: "RUNNING" },
-            });
-
-            if (updateResult.count === 0) {
-                const latestJob = await prisma.keywordJob.findUnique({ where: { id: jobId } });
-                if (!latestJob) {
-                    return null;
-                }
-                if (latestJob.archivedAt) {
-                    throw new AppError(
-                        409,
-                        "JOB_ARCHIVED",
-                        "Archived jobs cannot be run."
-                    );
-                }
-                if (latestJob.status === "RUNNING") {
-                    throw new AppError(
-                        409,
-                        "JOB_ALREADY_RUNNING",
-                        "Job is already running."
-                    );
-                }
-                if (latestJob.status === "DONE" && !forceRun) {
-                    const existingItems = await prisma.keywordJobItem.findMany({
-                        where: { jobId },
-                        orderBy: { createdAt: "asc" },
-                    });
-                    return { job: latestJob, items: existingItems };
-                }
-                throw new AppError(409, "JOB_ALREADY_RUNNING", "Job is already running.");
-            }
-
-            runStarted = true;
-
-            let keywords: string[];
-            try {
-                keywords = await suggestKeywords(topic, maxResults);
-            } catch (error) {
-                if (error instanceof LLMNotConfiguredError) {
-                    throw new AppError(
-                        400,
-                        "LLM_NOT_CONFIGURED",
-                        "LLM provider is not configured."
-                    );
-                }
-                throw error;
-            }
-
-            const existingItems = await prisma.keywordJobItem.findMany({
-                where: { jobId },
-            });
-            const seen = new Set(existingItems.map((item) => normalizeKeyword(item.term)));
-            const newKeywords = keywords.filter((keyword) => {
-                const normalized = normalizeKeyword(keyword);
-                if (seen.has(normalized)) {
-                    return false;
-                }
-                seen.add(normalized);
-                return true;
-            });
-
-            if (newKeywords.length > 0) {
-                await prisma.keywordJobItem.createMany({
-                    data: newKeywords.map((keyword) => ({
-                        jobId,
-                        term: keyword.trim(),
-                        source: "AI",
-                        status: "DONE",
-                    })),
-                });
-            }
-
-            const updatedJob = await prisma.keywordJob.update({
-                where: { id: jobId },
-                data: { status: "DONE" },
-            });
-
-            const items = await prisma.keywordJobItem.findMany({
-                where: { jobId },
-                orderBy: { createdAt: "asc" },
-            });
-
-            return {
-                job: updatedJob,
-                items,
-                seedCount: newKeywords.length,
-                keywordsGenerated: newKeywords.length,
-                itemsPersisted: newKeywords.length,
-            };
-        }
-
         const seedItems =
             job.mode === "AUTO" || job.mode === "HYBRID"
                 ? await prisma.keywordSeed.findMany({
@@ -343,33 +234,11 @@ export async function runKeywordJob(jobId: string, options?: { force?: boolean }
 
         const suggestions: Array<{
             term: string;
-            source: "CUSTOM" | "AUTO" | "HYBRID" | "AI";
+            source: "CUSTOM" | "AUTO" | "HYBRID";
             resultJson: ReturnType<typeof buildResultJson>;
             providerRaw?: unknown;
         }> = [];
         const seen = new Set<string>();
-        let fallbackWarning: string | null = null;
-
-        const params =
-            (
-                job as {
-                    params?: {
-                        occasion?: string;
-                        productType?: string;
-                        audience?: string;
-                    };
-                }
-            ).params ?? {};
-        const fallbackTopic = [
-            job.niche,
-            params.occasion,
-            params.productType,
-            params.audience,
-            seeds[0],
-        ]
-            .filter(Boolean)
-            .join(" ")
-            .trim();
 
         for (const item of seedEntries) {
             let results: KeywordSuggestion[] = [];
@@ -382,40 +251,6 @@ export async function runKeywordJob(jobId: string, options?: { force?: boolean }
                     timeframe,
                 });
             } catch (error) {
-                if (
-                    resolvedProvider === "TRENDS" &&
-                    isAppError(error) &&
-                    [
-                        "PROVIDER_TEMP_BLOCKED",
-                        "PROVIDER_UNAVAILABLE",
-                        "TRENDS_NO_RESULTS",
-                    ].includes(error.code)
-                ) {
-                    const topic = fallbackTopic || item.term;
-                    try {
-                        const keywords = await suggestKeywords(topic, maxResults);
-                        fallbackWarning =
-                            "Google Trends unavailable. Falling back to AI suggestions.";
-                        keywords.forEach((keyword) => {
-                            const normalized = normalizeKeyword(keyword);
-                            if (seen.has(normalized)) return;
-                            seen.add(normalized);
-                            suggestions.push({
-                                term: keyword.trim(),
-                                source: "AI",
-                                resultJson: {
-                                    summary: `AI fallback suggestion for "${keyword}".`,
-                                    interestScore: 0,
-                                    competitionScore: 0,
-                                },
-                                providerRaw: { fallback: "AI", reason: error.code },
-                            });
-                        });
-                        break;
-                    } catch (aiError) {
-                        throw aiError;
-                    }
-                }
                 throw error;
             }
 
@@ -431,7 +266,7 @@ export async function runKeywordJob(jobId: string, options?: { force?: boolean }
                 seen.add(normalized);
                 suggestions.push({
                     term: result.term.trim(),
-                    source: result.isSeed ? (item.source as "CUSTOM" | "AUTO" | "HYBRID" | "AI") : "AUTO",
+                    source: result.isSeed ? (item.source as "CUSTOM" | "AUTO" | "HYBRID") : "AUTO",
                     resultJson: buildResultJson(result),
                     providerRaw: result.providerRaw,
                 });
@@ -456,7 +291,7 @@ export async function runKeywordJob(jobId: string, options?: { force?: boolean }
                 seedCount: seeds.length,
                 keywordsGenerated: 0,
                 itemsPersisted: 0,
-                warning: fallbackWarning ?? "Provider returned 0 results",
+                warning: "Provider returned 0 results",
             };
         }
 
@@ -491,7 +326,7 @@ export async function runKeywordJob(jobId: string, options?: { force?: boolean }
             seedCount: seeds.length,
             keywordsGenerated: suggestions.length,
             itemsPersisted: results.length,
-            warning: fallbackWarning ?? undefined,
+            warning: undefined,
         };
     } catch (error) {
         if (isAppError(error)) {
