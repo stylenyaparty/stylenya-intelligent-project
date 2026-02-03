@@ -9,13 +9,12 @@ type KeywordSeedInput = {
 };
 
 type KeywordJobInput = {
-    mode: "CUSTOM" | "AUTO" | "HYBRID" | "AI";
+    mode: "CUSTOM" | "AUTO" | "HYBRID";
     marketplace: "ETSY" | "SHOPIFY" | "GOOGLE";
     language: "en" | "es";
     engine?: "google" | "etsy" | "shopify";
     country: string;
     niche?: string;
-    topic?: string;
     maxResults?: number;
     providerUsed?: "TRENDS" | "AUTO" | "GOOGLE_ADS";
     params?: {
@@ -146,31 +145,6 @@ export async function createKeywordJob(input: KeywordJobInput) {
                 "Google Ads provider is not configured."
             );
         }
-    }
-
-    if (input.mode === "AI") {
-        const topic = input.topic?.trim();
-        if (!topic) {
-            throw new Error("Topic is required for AI mode.");
-        }
-
-        const job = await prisma.keywordJob.create({
-            data: {
-                mode: input.mode,
-                marketplace: input.marketplace,
-                language,
-                engine,
-                country,
-                niche,
-                topic,
-                maxResults,
-                providerUsed,
-                paramsJson: { params, seedIds },
-                status: "PENDING",
-            },
-        });
-
-        return { job, items: [] };
     }
 
     if ((input.mode === "CUSTOM" || input.mode === "HYBRID") && seedIds.length === 0) {

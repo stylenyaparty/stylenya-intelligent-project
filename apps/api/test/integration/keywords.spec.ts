@@ -54,6 +54,23 @@ describe("Keywords API", () => {
         return response.body.job as { id: string };
     }
 
+    it("rejects AI keyword jobs", async () => {
+        const headers = await authHeader();
+
+        const response = await request
+            .post("/keywords/jobs")
+            .set(headers)
+            .send({
+                mode: "AI",
+                marketplace: "ETSY",
+                language: "en",
+                country: "us",
+            })
+            .expect(400);
+
+        expect(response.body.code).toBe("INVALID_JOB_MODE");
+    });
+
     it("creates seeds with normalization and dedupe", async () => {
         const headers = await authHeader();
 

@@ -135,7 +135,6 @@ model KeywordJob {
   engine      String
   country     String
   niche       String           @default("")
-  topic       String?
   maxResults  Int              @default(10)
   providerUsed String
   providerRequest Json?
@@ -187,6 +186,38 @@ model PromotedKeywordSignal {
   @@unique([keyword, engine, language, country])
   @@index([keyword])
   @@index([promotedAt])
+}
+
+model WeeklyFocus {
+  id        String   @id @default(cuid())
+  asOf      DateTime
+  limit     Int
+  itemsJson Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  drafts DecisionDraft[]
+
+  @@index([asOf])
+}
+
+model DecisionDraft {
+  id                 String               @id @default(cuid())
+  weeklyFocusId      String
+  weeklyFocus        WeeklyFocus          @relation(fields: [weeklyFocusId], references: [id])
+  title              String
+  rationale          String
+  actions            Json
+  confidence         Int
+  status             DecisionDraftStatus  @default(ACTIVE)
+  sources            Json
+  promotedDecisionId String?
+  promotedDecision   Decision?            @relation(fields: [promotedDecisionId], references: [id])
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@index([weeklyFocusId])
+  @@index([status])
 }
 
 enum UserRole {
@@ -263,7 +294,6 @@ enum KeywordJobMode {
   CUSTOM
   AUTO
   HYBRID
-  AI
 }
 
 enum KeywordMarketplace {
@@ -283,7 +313,12 @@ enum KeywordJobItemSource {
   CUSTOM
   AUTO
   HYBRID
-  AI
+}
+
+enum DecisionDraftStatus {
+  ACTIVE
+  DISMISSED
+  PROMOTED
 }
 
 enum KeywordJobItemStatus {

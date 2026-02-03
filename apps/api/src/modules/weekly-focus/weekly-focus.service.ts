@@ -176,3 +176,21 @@ export async function buildWeeklyFocusSuggestions(limit = 7): Promise<{
         items: suggestions.slice(0, cappedLimit),
     };
 }
+
+export async function createWeeklyFocusSnapshot(limit = 7) {
+    const snapshot = await buildWeeklyFocusSuggestions(limit);
+    const record = await prisma.weeklyFocus.create({
+        data: {
+            asOf: new Date(snapshot.asOf),
+            limit: snapshot.limit,
+            itemsJson: snapshot.items,
+        },
+    });
+
+    return {
+        weeklyFocusId: record.id,
+        asOf: record.asOf.toISOString(),
+        limit: record.limit,
+        items: snapshot.items,
+    };
+}
