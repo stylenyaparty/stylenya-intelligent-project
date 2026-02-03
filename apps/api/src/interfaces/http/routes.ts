@@ -8,6 +8,7 @@ import { weeklyFocusRoutes } from "../../modules/weekly-focus/weekly-focus.route
 import { dashboardRoutes } from "../../modules/dashboard/dashboard.routes";
 import { productsRoutes } from "../../modules/products/products.routes";
 import { keywordProviderSettingsRoutes } from "../../modules/settings/keyword-provider-settings.routes";
+import { decisionDraftRoutes } from "../../modules/decision-drafts/decision-drafts.routes";
 
 import { z } from "zod";
 import { PrismaUserRepository } from "../../infrastructure/repositories/prisma-user-repository";
@@ -41,6 +42,7 @@ export async function registerRoutes(app: FastifyInstance) {
 
     app.register(productsRoutes, { prefix: "/v1" });
     app.register(keywordProviderSettingsRoutes, { prefix: "/v1" });
+    app.register(decisionDraftRoutes, { prefix: "/v1" });
     
     app.get("/v1/me", { preHandler: requireAuth }, async (request) => {
         return { ok: true, auth: request.auth };

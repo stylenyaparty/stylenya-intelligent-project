@@ -75,3 +75,65 @@ export async function updateKeywordProviderSettings(payload: GoogleAdsSettingsPa
     },
   );
 }
+
+export type LLMStatus = {
+  ok: boolean;
+  configured: boolean;
+  provider: "openai" | "disabled";
+  model?: string;
+};
+
+export type DecisionDraft = {
+  id: string;
+  weeklyFocusId: string;
+  title: string;
+  rationale: string;
+  actions: string[];
+  confidence: number;
+  status: "ACTIVE" | "DISMISSED" | "PROMOTED";
+  sources: {
+    keywordJobIds: string[];
+    signalIds: string[];
+    productIds: string[];
+  };
+  promotedDecisionId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function getLLMStatus() {
+  return api<LLMStatus>("/llm/status");
+}
+
+export async function generateWeeklyFocusDrafts(weeklyFocusId: string, maxDrafts?: number) {
+  return api<{ ok: boolean; drafts: DecisionDraft[] }>(
+    `/weekly-focus/${weeklyFocusId}/drafts/generate`,
+    {
+      method: "POST",
+      body: JSON.stringify(maxDrafts ? { maxDrafts } : {}),
+    },
+  );
+}
+
+export async function listWeeklyFocusDrafts(weeklyFocusId: string, status: "active" | "all" = "active") {
+  return api<{ ok: boolean; drafts: DecisionDraft[] }>(
+    `/weekly-focus/${weeklyFocusId}/drafts?status=${status}`,
+  );
+}
+
+export async function dismissDraft(draftId: string) {
+  return api<{ ok: boolean; draft: DecisionDraft }>(`/decision-drafts/${draftId}/dismiss`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export async function promoteDraft(draftId: string) {
+  return api<{ ok: boolean; draft: DecisionDraft; decision: { id: string } }>(
+    `/decision-drafts/${draftId}/promote`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    },
+  );
+}
