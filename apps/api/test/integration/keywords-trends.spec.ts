@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
 import { createTestServer, getAuthToken, seedAdmin } from "../helpers.js";
@@ -25,6 +25,11 @@ describe("Keywords API (trends provider)", () => {
     beforeAll(async () => {
         app = await createTestServer();
         request = supertest(app.server);
+    });
+
+    beforeEach(() => {
+        mockInterestOverTime.mockReset();
+        mockRelatedQueries.mockReset();
     });
 
     afterAll(async () => {
@@ -326,5 +331,143 @@ describe("Keywords API (trends provider)", () => {
                 process.env.KEYWORD_TRENDS_ENABLED = previous;
             }
         }
+    });
+
+    it("returns a warning and persists no items when only seed results are returned", async () => {
+        const headers = await authHeader();
+
+        mockInterestOverTime.mockResolvedValue(
+            JSON.stringify({
+                default: { timelineData: [{ value: [10] }, { value: [20] }, { value: [30] }] },
+            })
+        );
+        mockRelatedQueries.mockResolvedValue(
+            JSON.stringify({
+                default: {
+                    rankedList: [{ rankedKeyword: [] }, { rankedKeyword: [] }],
+                },
+            })
+        );
+
+        const seeds = await request
+            .post("/v1/keywords/seeds")
+            .set(headers)
+            .send({ terms: ["seed only term"] })
+            .expect(201);
+
+        const seedId = seeds.body.created[0].id as string;
+
+        const job = await request
+            .post("/v1/keywords/jobs")
+            .set(headers)
+            .send({
+                mode: "CUSTOM",
+                marketplace: "GOOGLE",
+                language: "en",
+                country: "us",
+                seedIds: [seedId],
+                providerUsed: "TRENDS",
+            })
+            .expect(201);
+
+        const run = await request
+            .post(`/v1/keywords/jobs/${job.body.job.id}/run`)
+            .set(headers)
+            .expect(200);
+
+        expect(run.body.items).toEqual([]);
+        expect(run.body.warning).toBe("Provider returned 0 results");
+
+        const items = await request
+            .get(`/v1/keywords/jobs/${job.body.job.id}/items`)
+            .set(headers)
+            .expect(200);
+
+        expect(items.body.items).toEqual([]);
+    });
+
+    it("re-runs DONE jobs when force is true", async () => {
+        const headers = await authHeader();
+
+        mockInterestOverTime.mockResolvedValueOnce(
+            JSON.stringify({
+                default: { timelineData: [{ value: [12] }, { value: [40] }, { value: [70] }] },
+            })
+        );
+        mockRelatedQueries.mockResolvedValueOnce(
+            JSON.stringify({
+                default: {
+                    rankedList: [
+                        { rankedKeyword: [{ query: "first result", value: 50 }] },
+                        { rankedKeyword: [] },
+                    ],
+                },
+            })
+        );
+
+        const seeds = await request
+            .post("/v1/keywords/seeds")
+            .set(headers)
+            .send({ terms: ["force rerun seed"] })
+            .expect(201);
+
+        const seedId = seeds.body.created[0].id as string;
+
+        const job = await request
+            .post("/v1/keywords/jobs")
+            .set(headers)
+            .send({
+                mode: "CUSTOM",
+                marketplace: "GOOGLE",
+                language: "en",
+                country: "us",
+                seedIds: [seedId],
+                providerUsed: "TRENDS",
+            })
+            .expect(201);
+
+        const run = await request
+            .post(`/v1/keywords/jobs/${job.body.job.id}/run`)
+            .set(headers)
+            .expect(200);
+
+        expect(run.body.items.map((item: { term: string }) => item.term)).toEqual([
+            "first result",
+        ]);
+        expect(mockInterestOverTime).toHaveBeenCalledTimes(1);
+
+        const rerun = await request
+            .post(`/v1/keywords/jobs/${job.body.job.id}/run`)
+            .set(headers)
+            .expect(200);
+
+        expect(rerun.body.items).toEqual(run.body.items);
+        expect(mockInterestOverTime).toHaveBeenCalledTimes(1);
+
+        mockInterestOverTime.mockResolvedValueOnce(
+            JSON.stringify({
+                default: { timelineData: [{ value: [20] }, { value: [50] }, { value: [90] }] },
+            })
+        );
+        mockRelatedQueries.mockResolvedValueOnce(
+            JSON.stringify({
+                default: {
+                    rankedList: [
+                        { rankedKeyword: [{ query: "second result", value: 88 }] },
+                        { rankedKeyword: [] },
+                    ],
+                },
+            })
+        );
+
+        const forced = await request
+            .post(`/v1/keywords/jobs/${job.body.job.id}/run?force=true`)
+            .set(headers)
+            .expect(200);
+
+        expect(forced.body.items.map((item: { term: string }) => item.term)).toEqual([
+            "second result",
+        ]);
+        expect(mockInterestOverTime).toHaveBeenCalledTimes(2);
     });
 });
