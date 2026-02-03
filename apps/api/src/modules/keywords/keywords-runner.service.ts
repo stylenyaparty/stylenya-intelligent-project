@@ -38,12 +38,13 @@ function buildResultJson(suggestion: KeywordSuggestion) {
     };
 }
 
-export async function runKeywordJob(jobId: string) {
+export async function runKeywordJob(jobId: string, options?: { force?: boolean }) {
     if (runningKeywordJobs.get(jobId)) {
         throw new AppError(409, "JOB_ALREADY_RUNNING", "Job is already running.");
     }
     runningKeywordJobs.set(jobId, true);
 
+    const forceRun = options?.force === true;
     let originalStatus: "PENDING" | "RUNNING" | "DONE" | "FAILED" | null = null;
     let runStarted = false;
 
@@ -71,7 +72,7 @@ export async function runKeywordJob(jobId: string) {
             );
         }
 
-        if (job.status === "DONE") {
+        if (job.status === "DONE" && !forceRun) {
             const existingItems = await prisma.keywordJobItem.findMany({
                 where: { jobId },
                 orderBy: { createdAt: "asc" },
@@ -138,7 +139,7 @@ export async function runKeywordJob(jobId: string) {
                 where: {
                     id: jobId,
                     archivedAt: null,
-                    status: { in: ["PENDING", "FAILED"] },
+                    status: { in: forceRun ? ["PENDING", "FAILED", "DONE"] : ["PENDING", "FAILED"] },
                 },
                 data: { status: "RUNNING" },
             });
@@ -162,7 +163,7 @@ export async function runKeywordJob(jobId: string) {
                         "Job is already running."
                     );
                 }
-                if (latestJob.status === "DONE") {
+                if (latestJob.status === "DONE" && !forceRun) {
                     const existingItems = await prisma.keywordJobItem.findMany({
                         where: { jobId },
                         orderBy: { createdAt: "asc" },
@@ -269,7 +270,7 @@ export async function runKeywordJob(jobId: string) {
             where: {
                 id: jobId,
                 archivedAt: null,
-                status: { in: ["PENDING", "FAILED"] },
+                status: { in: forceRun ? ["PENDING", "FAILED", "DONE"] : ["PENDING", "FAILED"] },
             },
             data: { status: "RUNNING" },
         });
@@ -293,7 +294,7 @@ export async function runKeywordJob(jobId: string) {
                     "Job is already running."
                 );
             }
-            if (latestJob.status === "DONE") {
+            if (latestJob.status === "DONE" && !forceRun) {
                 const existingItems = await prisma.keywordJobItem.findMany({
                     where: { jobId },
                     orderBy: { createdAt: "asc" },
@@ -316,6 +317,8 @@ export async function runKeywordJob(jobId: string) {
                 );
             }
             provider = new GoogleAdsKeywordProvider(credentials);
+        } else if (forceRun) {
+            provider = new GoogleTrendsKeywordResearchProvider();
         }
         const existingProviderRequest = job.providerRequest as
             | { geo?: string; timeframe?: string; seeds?: string[] }
@@ -354,8 +357,12 @@ export async function runKeywordJob(jobId: string) {
                 timeframe,
             });
 
+            const normalizedSeed = normalizeKeyword(item.term);
             for (const result of results) {
                 const normalized = normalizeKeyword(result.term);
+                if (result.isSeed || normalized === normalizedSeed) {
+                    continue;
+                }
                 if (seen.has(normalized)) {
                     continue;
                 }
