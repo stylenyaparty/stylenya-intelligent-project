@@ -4,7 +4,8 @@ import {
     DEFAULT_TIMEFRAME,
 } from "./providers/googleTrendsKeywordResearchProvider.js";
 import { GoogleAdsKeywordProvider } from "./providers/googleAdsKeywordProvider.js";
-import type { KeywordSuggestion } from "./providers/providerTypes.js";
+import type { KeywordResearchProvider, KeywordSuggestion } from "./providers/providerTypes.js";
+import { Prisma } from "@prisma/client";
 import { LLMNotConfiguredError } from "../llm/llm.errors.js";
 import { suggestKeywords } from "../llm/suggest-keywords.service.js";
 import { AppError, isAppError } from "../../types/app-error.js";
@@ -306,7 +307,7 @@ export async function runKeywordJob(jobId: string, options?: { force?: boolean }
 
         runStarted = true;
 
-        let provider = trendsProvider;
+        let provider: KeywordResearchProvider = trendsProvider;
         if (resolvedProvider === "GOOGLE_ADS") {
             const credentials = await getGoogleAdsCredentials();
             if (!credentials) {
@@ -407,7 +408,7 @@ export async function runKeywordJob(jobId: string, options?: { force?: boolean }
                     source: suggestion.source,
                     status: "DONE",
                     resultJson: suggestion.resultJson,
-                    providerRaw: suggestion.providerRaw ?? null,
+                    providerRaw: suggestion.providerRaw ?? Prisma.JsonNull,
                 })),
                 skipDuplicates: true,
             }),
