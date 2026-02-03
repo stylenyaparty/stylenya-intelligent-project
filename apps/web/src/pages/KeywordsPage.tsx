@@ -413,6 +413,10 @@ export default function KeywordsPage() {
           toast.error("Google Trends temporarily blocked. Try again in 30–60 seconds.");
           return;
         }
+        if (e.status === 422 && e.code === "TRENDS_NO_RESULTS") {
+          toast.error(e.message || "Google Trends returned no results for this search.");
+          return;
+        }
         if (e.status === 409 && e.code === "JOB_ALREADY_RUNNING") {
           toast.warning("Job already running.");
           return;
