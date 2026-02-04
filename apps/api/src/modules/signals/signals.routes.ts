@@ -1,0 +1,93 @@
+import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { requireAuth } from "../../interfaces/http/middleware/auth.js";
+import { isAppError } from "../../types/app-error.js";
+import {
+    importGkpCsv,
+    listSignalBatches,
+    listSignals,
+} from "./signals.service.js";
+import { extractMultipartFile } from "../products/products.service.js";
+
+const signalListQuerySchema = z.object({
+    batchId: z.string().optional(),
+    source: z.string().optional(),
+    q: z.string().optional(),
+    limit: z.coerce.number().int().optional(),
+    offset: z.coerce.number().int().optional(),
+});
+
+export async function signalsRoutes(app: FastifyInstance) {
+    app.post(
+        "/signal-batches/gkp-csv",
+        { preHandler: requireAuth },
+        async (request, reply) => {
+            const multipartFile =
+                typeof (request as { file?: () => Promise<{ toBuffer: () => Promise<Buffer> }> }).file ===
+                "function"
+                    ? await (request as { file: () => Promise<{ toBuffer: () => Promise<Buffer> }> }).file()
+                    : null;
+
+            const rawBody = request.body as unknown;
+            let buffer = Buffer.isBuffer(rawBody)
+                ? rawBody
+                : rawBody instanceof Uint8Array
+                    ? Buffer.from(rawBody)
+                    : typeof rawBody === "string"
+                        ? Buffer.from(rawBody, "utf8")
+                        : null;
+
+            if (!buffer && !multipartFile) {
+                const chunks: Buffer[] = [];
+                for await (const chunk of request.raw) {
+                    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+                }
+                if (chunks.length > 0) {
+                    buffer = Buffer.concat(chunks);
+                }
+            }
+
+            const file = multipartFile
+                ? {
+                    filename: "upload.csv",
+                    buffer: await multipartFile.toBuffer(),
+                }
+                : buffer
+                    ? extractMultipartFile(buffer, request.headers["content-type"], "file")
+                    : null;
+
+            if (!file) {
+                return reply.code(400).send({ error: "File is required" });
+            }
+
+            const contents = file.buffer.toString("utf8");
+
+            try {
+                const result = await importGkpCsv(contents, file.filename);
+                return reply.send(result);
+            } catch (error) {
+                if (isAppError(error)) {
+                    return reply
+                        .code(error.statusCode)
+                        .send({ code: error.code, message: error.message, details: error.details });
+                }
+                throw error;
+            }
+        }
+    );
+
+    app.get("/signal-batches", { preHandler: requireAuth }, async () => {
+        const batches = await listSignalBatches();
+        return { ok: true, batches };
+    });
+
+    app.get("/signals", { preHandler: requireAuth }, async (request, reply) => {
+        const query = signalListQuerySchema.safeParse(request.query ?? {});
+        if (!query.success) {
+            return reply.code(400).send({ error: "Invalid signals query" });
+        }
+
+        const signals = await listSignals(query.data);
+        return reply.send({ ok: true, signals });
+    });
+}
