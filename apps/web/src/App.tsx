@@ -13,6 +13,7 @@ import WeeklyFocusPage from "./pages/WeeklyFocusPage";
 import DecisionsPage from "./pages/DecisionsPage";
 import KeywordsPage from "./pages/KeywordsPage";
 import ProductsPage from "./pages/ProductsPage";
+import SignalsPage from "./pages/SignalsPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 
@@ -49,6 +50,7 @@ const App = () => (
               <Route path="weekly-focus" element={<WeeklyFocusPage />} />
               <Route path="decisions" element={<DecisionsPage />} />
               <Route path="keywords" element={<KeywordsPage />} />
+              <Route path="signals" element={<SignalsPage />} />
               <Route path="products" element={<ProductsPage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
