@@ -129,6 +129,42 @@ model KeywordSeed {
   @@index([term])
 }
 
+model SignalBatch {
+  id        String   @id @default(cuid())
+  source    String
+  filename  String?
+  status    String
+  rowCount  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  signals   KeywordSignal[]
+}
+
+model KeywordSignal {
+  id                 String   @id @default(cuid())
+  batchId            String
+  batch              SignalBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  term               String
+  termNormalized     String
+  source             String
+  geo                String?
+  language           String?
+  capturedAt         DateTime @default(now())
+
+  avgMonthlySearches Int?
+  competition        String?
+  topOfPageBidLow    Float?
+  topOfPageBidHigh   Float?
+
+  rawRow             Json?
+  createdAt          DateTime @default(now())
+
+  @@index([termNormalized])
+  @@index([source, capturedAt])
+  @@unique([batchId, termNormalized, geo, language])
+}
+
 model KeywordJob {
   id          String           @id @default(cuid())
   mode        KeywordJobMode
