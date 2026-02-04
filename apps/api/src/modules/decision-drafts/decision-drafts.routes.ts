@@ -15,23 +15,34 @@ export async function decisionDraftRoutes(app: FastifyInstance) {
         { preHandler: requireAuth },
         async (request, reply) => {
             const params = request.params as { id: string };
-            const BodySchema = z.object({ maxDrafts: z.number().int().optional() });
+            const BodySchema = z.object({ maxDrafts: z.coerce.number().int().optional() }); // <-- coerce helps
             const parsed = BodySchema.safeParse(request.body ?? {});
             if (!parsed.success) {
                 return reply.code(400).send({ error: "Invalid request" });
             }
+
             const requested = parsed.data.maxDrafts ?? 3;
             const maxDrafts = Math.min(Math.max(requested, 1), 5);
+
             try {
                 const drafts = await createDecisionDrafts(params.id, maxDrafts);
                 return reply.code(201).send({ ok: true, drafts });
             } catch (error) {
+                // 🔥 ALWAYS log the real error
+                request.log.error({ err: error }, "drafts.generate failed");
+
                 if (isAppError(error)) {
                     return reply
                         .code(error.statusCode)
-                        .send({ code: error.code, message: error.message });
+                        .send({ code: error.code, message: error.message, details: error.details });
                 }
-                throw error;
+
+                // ✅ Map unknown upstream/LLM errors to a clean 503 (not 502)
+                return reply.code(503).send({
+                    code: "LLM_UPSTREAM_FAILED",
+                    message: "LLM provider unavailable. Try again later.",
+                    retryAfterSeconds: 60,
+                });
             }
         }
     );

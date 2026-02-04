@@ -107,6 +107,8 @@ model Decision {
   priorityScore Int?
   sources       Json?
 
+  promotedDraft DecisionDraft?
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -211,7 +213,7 @@ model DecisionDraft {
   confidence         Int
   status             DecisionDraftStatus  @default(ACTIVE)
   sources            Json
-  promotedDecisionId String?
+  promotedDecisionId String?              @unique
   promotedDecision   Decision?            @relation(fields: [promotedDecisionId], references: [id])
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
