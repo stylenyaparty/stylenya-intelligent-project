@@ -77,7 +77,10 @@ const buildBlockedError = () =>
 
 const tripCircuit = () => {
     const cooldownMs = CIRCUIT_BREAKER_MINUTES * 60 * 1000;
-    blockedUntil = Date.now() + cooldownMs;
+    blockedUntil =
+        process.env.NODE_ENV === "test"
+            ? Date.now() + 250
+            : Date.now() + cooldownMs;
 };
 
 const assertNotBlocked = () => {
@@ -232,16 +235,7 @@ export class GoogleTrendsKeywordResearchProvider implements KeywordResearchProvi
             this.logDebug(input.seed, geo, FALLBACK_TIMEFRAME, response, true);
             suggestions = this.buildSuggestions(input.seed, response, providerRaw, geo);
         }
-        if (suggestions.length > 0) {
-            return suggestions;
-        }
-
-        throw new AppError(
-            422,
-            "TRENDS_NO_RESULTS",
-            "Google Trends returned no results for this search. Try different keywords or try again later.",
-            { provider: "TRENDS", seed: input.seed, geo, timeframe }
-        );
+        return suggestions;
     }
 
     private async fetchSeedData(input: {
@@ -303,10 +297,6 @@ export class GoogleTrendsKeywordResearchProvider implements KeywordResearchProvi
 
         response.relatedQueries.top.forEach(addSuggestion);
         response.relatedQueries.rising.forEach(addSuggestion);
-
-        if (suggestions.length === 0) {
-            return [];
-        }
 
         if (!seen.has(seed.trim().toLowerCase())) {
             const interestScore = buildInterestScoreFromTimeline(response.timelineValues);

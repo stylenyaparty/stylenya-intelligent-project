@@ -22,11 +22,16 @@ export async function signalsRoutes(app: FastifyInstance) {
         "/signal-batches/gkp-csv",
         { preHandler: requireAuth },
         async (request, reply) => {
-            const multipartFile =
-                typeof (request as { file?: () => Promise<{ toBuffer: () => Promise<Buffer> }> }).file ===
-                "function"
-                    ? await (request as { file: () => Promise<{ toBuffer: () => Promise<Buffer> }> }).file()
-                    : null;
+            let multipartFile: { toBuffer: () => Promise<Buffer> } | null = null;
+            const isMultipart =
+                typeof (request as { isMultipart?: () => boolean }).isMultipart === "function"
+                    ? (request as { isMultipart: () => boolean }).isMultipart()
+                    : false;
+            if (isMultipart) {
+                multipartFile = await (request as {
+                    file: () => Promise<{ toBuffer: () => Promise<Buffer> }>;
+                }).file();
+            }
 
             const rawBody = request.body as unknown;
             let buffer = Buffer.isBuffer(rawBody)

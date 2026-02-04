@@ -29,21 +29,21 @@ import { GenerateWeeklyFocusSnapshotUseCase } from "../../application/use-cases/
 
 export async function registerRoutes(app: FastifyInstance) {
 
-    app.register(recommendationsRoutes, { prefix: "/v1" });
+    app.register(recommendationsRoutes);
 
-    app.register(decisionsRoutes, { prefix: "/v1" });
+    app.register(decisionsRoutes);
 
-    app.register(keywordsRoutes, { prefix: "/v1" });
+    app.register(keywordsRoutes);
 
     app.register(llmRoutes, { prefix: "/v1" });
 
-    app.register(weeklyFocusRoutes, { prefix: "/v1" });
+    app.register(weeklyFocusRoutes);
 
-    app.register(dashboardRoutes, { prefix: "/v1" });
+    app.register(dashboardRoutes);
 
-    app.register(productsRoutes, { prefix: "/v1" });
+    app.register(productsRoutes);
     app.register(signalsRoutes, { prefix: "/v1" });
-    app.register(keywordProviderSettingsRoutes, { prefix: "/v1" });
+    app.register(keywordProviderSettingsRoutes);
     app.register(decisionDraftRoutes, { prefix: "/v1" });
     
     app.get("/v1/me", { preHandler: requireAuth }, async (request) => {
