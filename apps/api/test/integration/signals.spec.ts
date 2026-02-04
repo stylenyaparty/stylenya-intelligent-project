@@ -3,9 +3,12 @@ import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createTestServer, getAuthToken, resetDatabase, seedAdmin } from "../helpers.js";
 
 describe("Signals API", () => {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
     let app: FastifyInstance;
     let request: ReturnType<typeof supertest>;
     let cachedHeaders: { Authorization: string } | null = null;
@@ -35,7 +38,7 @@ describe("Signals API", () => {
 
     it("imports GKP CSV successfully", async () => {
         const headers = await authHeader();
-        const csvPath = path.join("apps", "api", "test", "fixtures", "gkp-simple.csv");
+        const csvPath = path.resolve(__dirname, "..", "fixtures", "gkp-simple.csv");
         const csv = await fs.readFile(csvPath);
 
         const response = await request
@@ -51,7 +54,7 @@ describe("Signals API", () => {
 
     it("skips duplicate keywords in a batch", async () => {
         const headers = await authHeader();
-        const csvPath = path.join("apps", "api", "test", "fixtures", "gkp-duplicates.csv");
+        const csvPath = path.resolve(__dirname, "..", "fixtures", "gkp-duplicates.csv");
         const csv = await fs.readFile(csvPath);
 
         const response = await request
@@ -65,6 +68,21 @@ describe("Signals API", () => {
 
     it("lists signal batches", async () => {
         const headers = await authHeader();
+
+        await request
+            .post("/v1/signal-batches/gkp-csv")
+            .set(headers)
+            .attach(
+                "file",
+                Buffer.from(
+                    [
+                        "Keyword,Avg. monthly searches,Competition,Top of page bid (low range),Top of page bid (high range)",
+                        "batch seed,111,LOW,0.4,0.9",
+                    ].join("\n")
+                ),
+                "gkp-batch.csv"
+            )
+            .expect(200);
 
         const response = await request
             .get("/v1/signal-batches")

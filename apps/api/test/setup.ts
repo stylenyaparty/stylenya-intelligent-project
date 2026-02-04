@@ -38,5 +38,7 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-    await prisma.$disconnect();
+    if (prisma) {
+        await prisma.$disconnect();
+    }
 });
