@@ -8,11 +8,10 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
     proxy: {
-      "/v1": {
-        target: "http://localhost:3001",
-        changeOrigin: true,
+      "/v1": { target: "http://localhost:3001", changeOrigin: true, 
         secure: false,
       },
+      "/health": { target: "http://localhost:3001", changeOrigin: true },
     },
     hmr: {
       overlay: false,

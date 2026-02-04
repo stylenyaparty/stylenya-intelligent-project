@@ -50,6 +50,7 @@ CREATE TABLE "DecisionDraft" (
 CREATE INDEX "WeeklyFocus_asOf_idx" ON "WeeklyFocus"("asOf");
 CREATE INDEX "DecisionDraft_weeklyFocusId_idx" ON "DecisionDraft"("weeklyFocusId");
 CREATE INDEX "DecisionDraft_status_idx" ON "DecisionDraft"("status");
+CREATE UNIQUE INDEX "DecisionDraft_promotedDecisionId_key" ON "DecisionDraft"("promotedDecisionId");
 
 ALTER TABLE "DecisionDraft" ADD CONSTRAINT "DecisionDraft_weeklyFocusId_fkey" FOREIGN KEY ("weeklyFocusId") REFERENCES "WeeklyFocus"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "DecisionDraft" ADD CONSTRAINT "DecisionDraft_promotedDecisionId_fkey" FOREIGN KEY ("promotedDecisionId") REFERENCES "Decision"("id") ON DELETE SET NULL ON UPDATE CASCADE;
