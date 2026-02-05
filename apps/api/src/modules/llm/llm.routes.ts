@@ -14,9 +14,9 @@ export async function llmRoutes(app: FastifyInstance) {
         signals: z
             .array(
                 z.object({
-                    term: z.string().min(1),
+                    keyword: z.string().min(1),
                     avgMonthlySearches: z.number().int().nonnegative().optional(),
-                    competition: z.string().min(1).optional(),
+                    competitionLevel: z.string().min(1).optional(),
                 })
             )
             .min(1)

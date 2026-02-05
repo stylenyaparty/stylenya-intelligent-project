@@ -130,39 +130,49 @@ model KeywordSeed {
 }
 
 model SignalBatch {
-  id        String   @id @default(cuid())
-  source    String
-  filename  String?
-  status    String
-  rowCount  Int      @default(0)
-  createdAt DateTime @default(now())
+  id              String   @id @default(cuid())
+  source          String
+  filename        String?
+  status          String
+  totalRows       Int      @default(0)
+  importedRows    Int      @default(0)
+  skippedRows     Int      @default(0)
+  columnsDetected Json?
+  warningsJson    Json?
+  uploadedAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
 
-  signals   KeywordSignal[]
+  signals         KeywordSignal[]
 }
 
 model KeywordSignal {
-  id                 String   @id @default(cuid())
+  id                 String      @id @default(cuid())
   batchId            String
   batch              SignalBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
-  term               String
-  termNormalized     String
+  keyword            String
+  keywordNormalized  String
   source             String
   geo                String?
   language           String?
-  capturedAt         DateTime @default(now())
 
   avgMonthlySearches Int?
-  competition        String?
-  topOfPageBidLow    Float?
-  topOfPageBidHigh   Float?
-
+  competitionLevel   String?
+  competitionIndex   Float?
+  cpcLow             Float?
+  cpcHigh            Float?
+  change3mPct        Float?
+  changeYoYPct       Float?
+  currency           String?
+  monthlySearchesJson Json?
+  rawRowHash         String?
   rawRow             Json?
+
   createdAt          DateTime @default(now())
 
-  @@index([termNormalized])
-  @@index([source, capturedAt])
-  @@unique([batchId, termNormalized, geo, language])
+  @@index([keywordNormalized])
+  @@index([source, createdAt])
+  @@unique([batchId, keywordNormalized])
 }
 
 model KeywordJob {

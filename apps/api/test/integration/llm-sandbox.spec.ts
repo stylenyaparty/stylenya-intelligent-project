@@ -48,7 +48,11 @@ describe("LLM Sandbox API", () => {
             .set({ Authorization: `Bearer ${token}` })
             .send({
                 signals: [
-                    { term: "summer shoes", avgMonthlySearches: 1200, competition: "LOW" },
+                    {
+                        keyword: "summer shoes",
+                        avgMonthlySearches: 1200,
+                        competitionLevel: "LOW",
+                    },
                 ],
                 seeds: ["summer collection"],
                 context: "Focus on seasonal demand.",
@@ -69,7 +73,7 @@ describe("LLM Sandbox API", () => {
         });
 
         const signals = Array.from({ length: 21 }, (_, idx) => ({
-            term: `signal-${idx}`,
+            keyword: `signal-${idx}`,
         }));
 
         const response = await request
