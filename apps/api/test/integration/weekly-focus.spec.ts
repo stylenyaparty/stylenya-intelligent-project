@@ -72,7 +72,6 @@ describe("Weekly Focus API", () => {
                 language: "en",
                 country: "US",
                 seedIds: [seedId],
-                providerUsed: "TRENDS",
             })
             .expect(201);
 
