@@ -86,6 +86,7 @@ export async function decisionsRoutes(app: FastifyInstance) {
                 limit: z.string().optional(),
                 status: DecisionStatusSchema.optional(),
                 range: z.enum(["today", "all"]).optional(),
+                mode: z.enum(["all"]).optional(),
                 date: z.string().optional(),
             });
 
@@ -100,11 +101,11 @@ export async function decisionsRoutes(app: FastifyInstance) {
             const where: any = {};
             if (query.data.status) where.status = query.data.status;
 
-            const range = query.data.range ?? "today";
+            const mode = query.data.mode ?? (query.data.range === "all" ? "all" : "today");
             const dateFilter =
                 typeof query.data.date === "string"
                     ? getDecisionDateRange({ date: query.data.date })
-                    : range === "all"
+                    : mode === "all"
                         ? null
                         : getDecisionDateRange();
 

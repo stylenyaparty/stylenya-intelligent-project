@@ -234,27 +234,26 @@ model WeeklyFocus {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  drafts DecisionDraft[]
-
   @@index([asOf])
 }
 
 model DecisionDraft {
-  id                 String               @id @default(cuid())
-  weeklyFocusId      String
-  weeklyFocus        WeeklyFocus          @relation(fields: [weeklyFocusId], references: [id])
+  id                 String              @id @default(cuid())
+  createdAt          DateTime            @default(now())
+  createdDate        DateTime
+  status             DecisionDraftStatus @default(NEW)
   title              String
   rationale          String
-  actions            Json
-  confidence         Int
-  status             DecisionDraftStatus  @default(ACTIVE)
-  sources            Json
-  promotedDecisionId String?              @unique
-  promotedDecision   Decision?            @relation(fields: [promotedDecisionId], references: [id])
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
+  recommendedActions Json
+  confidence         Float?
+  signalIds          Json
+  seedSet            Json?
+  model              String?
+  usage              Json?
+  promotedDecisionId String?             @unique
+  promotedDecision   Decision?           @relation(fields: [promotedDecisionId], references: [id])
 
-  @@index([weeklyFocusId])
+  @@index([createdDate])
   @@index([status])
 }
 
@@ -354,7 +353,7 @@ enum KeywordJobItemSource {
 }
 
 enum DecisionDraftStatus {
-  ACTIVE
+  NEW
   DISMISSED
   PROMOTED
 }
