@@ -217,7 +217,8 @@ function parseCompetition(value?: string | null) {
 }
 
 function findHeaderIndex(headers: string[], candidates: string[]) {
-    return headers.findIndex((header) => candidates.includes(normalizeHeader(header)));
+    const normalizedCandidates = new Set(candidates.map((candidate) => normalizeHeader(candidate)));
+    return headers.findIndex((header) => normalizedCandidates.has(normalizeHeader(header)));
 }
 
 function extractMonthlyKey(header: string) {
