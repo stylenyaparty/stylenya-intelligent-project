@@ -267,7 +267,7 @@ describe("Keywords API", () => {
             language: "en",
             country: "US",
             maxResults: 12,
-            providerUsed: "TRENDS",
+            providerUsed: "AUTO",
         });
     });
 
