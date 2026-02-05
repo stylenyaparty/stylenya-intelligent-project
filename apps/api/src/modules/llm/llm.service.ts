@@ -33,10 +33,23 @@ export function getLLMStatus(): LLMStatus {
 }
 
 export async function generateDecisionDrafts(input: {
-    weeklyFocus: { id: string; asOf: string };
-    context: Record<string, unknown>;
+    signals: Array<{
+        id: string;
+        term: string;
+        termNormalized: string;
+        source: string;
+        geo?: string | null;
+        language?: string | null;
+        capturedAt: string;
+        avgMonthlySearches?: number | null;
+        competition?: string | null;
+        topOfPageBidLow?: number | null;
+        topOfPageBidHigh?: number | null;
+    }>;
+    seeds?: string[];
+    context?: string;
     maxDrafts: number;
-}): Promise<DecisionDraftsResponse> {
+}): Promise<{ drafts: DecisionDraftsResponse["drafts"]; meta: { model?: string } }> {
     try {
         const provider = getLLMProvider();
         const system = [
@@ -48,27 +61,23 @@ export async function generateDecisionDrafts(input: {
                         {
                             title: "string",
                             rationale: "string",
-                            actions: ["string"],
+                            recommendedActions: ["string"],
                             confidence: 0,
-                            sources: {
-                                keywordJobIds: ["string"],
-                                signalIds: ["string"],
-                                productIds: ["string"],
-                            },
                         },
                     ],
                 },
                 null,
                 2
             ),
+            "Confidence must be a number from 0 to 100.",
             "Do not include markdown, code fences, or extra text.",
         ].join("\n");
         const user = JSON.stringify(
             {
-                weeklyFocusId: input.weeklyFocus.id,
-                asOf: input.weeklyFocus.asOf,
                 maxDrafts: input.maxDrafts,
-                context: input.context,
+                signals: input.signals,
+                seeds: input.seeds ?? [],
+                context: input.context ?? "",
             },
             null,
             2
@@ -99,7 +108,15 @@ export async function generateDecisionDrafts(input: {
         }
 
         const limitedDrafts = validated.data.drafts.slice(0, input.maxDrafts);
-        return { drafts: limitedDrafts };
+        return {
+            drafts: limitedDrafts,
+            meta: {
+                model:
+                    process.env.LLM_PROVIDER === "mock"
+                        ? "mock"
+                        : process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+            },
+        };
     } catch (error) {
         if (error instanceof LLMNotConfiguredError) {
             throw new AppError(400, "LLM_NOT_CONFIGURED", error.message);

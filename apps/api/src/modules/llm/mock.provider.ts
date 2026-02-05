@@ -13,16 +13,11 @@ export class MockLLMProvider implements LLMProvider {
                         title: "Launch a seasonal keyword bundle",
                         rationale:
                             "Promoted keyword signals show rising intent for the current season. Bundling products can capture demand.",
-                        actions: [
+                        recommendedActions: [
                             "Create a seasonal landing page for top promoted keywords.",
                             "Bundle top 3 matching products into a featured collection.",
                         ],
                         confidence: clampConfidence(78),
-                        sources: {
-                            keywordJobIds: [],
-                            signalIds: [],
-                            productIds: [],
-                        },
                     },
                 ],
             };

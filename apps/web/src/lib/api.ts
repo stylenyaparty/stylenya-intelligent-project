@@ -85,39 +85,43 @@ export type LLMStatus = {
 
 export type DecisionDraft = {
   id: string;
-  weeklyFocusId: string;
+  createdDate: string;
   title: string;
   rationale: string;
-  actions: string[];
-  confidence: number;
-  status: "ACTIVE" | "DISMISSED" | "PROMOTED";
-  sources: {
-    keywordJobIds: string[];
-    signalIds: string[];
-    productIds: string[];
-  };
+  recommendedActions: string[];
+  confidence?: number | null;
+  status: "NEW" | "DISMISSED" | "PROMOTED";
+  signalIds: string[];
+  seedSet?: string[] | null;
+  model?: string | null;
+  usage?: unknown;
   promotedDecisionId?: string | null;
   createdAt: string;
-  updatedAt: string;
 };
 
 export async function getLLMStatus() {
   return api<LLMStatus>("/llm/status");
 }
 
-export async function generateWeeklyFocusDrafts(weeklyFocusId: string, maxDrafts?: number) {
-  return api<{ ok: boolean; drafts: DecisionDraft[] }>(
-    `/weekly-focus/${weeklyFocusId}/drafts/generate`,
-    {
-      method: "POST",
-      body: JSON.stringify(maxDrafts ? { maxDrafts } : {}),
-    },
-  );
+export async function generateDecisionDrafts(input: {
+  batchId?: string;
+  signalIds?: string[];
+  seeds?: string[];
+  context?: string;
+}) {
+  return api<{ ok: boolean; drafts: DecisionDraft[] }>("/decision-drafts/generate", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
-export async function listWeeklyFocusDrafts(weeklyFocusId: string, status: "active" | "all" = "active") {
+export async function listDecisionDrafts(params: { date?: string; status?: "NEW" | "DISMISSED" | "PROMOTED" | "ALL" } = {}) {
+  const query = new URLSearchParams();
+  if (params.date) query.set("date", params.date);
+  if (params.status) query.set("status", params.status);
+  const suffix = query.toString();
   return api<{ ok: boolean; drafts: DecisionDraft[] }>(
-    `/weekly-focus/${weeklyFocusId}/drafts?status=${status}`,
+    `/decision-drafts${suffix ? `?${suffix}` : ""}`,
   );
 }
 

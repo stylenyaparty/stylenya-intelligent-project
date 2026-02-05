@@ -11,21 +11,22 @@ import {
 
 export async function decisionDraftRoutes(app: FastifyInstance) {
     app.post(
-        "/weekly-focus/:id/drafts/generate",
+        "/decision-drafts/generate",
         { preHandler: requireAuth },
         async (request, reply) => {
-            const params = request.params as { id: string };
-            const BodySchema = z.object({ maxDrafts: z.coerce.number().int().optional() }); // <-- coerce helps
+            const BodySchema = z.object({
+                batchId: z.string().optional(),
+                signalIds: z.array(z.string()).optional(),
+                seeds: z.array(z.string()).optional(),
+                context: z.string().optional(),
+            });
             const parsed = BodySchema.safeParse(request.body ?? {});
             if (!parsed.success) {
                 return reply.code(400).send({ error: "Invalid request" });
             }
 
-            const requested = parsed.data.maxDrafts ?? 3;
-            const maxDrafts = Math.min(Math.max(requested, 1), 5);
-
             try {
-                const drafts = await createDecisionDrafts(params.id, maxDrafts);
+                const drafts = await createDecisionDrafts(parsed.data);
                 return reply.code(201).send({ ok: true, drafts });
             } catch (error) {
                 // 🔥 ALWAYS log the real error
@@ -47,12 +48,30 @@ export async function decisionDraftRoutes(app: FastifyInstance) {
         }
     );
 
-    app.get("/weekly-focus/:id/drafts", { preHandler: requireAuth }, async (request, reply) => {
-        const params = request.params as { id: string };
-        const query = request.query as { status?: string };
-        const status = query.status === "all" ? "all" : "active";
-        const drafts = await listDecisionDrafts(params.id, status);
-        return reply.send({ ok: true, drafts });
+    app.get("/decision-drafts", { preHandler: requireAuth }, async (request, reply) => {
+        const QuerySchema = z.object({
+            date: z.string().optional(),
+            status: z.enum(["NEW", "DISMISSED", "PROMOTED", "ALL"]).optional(),
+        });
+        const parsed = QuerySchema.safeParse(request.query ?? {});
+        if (!parsed.success) {
+            return reply.code(400).send({ error: "Invalid decision drafts query" });
+        }
+
+        try {
+            const drafts = await listDecisionDrafts({
+                date: parsed.data.date,
+                status: parsed.data.status ?? "NEW",
+            });
+            return reply.send({ ok: true, drafts });
+        } catch (error) {
+            if (isAppError(error)) {
+                return reply
+                    .code(error.statusCode)
+                    .send({ code: error.code, message: error.message });
+            }
+            throw error;
+        }
     });
 
     app.post(
