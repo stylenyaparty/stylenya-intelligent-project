@@ -16,7 +16,7 @@ type KeywordJobInput = {
     country: string;
     niche?: string;
     maxResults?: number;
-    providerUsed?: "TRENDS" | "AUTO" | "GOOGLE_ADS";
+    providerUsed?: "AUTO" | "GOOGLE_ADS";
     params?: {
         occasion?: string;
         productType?: string;
@@ -48,13 +48,13 @@ function normalizeLanguage(language: KeywordJobInput["language"]) {
 }
 
 function normalizeProvider(provider?: string) {
-    if (!provider) return "TRENDS";
+    if (!provider) return "AUTO";
     const normalized = provider.trim().toUpperCase();
     if (normalized === "AUTO") return "AUTO";
     if (normalized === "GOOGLE_ADS" || normalized === "GOOGLE-ADS" || normalized === "GOOGLEADS") {
         return "GOOGLE_ADS";
     }
-    return "TRENDS";
+    return "AUTO";
 }
 
 function uniqueTerms(terms: string[]) {
@@ -133,7 +133,7 @@ export async function createKeywordJob(input: KeywordJobInput) {
     const country = input.country.trim().toUpperCase();
     const maxResults = Math.min(input.maxResults ?? 10, 50);
     const providerUsed = normalizeProvider(
-        input.providerUsed ?? process.env.KEYWORD_PROVIDER ?? "TRENDS"
+        input.providerUsed ?? process.env.KEYWORD_PROVIDER ?? "AUTO"
     );
     const googleAdsStatus = await getGoogleAdsStatus();
 
@@ -177,15 +177,6 @@ export async function createKeywordJob(input: KeywordJobInput) {
     }
 
     const finalItems = items;
-    const providerRequest =
-        providerUsed === "TRENDS"
-            ? {
-                geo: country,
-                timeframe: "today 12-m",
-                seeds: finalItems.map((item) => item.term),
-            }
-            : undefined;
-
     const job = await prisma.keywordJob.create({
         data: {
             mode: input.mode,
@@ -196,7 +187,6 @@ export async function createKeywordJob(input: KeywordJobInput) {
             niche,
             maxResults,
             providerUsed,
-            providerRequest,
             paramsJson: { params, seedIds },
             status: "PENDING",
         },
