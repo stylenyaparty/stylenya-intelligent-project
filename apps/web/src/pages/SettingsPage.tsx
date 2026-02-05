@@ -138,9 +138,12 @@ export default function SettingsPage() {
           <div className="rounded-lg border p-4 space-y-3">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h3 className="text-sm font-semibold text-foreground">Google Trends</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-foreground">Google Trends (Legacy)</h3>
+                  <Badge variant="outline">Legacy</Badge>
+                </div>
                 <p className="text-sm text-muted-foreground">
-                  Default provider (no setup required).
+                  Legacy keyword provider for historical keyword jobs (no setup required).
                 </p>
               </div>
               <Badge variant="secondary" className="shrink-0">
@@ -159,7 +162,7 @@ export default function SettingsPage() {
                   </Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  If Google Ads is disabled or not configured, AUTO mode will use Google Trends.
+                  If Google Ads is disabled or not configured, AUTO mode will use Google Trends (legacy).
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -251,6 +254,27 @@ export default function SettingsPage() {
               </Button>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Legacy UI</CardTitle>
+          <CardDescription>Enable legacy keyword jobs and trends UI for debugging.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            To re-enable legacy navigation items, set{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">VITE_FEATURE_LEGACY_UI=true</code>{" "}
+            in the web app environment and restart the frontend.
+          </p>
+          <p>
+            Legacy APIs and engines also require{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">LEGACY_API_ENABLED=true</code>{" "}
+            and{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">LEGACY_ENGINE_ENABLED=true</code>{" "}
+            on the API service.
+          </p>
         </CardContent>
       </Card>
     </div>
