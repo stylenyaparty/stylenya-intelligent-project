@@ -77,7 +77,7 @@ export async function updateKeywordProviderSettings(payload: GoogleAdsSettingsPa
 export type LLMStatus = {
   ok: boolean;
   configured: boolean;
-  provider: "openai" | "disabled";
+  provider: "openai" | "mock" | "disabled";
   model?: string;
 };
 
@@ -85,14 +85,18 @@ export type DecisionDraft = {
   id: string;
   createdDate: string;
   title: string;
-  rationale: string;
-  recommendedActions: string[];
+  keywords: string[];
+  whyNow: string;
+  riskNotes: string;
+  nextSteps: string[];
   confidence?: number | null;
   status: "NEW" | "DISMISSED" | "PROMOTED";
   signalIds: string[];
   seedSet?: string[] | null;
   model?: string | null;
   usage?: unknown;
+  payloadSnapshot?: unknown;
+  sourceBatchId?: string | null;
   promotedDecisionId?: string | null;
   createdAt: string;
 };
@@ -101,16 +105,30 @@ export async function getLLMStatus() {
   return api<LLMStatus>("/llm/status");
 }
 
-export async function generateDecisionDrafts(input: {
-  batchId?: string;
-  signalIds?: string[];
-  seeds?: string[];
-  context?: string;
-}) {
-  return api<{ ok: boolean; drafts: DecisionDraft[] }>("/decision-drafts/generate", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+export async function generateDecisionDrafts(input: { batchId: string }) {
+  return api<{ ok: boolean; drafts: DecisionDraft[] }>(
+    `/decision-drafts/generate?batchId=${encodeURIComponent(input.batchId)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    },
+  );
+}
+
+export type SignalBatch = {
+  id: string;
+  source: string;
+  filename?: string | null;
+  status: string;
+  totalRows: number;
+  importedRows: number;
+  skippedRows: number;
+  warningsJson?: string[] | null;
+  uploadedAt: string;
+};
+
+export async function listSignalBatches() {
+  return api<{ ok: boolean; batches: SignalBatch[] }>("/signals/batches");
 }
 
 export async function listDecisionDrafts(params: { date?: string; status?: "NEW" | "DISMISSED" | "PROMOTED" | "ALL" } = {}) {

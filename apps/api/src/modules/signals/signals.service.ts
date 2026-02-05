@@ -228,3 +228,89 @@ export async function recomputeSignalScoresForBatch(batchId: string) {
 
     return { updated: signals.length };
 }
+
+export type LlmSignalDto = {
+    keyword: string;
+    avgMonthlySearches: number | null;
+    competition: "LOW" | "MEDIUM" | "HIGH" | null;
+    cpcLow: number | null;
+    cpcHigh: number | null;
+    change3mPct: number | null;
+    changeYoYPct: number | null;
+    score: number;
+    scoreReasons: string;
+    seasonalitySummary?: string;
+};
+
+function summarizeSeasonality(monthlySearches?: Record<string, number> | null) {
+    if (!monthlySearches || Object.keys(monthlySearches).length === 0) {
+        return null;
+    }
+    const entries = Object.entries(monthlySearches).sort(([a], [b]) => a.localeCompare(b));
+    if (entries.length === 0) return null;
+
+    let best = entries[0];
+    let worst = entries[0];
+    for (const entry of entries) {
+        if (entry[1] > best[1]) best = entry;
+        if (entry[1] < worst[1]) worst = entry;
+    }
+
+    const first = entries[0][1];
+    const last = entries[entries.length - 1][1];
+    const delta = last - first;
+    const trend = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
+
+    return `Peak ${best[0]}, low ${worst[0]}, trend ${trend}.`;
+}
+
+function normalizeCompetition(value?: string | null): LlmSignalDto["competition"] {
+    if (!value) return null;
+    const normalized = value.toUpperCase();
+    if (normalized === "LOW" || normalized === "MEDIUM" || normalized === "HIGH") {
+        return normalized;
+    }
+    return null;
+}
+
+export async function getTopSignalsForBatch(batchId: string, limit = 30): Promise<LlmSignalDto[]> {
+    const rows = await prisma.keywordSignal.findMany({
+        where: {
+            batchId,
+            keyword: { not: "" },
+            NOT: { avgMonthlySearches: 0 },
+        },
+        orderBy: [{ score: "desc" }, { createdAt: "desc" }],
+        take: Math.min(Math.max(limit, 1), 200),
+        select: {
+            keyword: true,
+            avgMonthlySearches: true,
+            competitionLevel: true,
+            cpcLow: true,
+            cpcHigh: true,
+            change3mPct: true,
+            changeYoYPct: true,
+            score: true,
+            scoreReasons: true,
+            monthlySearchesJson: true,
+        },
+    });
+
+    return rows.map((signal) => {
+        const seasonalitySummary = summarizeSeasonality(
+            signal.monthlySearchesJson as Record<string, number> | null
+        );
+        return {
+            keyword: signal.keyword,
+            avgMonthlySearches: signal.avgMonthlySearches ?? null,
+            competition: normalizeCompetition(signal.competitionLevel),
+            cpcLow: signal.cpcLow ?? null,
+            cpcHigh: signal.cpcHigh ?? null,
+            change3mPct: signal.change3mPct ?? null,
+            changeYoYPct: signal.changeYoYPct ?? null,
+            score: signal.score ?? 0,
+            scoreReasons: signal.scoreReasons ?? "",
+            ...(seasonalitySummary ? { seasonalitySummary } : {}),
+        };
+    });
+}
