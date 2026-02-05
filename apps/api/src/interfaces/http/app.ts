@@ -1,4 +1,5 @@
 import Fastify, { type FastifyLoggerOptions } from "fastify";
+import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
 import multipart from "@fastify/multipart";
@@ -15,7 +16,8 @@ export async function createApp(options: CreateAppOptions = {}) {
         logger: options.logger ?? { level: "info" },
     });
 
-    await app.register(cors, { origin: true });
+    await app.register(cors, { origin: true, credentials: true });
+    await app.register(cookie);
     await app.register(jwt, {
         secret: process.env.JWT_SECRET!,
     });
