@@ -164,6 +164,8 @@ model KeywordSignal {
   change3mPct        Float?
   changeYoYPct       Float?
   currency           String?
+  score              Float       @default(0)
+  scoreReasons       String?
   monthlySearchesJson Json?
   rawRowHash         String?
   rawRow             Json?

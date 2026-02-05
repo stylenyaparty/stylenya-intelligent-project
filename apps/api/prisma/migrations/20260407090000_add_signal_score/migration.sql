@@ -1,0 +1,3 @@
+ALTER TABLE "KeywordSignal"
+    ADD COLUMN "score" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    ADD COLUMN "scoreReasons" TEXT;

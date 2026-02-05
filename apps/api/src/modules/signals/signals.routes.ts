@@ -14,6 +14,10 @@ const signalListQuerySchema = z.object({
     batchId: z.string().optional(),
     source: z.string().optional(),
     q: z.string().optional(),
+    sort: z
+        .enum(["score", "avgMonthlySearches", "cpcHigh", "createdAt", "change3mPct", "changeYoYPct"])
+        .optional(),
+    order: z.enum(["asc", "desc"]).optional(),
     limit: z.coerce.number().int().optional(),
     offset: z.coerce.number().int().optional(),
 });
