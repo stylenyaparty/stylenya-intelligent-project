@@ -4,6 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -11,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PageHeader, LoadingState, EmptyState, ErrorState } from "@/components/dashboard";
 import { toast } from "@/components/ui/sonner";
 
@@ -38,6 +46,8 @@ type KeywordSignal = {
   change3mPct?: number | null;
   changeYoYPct?: number | null;
   currency?: string | null;
+  score?: number | null;
+  scoreReasons?: string | null;
   createdAt: string;
   source: string;
 };
@@ -59,6 +69,16 @@ type UploadResponse = {
   warnings?: string[];
 };
 
+type SignalSortOption = "score" | "avgMonthlySearches" | "cpcHigh" | "change3mPct" | "changeYoYPct";
+
+const SIGNAL_SORT_OPTIONS: Array<{ value: SignalSortOption; label: string }> = [
+  { value: "score", label: "Score" },
+  { value: "avgMonthlySearches", label: "Avg Monthly Searches" },
+  { value: "cpcHigh", label: "CPC High" },
+  { value: "change3mPct", label: "3M Change" },
+  { value: "changeYoYPct", label: "YoY Change" },
+];
+
 export default function SignalsPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -70,6 +90,7 @@ export default function SignalsPage() {
 
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [sortBy, setSortBy] = useState<SignalSortOption>("score");
 
   const [loadingBatches, setLoadingBatches] = useState(false);
   const [loadingSignals, setLoadingSignals] = useState(false);
@@ -112,6 +133,8 @@ export default function SignalsPage() {
       const params = new URLSearchParams();
       if (batchId) params.set("batchId", batchId);
       if (debouncedQuery) params.set("q", debouncedQuery);
+      params.set("sort", sortBy);
+      params.set("order", "desc");
       params.set("limit", "100");
       const response = await api<SignalResponse>(`/signals?${params.toString()}`);
       setSignals(response.signals);
@@ -129,7 +152,7 @@ export default function SignalsPage() {
 
   useEffect(() => {
     void loadSignals();
-  }, [activeBatchId, debouncedQuery]);
+  }, [activeBatchId, debouncedQuery, sortBy]);
 
   async function handleUpload() {
     if (!uploadFile) {
@@ -273,12 +296,29 @@ export default function SignalsPage() {
                   ? `Showing signals for ${activeBatch.filename || "GKP CSV"}`
                   : "Showing latest signals"}
               </div>
-              <Input
-                placeholder="Search signals..."
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                className="md:max-w-sm"
-              />
+              <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:items-center">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="whitespace-nowrap">Sort by</span>
+                  <Select value={sortBy} onValueChange={(value) => setSortBy(value as SignalSortOption)}>
+                    <SelectTrigger className="h-9 w-[220px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SIGNAL_SORT_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Input
+                  placeholder="Search signals..."
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  className="md:max-w-sm"
+                />
+              </div>
             </div>
 
             {error ? (
@@ -299,6 +339,7 @@ export default function SignalsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Keyword</TableHead>
+                    <TableHead className="w-24">Score</TableHead>
                     <TableHead>Avg. Monthly Searches</TableHead>
                     <TableHead>Competition</TableHead>
                     <TableHead>Top of page bid</TableHead>
@@ -310,6 +351,22 @@ export default function SignalsPage() {
                   {signals.map((signal) => (
                     <TableRow key={signal.id}>
                       <TableCell className="font-medium">{signal.keyword}</TableCell>
+                      <TableCell>
+                        {signal.score !== null && signal.score !== undefined ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="cursor-help text-sm font-medium">
+                                {signal.score.toFixed(2)}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <span>{signal.scoreReasons ?? "No score details."}</span>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
                       <TableCell>{signal.avgMonthlySearches ?? "-"}</TableCell>
                       <TableCell>{signal.competitionLevel ?? "-"}</TableCell>
                       <TableCell>
