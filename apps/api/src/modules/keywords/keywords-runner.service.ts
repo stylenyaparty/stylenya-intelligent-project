@@ -1,8 +1,4 @@
 import { prisma } from "../../infrastructure/db/prisma.js";
-import {
-    GoogleTrendsKeywordResearchProvider,
-    DEFAULT_TIMEFRAME,
-} from "./providers/googleTrendsKeywordResearchProvider.js";
 import { GoogleAdsKeywordProvider } from "./providers/googleAdsKeywordProvider.js";
 import type { KeywordResearchProvider, KeywordSuggestion } from "./providers/providerTypes.js";
 import { Prisma } from "@prisma/client";
@@ -11,9 +7,8 @@ import {
     getGoogleAdsCredentials,
     getGoogleAdsStatus,
 } from "../settings/keyword-provider-settings.service.js";
-import { isLegacyEngineEnabled } from "../legacy/legacy-flags.js";
 
-const trendsProvider = new GoogleTrendsKeywordResearchProvider();
+const DEFAULT_TIMEFRAME = "today 12-m";
 const runningKeywordJobs = new Map<string, boolean>();
 
 function normalizeKeyword(value: string) {
@@ -26,7 +21,7 @@ function normalizeProvider(providerUsed: string) {
     if (["GOOGLE_ADS", "GOOGLE-ADS", "GOOGLEADS"].includes(normalized)) {
         return "GOOGLE_ADS";
     }
-    return "TRENDS";
+    return "UNSUPPORTED";
 }
 
 function buildResultJson(suggestion: KeywordSuggestion) {
@@ -39,10 +34,6 @@ function buildResultJson(suggestion: KeywordSuggestion) {
 }
 
 export async function runKeywordJob(jobId: string, options?: { force?: boolean }) {
-    if (!isLegacyEngineEnabled()) {
-        throw new AppError(410, "LEGACY_ENGINE_DISABLED", "Legacy engine disabled.");
-    }
-
     if (runningKeywordJobs.get(jobId)) {
         throw new AppError(409, "JOB_ALREADY_RUNNING", "Job is already running.");
     }
@@ -100,30 +91,21 @@ export async function runKeywordJob(jobId: string, options?: { force?: boolean }
 
         const googleAdsStatus = await getGoogleAdsStatus();
         const normalizedProvider = normalizeProvider(job.providerUsed);
-        const resolvedProvider =
-            normalizedProvider === "AUTO"
-                ? googleAdsStatus.enabled && googleAdsStatus.configured
-                    ? "GOOGLE_ADS"
-                    : "TRENDS"
-                : normalizedProvider === "GOOGLE_ADS"
-                    ? "GOOGLE_ADS"
-                    : "TRENDS";
-
-        if (normalizedProvider === "GOOGLE_ADS") {
-            if (!googleAdsStatus.enabled || !googleAdsStatus.configured) {
-                throw new AppError(
-                    400,
-                    "GOOGLE_ADS_NOT_CONFIGURED",
-                    "Google Ads provider is not configured."
-                );
-            }
-        }
-
-        if (resolvedProvider === "TRENDS" && process.env.KEYWORD_TRENDS_ENABLED === "false") {
+        if (normalizedProvider === "UNSUPPORTED") {
             throw new AppError(
                 400,
-                "PROVIDER_NOT_CONFIGURED",
-                "Google Trends provider is disabled."
+                "PROVIDER_NOT_SUPPORTED",
+                "Selected keyword provider is not supported."
+            );
+        }
+
+        if (!googleAdsStatus.enabled || !googleAdsStatus.configured) {
+            throw new AppError(
+                400,
+                normalizedProvider === "GOOGLE_ADS"
+                    ? "GOOGLE_ADS_NOT_CONFIGURED"
+                    : "PROVIDER_NOT_CONFIGURED",
+                "Google Ads provider is not configured."
             );
         }
 
@@ -203,39 +185,16 @@ export async function runKeywordJob(jobId: string, options?: { force?: boolean }
 
         runStarted = true;
 
-        let provider: KeywordResearchProvider = trendsProvider;
-        if (resolvedProvider === "GOOGLE_ADS") {
-            const credentials = await getGoogleAdsCredentials();
-            if (!credentials) {
-                throw new AppError(
-                    400,
-                    "GOOGLE_ADS_NOT_CONFIGURED",
-                    "Google Ads provider is not configured."
-                );
-            }
-            provider = new GoogleAdsKeywordProvider(credentials);
-        } else if (forceRun) {
-            provider = new GoogleTrendsKeywordResearchProvider();
+        const credentials = await getGoogleAdsCredentials();
+        if (!credentials) {
+            throw new AppError(
+                400,
+                "GOOGLE_ADS_NOT_CONFIGURED",
+                "Google Ads provider is not configured."
+            );
         }
-        const existingProviderRequest = job.providerRequest as
-            | { geo?: string; timeframe?: string; seeds?: string[] }
-            | null
-            | undefined;
-        const timeframe =
-            typeof existingProviderRequest?.timeframe === "string"
-                ? existingProviderRequest.timeframe
-                : DEFAULT_TIMEFRAME;
-        const providerRequest = {
-            geo: job.country,
-            timeframe,
-            seeds,
-        };
-        if (resolvedProvider === "TRENDS" && !job.providerRequest) {
-            await prisma.keywordJob.update({
-                where: { id: jobId },
-                data: { providerRequest },
-            });
-        }
+        const provider: KeywordResearchProvider = new GoogleAdsKeywordProvider(credentials);
+        const timeframe = DEFAULT_TIMEFRAME;
 
         const suggestions: Array<{
             term: string;

@@ -37,7 +37,7 @@ export const keywordJobCreateSchema = z.object({
     maxResults: z.number().int().min(1).max(50).optional(),
     providerUsed: z.preprocess(
         (value) => (typeof value === "string" ? value.toUpperCase() : value),
-        z.enum(["TRENDS", "AUTO", "GOOGLE_ADS"])
+        z.enum(["AUTO", "GOOGLE_ADS"])
     ).optional(),
     params: z
         .object({

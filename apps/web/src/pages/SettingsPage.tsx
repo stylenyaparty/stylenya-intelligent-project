@@ -15,9 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/sonner";
 
 const emptySettings: KeywordProviderSettings = {
-  trends: { enabled: true },
   googleAds: { enabled: false, configured: false },
-  auto: { prefers: "GOOGLE_ADS_WHEN_CONFIGURED" },
 };
 
 export default function SettingsPage() {
@@ -135,34 +133,18 @@ export default function SettingsPage() {
           <CardDescription>Choose how keyword research providers are configured.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="rounded-lg border p-4 space-y-3">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-foreground">Google Trends (Legacy)</h3>
-                  <Badge variant="outline">Legacy</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Legacy keyword provider for historical keyword jobs (no setup required).
-                </p>
-              </div>
-              <Badge variant="secondary" className="shrink-0">
-                Enabled
-              </Badge>
-            </div>
-          </div>
-
           <div className="rounded-lg border p-4 space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-3">
                   <h3 className="text-sm font-semibold text-foreground">Google Ads</h3>
                   <Badge variant={googleAdsConfigured ? "default" : "outline"}>
-                    Configured: {googleAdsConfigured ? "Yes" : "No"}
+                    {googleAdsConfigured ? "Configured" : "Not configured"}
                   </Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  If Google Ads is disabled or not configured, AUTO mode will use Google Trends (legacy).
+                  Optional integration for keyword research. Enable only when you have credentials ready.
+                  {!googleAdsConfigured && " Not configured yet—add credentials when you’re ready."}
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -257,26 +239,6 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Legacy UI</CardTitle>
-          <CardDescription>Enable legacy keyword jobs and trends UI for debugging.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>
-            To re-enable legacy navigation items, set{" "}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">VITE_FEATURE_LEGACY_UI=true</code>{" "}
-            in the web app environment and restart the frontend.
-          </p>
-          <p>
-            Legacy APIs and engines also require{" "}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">LEGACY_API_ENABLED=true</code>{" "}
-            and{" "}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">LEGACY_ENGINE_ENABLED=true</code>{" "}
-            on the API service.
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }
