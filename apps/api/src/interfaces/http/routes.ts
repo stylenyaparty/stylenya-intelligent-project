@@ -28,6 +28,9 @@ import { PrismaDecisionLogRepository } from "../../infrastructure/repositories/p
 import { GenerateWeeklyFocusSnapshotUseCase } from "../../application/use-cases/generate-weekly-focus-snapshot";
 import { API_PREFIX } from "./api-prefix.js";
 
+const SIDEBAR_COOKIE_NAME = "sidebar:state";
+const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
+
 
 export async function registerRoutes(app: FastifyInstance) {
 
@@ -50,6 +53,22 @@ export async function registerRoutes(app: FastifyInstance) {
     
     app.get("/me", { preHandler: requireAuth }, async (request) => {
         return { ok: true, auth: request.auth };
+    });
+
+    app.post("/ui/sidebar-state", async (request, reply) => {
+        const BodySchema = z.object({ open: z.boolean() });
+        const body = BodySchema.parse(request.body);
+        const isProd = process.env.NODE_ENV === "production";
+
+        reply.setCookie(SIDEBAR_COOKIE_NAME, String(body.open), {
+            path: "/",
+            httpOnly: true,
+            secure: isProd,
+            sameSite: "lax",
+            maxAge: SIDEBAR_COOKIE_MAX_AGE,
+        });
+
+        return reply.code(204).send();
     });
 
     app.get(
