@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
-import { createTestServer, getAuthToken, seedAdmin } from "../helpers.js";
+import { createTestServer, getAuthToken, seedAdmin, apiPath } from "../helpers.js";
 
 describe("Legacy API disabled", () => {
     let app: FastifyInstance;
@@ -41,7 +41,7 @@ describe("Legacy API disabled", () => {
         const headers = await authHeader();
 
         const response = await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: ["legacy keyword"] })
             .expect(410);

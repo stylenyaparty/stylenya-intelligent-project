@@ -26,6 +26,7 @@ import { requireLegacyEnabled } from "./middleware/legacy.js";
 import { RecommendWeeklyFocusUseCase } from "../../application/use-cases/recommend-weekly-focus.js";
 import { PrismaDecisionLogRepository } from "../../infrastructure/repositories/prisma-decision-log-repository";
 import { GenerateWeeklyFocusSnapshotUseCase } from "../../application/use-cases/generate-weekly-focus-snapshot";
+import { API_PREFIX } from "./api-prefix.js";
 
 
 export async function registerRoutes(app: FastifyInstance) {
@@ -36,23 +37,23 @@ export async function registerRoutes(app: FastifyInstance) {
 
     app.register(keywordsRoutes);
 
-    app.register(llmRoutes, { prefix: "/v1" });
+    app.register(llmRoutes);
 
     app.register(weeklyFocusRoutes);
 
     app.register(dashboardRoutes);
 
     app.register(productsRoutes);
-    app.register(signalsRoutes, { prefix: "/v1" });
+    app.register(signalsRoutes);
     app.register(keywordProviderSettingsRoutes);
-    app.register(decisionDraftRoutes, { prefix: "/v1" });
+    app.register(decisionDraftRoutes);
     
-    app.get("/v1/me", { preHandler: requireAuth }, async (request) => {
+    app.get("/me", { preHandler: requireAuth }, async (request) => {
         return { ok: true, auth: request.auth };
     });
 
     app.get(
-        "/v1/admin/ping",
+        "/admin/ping",
         { preHandler: [requireAuth, requireRole("ADMIN")] },
         async () => ({ ok: true, admin: true })
     );
@@ -64,17 +65,17 @@ export async function registerRoutes(app: FastifyInstance) {
         service: "stylenya-api",
         version: "0.1.0",
         docs: {
-            health: "/health",
-            bootstrapStatus: "/v1/bootstrap-status",
-            initialAdmin: "/v1/initial-admin",
-            login: "/v1/auth/login",
+            health: `${API_PREFIX}/health`,
+            bootstrapStatus: `${API_PREFIX}/bootstrap-status`,
+            initialAdmin: `${API_PREFIX}/initial-admin`,
+            login: `${API_PREFIX}/auth/login`,
         },
     }));
     const userRepo = new PrismaUserRepository();
     const getBootstrapStatus = new GetBootstrapStatusUseCase(userRepo);
     const createInitialAdmin = new CreateInitialAdminUseCase(userRepo);
 
-    app.get("/v1/bootstrap-status", async () => {
+    app.get("/bootstrap-status", async () => {
         const result = await getBootstrapStatus.execute();
         return result;
     });
@@ -94,7 +95,7 @@ export async function registerRoutes(app: FastifyInstance) {
             return { ok: true, decisionLog: row };
         }
     );
-    app.post("/v1/initial-admin", async (request, reply) => {
+    app.post("/initial-admin", async (request, reply) => {
         const BodySchema = z.object({
             email: z.string().email(),
             password: z.string().min(8),
@@ -134,5 +135,5 @@ export async function registerRoutes(app: FastifyInstance) {
         }
     );
 
-    await app.register(authRoutes, { prefix: "/v1/auth" });
+    await app.register(authRoutes, { prefix: "/auth" });
 }

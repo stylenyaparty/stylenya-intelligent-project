@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../../src/infrastructure/db/prisma.js";
-import { createTestServer, getAuthToken, seedAdmin } from "../helpers.js";
+import { createTestServer, getAuthToken, seedAdmin, apiPath } from "../helpers.js";
 
 describe("Weekly Focus API", () => {
     let app: FastifyInstance;
@@ -35,7 +35,7 @@ describe("Weekly Focus API", () => {
         const headers = await authHeader();
 
         const response = await request
-            .get("/weekly-focus?limit=7")
+            .get(apiPath("/weekly-focus?limit=7"))
             .set(headers)
             .expect(200);
 
@@ -56,7 +56,7 @@ describe("Weekly Focus API", () => {
         });
 
         const seeds = await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: ["birthday banner"] })
             .expect(201);
@@ -64,7 +64,7 @@ describe("Weekly Focus API", () => {
         const seedId = seeds.body.created[0].id as string;
 
         const job = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "CUSTOM",
@@ -79,13 +79,13 @@ describe("Weekly Focus API", () => {
         const keywordItem = job.body.items[0];
 
         await request
-            .post(`/keywords/job-items/${keywordItem.id}/promote`)
+            .post(apiPath(`/keywords/job-items/${keywordItem.id}/promote`))
             .set(headers)
             .send({})
             .expect(201);
 
         const response = await request
-            .get("/weekly-focus?limit=7")
+            .get(apiPath("/weekly-focus?limit=7"))
             .set(headers)
             .expect(200);
 
@@ -127,13 +127,13 @@ describe("Weekly Focus API", () => {
         });
 
         await request
-            .post(`/keywords/job-items/${item.id}/promote`)
+            .post(apiPath(`/keywords/job-items/${item.id}/promote`))
             .set(headers)
             .send({})
             .expect(201);
 
         const response = await request
-            .get("/weekly-focus?limit=7")
+            .get(apiPath("/weekly-focus?limit=7"))
             .set(headers)
             .expect(200);
 

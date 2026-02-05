@@ -75,7 +75,7 @@ export default function WeeklyFocusPage() {
     setError(null);
     try {
       const [weeklyFocus, decisions] = await Promise.all([
-        api<WeeklyFocusResponse>(`/v1/weekly-focus?limit=${limit}`),
+        api<WeeklyFocusResponse>(`/weekly-focus?limit=${limit}`),
         api<DecisionsResponse>(`/decisions?limit=200&mode=all`),
       ]);
 

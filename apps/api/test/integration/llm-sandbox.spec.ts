@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
-import { createTestServer, getAuthToken, resetDatabase, seedAdmin } from "../helpers.js";
+import { createTestServer, getAuthToken, resetDatabase, seedAdmin, apiPath } from "../helpers.js";
 import * as llmService from "../../src/modules/llm/llm.service.js";
 
 describe("LLM Sandbox API", () => {
@@ -44,7 +44,7 @@ describe("LLM Sandbox API", () => {
         });
 
         const response = await request
-            .post("/v1/llm/sandbox")
+            .post(apiPath("/llm/sandbox"))
             .set({ Authorization: `Bearer ${token}` })
             .send({
                 signals: [
@@ -73,7 +73,7 @@ describe("LLM Sandbox API", () => {
         }));
 
         const response = await request
-            .post("/v1/llm/sandbox")
+            .post(apiPath("/llm/sandbox"))
             .set({ Authorization: `Bearer ${token}` })
             .send({ signals })
             .expect(400);

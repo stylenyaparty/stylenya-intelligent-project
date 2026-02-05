@@ -14,5 +14,5 @@ export async function weeklyFocusRoutes(app: FastifyInstance) {
     };
 
     app.get("/weekly-focus", { preHandler: legacyPreHandler }, handler);
-    app.get("/v1/weekly-focus", { preHandler: legacyPreHandler }, handler);
+    //app.get("/weekly-focus", { preHandler: legacyPreHandler }, handler);
 }
