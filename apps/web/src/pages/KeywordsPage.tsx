@@ -56,7 +56,7 @@ type KeywordJob = {
   engine: string;
   country: string;
   maxResults: number;
-  providerUsed: "TRENDS" | "AUTO" | "GOOGLE_ADS" | string;
+  providerUsed: "AUTO" | "GOOGLE_ADS" | string;
   niche: string;
   status: "PENDING" | "RUNNING" | "DONE" | "FAILED";
   archivedAt?: string | null;
@@ -138,13 +138,11 @@ type PromotedSignalsResponse = {
 type JobStatusFilter = "active" | "archived" | "all";
 
 type KeywordProviderSettings = {
-  trends: { enabled: boolean };
   googleAds: { enabled: boolean; configured: boolean; customerId?: string };
-  auto: { prefers: string };
 };
 
 export default function KeywordsPage() {
-  const defaultJobProviderUsed = "TRENDS";
+  const defaultJobProviderUsed = "AUTO";
   const defaultJobMaxResults = 10;
 
   const [activeTab, setActiveTab] = useState("seeds");
@@ -409,12 +407,8 @@ export default function KeywordsPage() {
       }
     } catch (e: unknown) {
       if (e instanceof ApiError) {
-        if (e.status === 503 && e.code === "PROVIDER_TEMP_BLOCKED") {
-          toast.error("Google Trends temporarily blocked. Try again in 30–60 seconds.");
-          return;
-        }
-        if (e.status === 422 && e.code === "TRENDS_NO_RESULTS") {
-          toast.error(e.message || "Google Trends returned no results for this search.");
+        if (e.status === 503 && e.code === "PROVIDER_UNAVAILABLE") {
+          toast.error("Keyword provider is temporarily unavailable. Try again soon.");
           return;
         }
         if (e.status === 409 && e.code === "JOB_ALREADY_RUNNING") {
@@ -504,7 +498,7 @@ export default function KeywordsPage() {
     const normalized = providerUsed.trim().toUpperCase();
     if (normalized === "AUTO") return "AUTO";
     if (normalized === "GOOGLE_ADS" || normalized === "GOOGLE-ADS") return "GOOGLE_ADS";
-    return "TRENDS";
+    return "UNSUPPORTED";
   };
 
   const renderProviderBadge = (providerUsed: string) => {
@@ -512,7 +506,7 @@ export default function KeywordsPage() {
     if (normalized === "AUTO") {
       return (
         <span className={`${providerBadgeBase} border-emerald-200 text-emerald-700`}>
-          {googleAdsConfigured ? "AUTO (ADS)" : "AUTO (TRENDS)"}
+          {googleAdsConfigured ? "AUTO (ADS)" : "AUTO (NOT CONFIGURED)"}
         </span>
       );
     }
@@ -524,18 +518,10 @@ export default function KeywordsPage() {
       );
     }
     return (
-      <span className={`${providerBadgeBase} border-primary/30 text-primary`}>
-        TRENDS
+      <span className={`${providerBadgeBase} border-muted-foreground/40 text-muted-foreground`}>
+        UNSUPPORTED
       </span>
     );
-  };
-
-  const isTrendsProvider = (providerUsed: string) => {
-    const normalized = normalizeProvider(providerUsed);
-    if (normalized === "AUTO") {
-      return !googleAdsConfigured;
-    }
-    return normalized === "TRENDS";
   };
 
   return (
@@ -909,16 +895,6 @@ export default function KeywordsPage() {
                 />
               ) : null}
 
-              {!loadingItems && selectedJob && isTrendsProvider(selectedJob.providerUsed) && (
-                <div className="flex items-start gap-2 rounded-md border border-muted/60 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                  <Info className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                  <span>
-                    Google Trends doesn’t provide competition metrics, so Competition is
-                    unavailable for these results.
-                  </span>
-                </div>
-              )}
-
               {!loadingItems && selectedJob && items.length > 0 && (
                 <div className="overflow-x-auto">
                   <Table>
@@ -945,15 +921,7 @@ export default function KeywordsPage() {
                           </TableCell>
                           <TableCell className="text-right font-mono">
                             {item.resultJson?.competitionScore ?? (
-                              <span
-                                title={
-                                  selectedJob && isTrendsProvider(selectedJob.providerUsed)
-                                    ? "Not available from Google Trends"
-                                    : undefined
-                                }
-                              >
-                                —
-                              </span>
+                              <span>—</span>
                             )}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground max-w-[320px]">
@@ -1060,7 +1028,6 @@ export default function KeywordsPage() {
                     <SelectValue placeholder="Select provider" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border border-border shadow-lg">
-                    <SelectItem value="TRENDS">Google Trends (Legacy)</SelectItem>
                     <SelectItem value="AUTO">AUTO</SelectItem>
                     <SelectItem value="GOOGLE_ADS" disabled={!googleAdsConfigured}>
                       Google Ads
@@ -1070,7 +1037,9 @@ export default function KeywordsPage() {
                 <p className="text-sm text-muted-foreground">
                   {loadingProviders
                     ? "Loading provider settings..."
-                    : "Google Trends is a legacy default. Google Ads requires setup."}
+                    : googleAdsConfigured
+                      ? "Google Ads is configured for keyword research."
+                      : "Google Ads is not configured yet."}
                 </p>
               </div>
               <div className="grid gap-2">

@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../../interfaces/http/middleware/auth.js";
-import { requireLegacyEnabled } from "../../interfaces/http/middleware/legacy.js";
 import {
     getGoogleAdsStatus,
     updateGoogleAdsSettings,
@@ -18,24 +17,20 @@ const googleAdsSchema = z.object({
 });
 
 export async function keywordProviderSettingsRoutes(app: FastifyInstance) {
-    const legacyPreHandler = [requireAuth, requireLegacyEnabled];
-
     app.get(
         "/settings/keyword-providers",
-        { preHandler: legacyPreHandler },
+        { preHandler: [requireAuth] },
         async () => {
             const googleAds = await getGoogleAdsStatus();
             return {
-                trends: { enabled: true },
                 googleAds,
-                auto: { prefers: "GOOGLE_ADS_WHEN_CONFIGURED" },
             };
         }
     );
 
     app.post(
         "/settings/google-ads",
-        { preHandler: legacyPreHandler },
+        { preHandler: [requireAuth] },
         async (request, reply) => {
             try {
                 const body = googleAdsSchema.parse(request.body);
