@@ -55,7 +55,7 @@ function calculatePriorityScore(signal: {
 
 function appendCompetitionNote(rationale: string, competitionScore: number | null) {
     if (competitionScore === null) {
-        return `${rationale} Competition unavailable (trends).`;
+        return `${rationale} Competition unavailable.`;
     }
     return rationale;
 }
