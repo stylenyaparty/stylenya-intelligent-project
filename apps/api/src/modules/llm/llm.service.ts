@@ -35,16 +35,21 @@ export function getLLMStatus(): LLMStatus {
 export async function generateDecisionDrafts(input: {
     signals: Array<{
         id: string;
-        term: string;
-        termNormalized: string;
+        keyword: string;
+        keywordNormalized: string;
         source: string;
         geo?: string | null;
         language?: string | null;
-        capturedAt: string;
+        createdAt: string;
         avgMonthlySearches?: number | null;
-        competition?: string | null;
-        topOfPageBidLow?: number | null;
-        topOfPageBidHigh?: number | null;
+        competitionLevel?: string | null;
+        competitionIndex?: number | null;
+        cpcLow?: number | null;
+        cpcHigh?: number | null;
+        change3mPct?: number | null;
+        changeYoYPct?: number | null;
+        currency?: string | null;
+        seasonality?: { bestMonth: string; worstMonth: string; trend: string } | null;
     }>;
     seeds?: string[];
     context?: string;

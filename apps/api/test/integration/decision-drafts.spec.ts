@@ -38,15 +38,15 @@ describe("Decision Drafts API", () => {
             data: {
                 source: "TEST",
                 status: "READY",
-                rowCount: 2,
+                totalRows: 2,
             },
         });
 
         const signalOne = await prisma.keywordSignal.create({
             data: {
                 batchId: batch.id,
-                term: "handmade candle",
-                termNormalized: "handmade candle",
+                keyword: "handmade candle",
+                keywordNormalized: "handmade candle",
                 source: "GKP",
             },
         });
@@ -54,8 +54,8 @@ describe("Decision Drafts API", () => {
         const signalTwo = await prisma.keywordSignal.create({
             data: {
                 batchId: batch.id,
-                term: "gift wrap",
-                termNormalized: "gift wrap",
+                keyword: "gift wrap",
+                keywordNormalized: "gift wrap",
                 source: "GKP",
             },
         });

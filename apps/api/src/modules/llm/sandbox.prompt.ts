@@ -1,7 +1,7 @@
 export type SandboxSignal = {
-    term: string;
+    keyword: string;
     avgMonthlySearches?: number;
-    competition?: string;
+    competitionLevel?: string;
 };
 
 export type SandboxPromptInput = {

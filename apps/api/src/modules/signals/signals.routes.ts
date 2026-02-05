@@ -6,6 +6,7 @@ import {
     importGkpCsv,
     listSignalBatches,
     listSignals,
+    listTopSignals,
 } from "./signals.service.js";
 import { extractMultipartFile } from "../products/products.service.js";
 
@@ -19,7 +20,7 @@ const signalListQuerySchema = z.object({
 
 export async function signalsRoutes(app: FastifyInstance) {
     app.post(
-        "/signal-batches/gkp-csv",
+        "/signals/upload",
         { preHandler: requireAuth },
         async (request, reply) => {
             let multipartFile: { toBuffer: () => Promise<Buffer> } | null = null;
@@ -65,10 +66,12 @@ export async function signalsRoutes(app: FastifyInstance) {
                 return reply.code(400).send({ error: "File is required" });
             }
 
-            const contents = file.buffer.toString("utf8");
+            if (file.buffer.length > 20 * 1024 * 1024) {
+                return reply.code(413).send({ error: "File exceeds 20MB upload limit." });
+            }
 
             try {
-                const result = await importGkpCsv(contents, file.filename);
+                const result = await importGkpCsv(file.buffer, file.filename);
                 return reply.send(result);
             } catch (error) {
                 if (isAppError(error)) {
@@ -81,7 +84,7 @@ export async function signalsRoutes(app: FastifyInstance) {
         }
     );
 
-    app.get("/signal-batches", { preHandler: requireAuth }, async () => {
+    app.get("/signals/batches", { preHandler: requireAuth }, async () => {
         const batches = await listSignalBatches();
         return { ok: true, batches };
     });
@@ -94,5 +97,11 @@ export async function signalsRoutes(app: FastifyInstance) {
 
         const signals = await listSignals(query.data);
         return reply.send({ ok: true, signals });
+    });
+
+    app.get("/signals/latest", { preHandler: requireAuth }, async (request) => {
+        const limit = Number((request.query as { limit?: string })?.limit ?? 20);
+        const signals = await listTopSignals(limit);
+        return { ok: true, signals };
     });
 }
