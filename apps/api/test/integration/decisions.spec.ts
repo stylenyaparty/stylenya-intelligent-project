@@ -215,7 +215,7 @@ describe("Decisions API", () => {
         expect(ids).not.toContain(yesterdayDecision.id);
     });
 
-    it("returns all decisions when range=all", async () => {
+    it("returns all decisions when mode=all", async () => {
         const headers = await authHeader();
 
         const range = getDecisionDateRange({ now: new Date() });
@@ -239,7 +239,7 @@ describe("Decisions API", () => {
         });
 
         const response = await request
-            .get("/decisions?range=all&limit=50")
+            .get("/decisions?mode=all&limit=50")
             .set(headers)
             .expect(200);
 

@@ -3,6 +3,7 @@ import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../../src/infrastructure/db/prisma.js";
 import { resetLLMProviderCache } from "../../src/modules/llm/get-llm-provider.js";
+import { getDecisionDateRange } from "../../src/modules/decisions/decision-date-range.js";
 import { createTestServer, getAuthToken, resetDatabase, seedAdmin } from "../helpers.js";
 
 describe("Decision Drafts API", () => {
@@ -32,116 +33,142 @@ describe("Decision Drafts API", () => {
         await app.close();
     });
 
-    it("rejects draft generation without auth", async () => {
-        await request
-            .post("/v1/weekly-focus/fake-id/drafts/generate")
-            .send({})
-            .expect(401);
-    });
-
-    it("returns LLM_NOT_CONFIGURED when disabled", async () => {
-        process.env.LLM_PROVIDER = "disabled";
-
-        await prisma.product.create({
+    async function seedSignalBatch() {
+        const batch = await prisma.signalBatch.create({
             data: {
-                name: "Seasonal Candle",
-                productSource: "SHOPIFY",
-                productType: "CANDLE",
-                status: "ACTIVE",
-                seasonality: "NONE",
+                source: "TEST",
+                status: "READY",
+                rowCount: 2,
             },
         });
 
-        const weeklyFocus = await request
-            .get("/v1/weekly-focus?limit=3")
-            .set({ Authorization: `Bearer ${token}` })
-            .expect(200);
+        const signalOne = await prisma.keywordSignal.create({
+            data: {
+                batchId: batch.id,
+                term: "handmade candle",
+                termNormalized: "handmade candle",
+                source: "GKP",
+            },
+        });
 
-        const response = await request
-            .post(`/v1/weekly-focus/${weeklyFocus.body.weeklyFocusId}/drafts/generate`)
-            .set({ Authorization: `Bearer ${token}` })
-            .send({ maxDrafts: 2 })
-            .expect(400);
+        const signalTwo = await prisma.keywordSignal.create({
+            data: {
+                batchId: batch.id,
+                term: "gift wrap",
+                termNormalized: "gift wrap",
+                source: "GKP",
+            },
+        });
 
-        expect(response.body.code).toBe("LLM_NOT_CONFIGURED");
+        return { batch, signals: [signalOne, signalTwo] };
+    }
+
+    it("rejects draft generation without auth", async () => {
+        await request.post("/v1/decision-drafts/generate").send({}).expect(401);
     });
 
-    it("returns INSUFFICIENT_CONTEXT when no real inputs exist", async () => {
+    it("guards against generation without signals", async () => {
         process.env.LLM_PROVIDER = "mock";
 
-        const weeklyFocus = await request
-            .get("/v1/weekly-focus?limit=3")
-            .set({ Authorization: `Bearer ${token}` })
-            .expect(200);
-
         const response = await request
-            .post(`/v1/weekly-focus/${weeklyFocus.body.weeklyFocusId}/drafts/generate`)
+            .post("/v1/decision-drafts/generate")
             .set({ Authorization: `Bearer ${token}` })
-            .send({})
-            .expect(409);
+            .send({ seeds: ["candle"] })
+            .expect(400);
 
-        expect(response.body.code).toBe("INSUFFICIENT_CONTEXT");
+        expect(response.body.code).toBe("SIGNALS_REQUIRED");
     });
 
     it("generates drafts with the mock provider and persists them", async () => {
         process.env.LLM_PROVIDER = "mock";
-
-        await prisma.product.create({
-            data: {
-                name: "Handmade Tote",
-                productSource: "ETSY",
-                productType: "BAG",
-                status: "ACTIVE",
-                seasonality: "NONE",
-            },
-        });
-
-        const weeklyFocus = await request
-            .get("/v1/weekly-focus?limit=3")
-            .set({ Authorization: `Bearer ${token}` })
-            .expect(200);
+        const { batch, signals } = await seedSignalBatch();
 
         const response = await request
-            .post(`/v1/weekly-focus/${weeklyFocus.body.weeklyFocusId}/drafts/generate`)
+            .post("/v1/decision-drafts/generate")
             .set({ Authorization: `Bearer ${token}` })
-            .send({ maxDrafts: 1 })
+            .send({ batchId: batch.id, seeds: ["candle"], context: "Holiday upsell" })
             .expect(201);
 
         expect(response.body.drafts.length).toBeGreaterThan(0);
+        expect(response.body.drafts[0].signalIds).toEqual(
+            expect.arrayContaining([signals[0].id, signals[1].id])
+        );
 
         const stored = await prisma.decisionDraft.findMany();
         expect(stored.length).toBeGreaterThan(0);
-        expect(stored[0].status).toBe("ACTIVE");
+        expect(stored[0].status).toBe("NEW");
     });
 
-    it("dismisses a draft", async () => {
-        process.env.LLM_PROVIDER = "mock";
+    it("lists drafts for today by default", async () => {
+        const range = getDecisionDateRange({ now: new Date() });
+        expect(range).toBeTruthy();
+        if (!range) return;
 
-        await prisma.product.create({
+        const yesterday = new Date(range.start.getTime() - 24 * 60 * 60 * 1000);
+        const yesterdayRange = getDecisionDateRange({
+            date: new Intl.DateTimeFormat("en-CA", {
+                timeZone: "America/New_York",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+            }).format(yesterday),
+        });
+        expect(yesterdayRange).toBeTruthy();
+        if (!yesterdayRange) return;
+
+        await prisma.decisionDraft.create({
             data: {
-                name: "Gift Wrap Kit",
-                productSource: "SHOPIFY",
-                productType: "ACCESSORY",
-                status: "ACTIVE",
-                seasonality: "NONE",
+                createdDate: range.start,
+                title: "Today draft",
+                rationale: "Based on signals",
+                recommendedActions: ["Action"],
+                confidence: 55,
+                status: "NEW",
+                signalIds: ["sig-1"],
             },
         });
 
-        const weeklyFocus = await request
-            .get("/v1/weekly-focus?limit=3")
+        await prisma.decisionDraft.create({
+            data: {
+                createdDate: yesterdayRange.start,
+                title: "Yesterday draft",
+                rationale: "Older",
+                recommendedActions: ["Action"],
+                confidence: 40,
+                status: "NEW",
+                signalIds: ["sig-2"],
+            },
+        });
+
+        const response = await request
+            .get("/v1/decision-drafts")
             .set({ Authorization: `Bearer ${token}` })
             .expect(200);
 
-        const generated = await request
-            .post(`/v1/weekly-focus/${weeklyFocus.body.weeklyFocusId}/drafts/generate`)
-            .set({ Authorization: `Bearer ${token}` })
-            .send({ maxDrafts: 1 })
-            .expect(201);
+        const titles = response.body.drafts.map((draft: { title: string }) => draft.title);
+        expect(titles).toContain("Today draft");
+        expect(titles).not.toContain("Yesterday draft");
+    });
 
-        const draftId = generated.body.drafts[0].id as string;
+    it("dismisses a draft", async () => {
+        const range = getDecisionDateRange({ now: new Date() });
+        expect(range).toBeTruthy();
+        if (!range) return;
+
+        const draft = await prisma.decisionDraft.create({
+            data: {
+                createdDate: range.start,
+                title: "Dismiss draft",
+                rationale: "Test",
+                recommendedActions: ["Action"],
+                confidence: 45,
+                status: "NEW",
+                signalIds: ["sig-1"],
+            },
+        });
 
         const dismissed = await request
-            .post(`/v1/decision-drafts/${draftId}/dismiss`)
+            .post(`/v1/decision-drafts/${draft.id}/dismiss`)
             .set({ Authorization: `Bearer ${token}` })
             .send({})
             .expect(200);
@@ -150,33 +177,24 @@ describe("Decision Drafts API", () => {
     });
 
     it("promotes a draft into a decision", async () => {
-        process.env.LLM_PROVIDER = "mock";
+        const range = getDecisionDateRange({ now: new Date() });
+        expect(range).toBeTruthy();
+        if (!range) return;
 
-        await prisma.product.create({
+        const draft = await prisma.decisionDraft.create({
             data: {
-                name: "Planner Bundle",
-                productSource: "ETSY",
-                productType: "STATIONERY",
-                status: "ACTIVE",
-                seasonality: "NONE",
+                createdDate: range.start,
+                title: "Promote draft",
+                rationale: "Test",
+                recommendedActions: ["Action"],
+                confidence: 85,
+                status: "NEW",
+                signalIds: ["sig-1"],
             },
         });
 
-        const weeklyFocus = await request
-            .get("/v1/weekly-focus?limit=3")
-            .set({ Authorization: `Bearer ${token}` })
-            .expect(200);
-
-        const generated = await request
-            .post(`/v1/weekly-focus/${weeklyFocus.body.weeklyFocusId}/drafts/generate`)
-            .set({ Authorization: `Bearer ${token}` })
-            .send({ maxDrafts: 1 })
-            .expect(201);
-
-        const draftId = generated.body.drafts[0].id as string;
-
         const promoted = await request
-            .post(`/v1/decision-drafts/${draftId}/promote`)
+            .post(`/v1/decision-drafts/${draft.id}/promote`)
             .set({ Authorization: `Bearer ${token}` })
             .send({})
             .expect(200);
@@ -188,5 +206,31 @@ describe("Decision Drafts API", () => {
             where: { id: promoted.body.decision.id },
         });
         expect(decision).not.toBeNull();
+    });
+
+    it("enforces traceability on promotion", async () => {
+        const range = getDecisionDateRange({ now: new Date() });
+        expect(range).toBeTruthy();
+        if (!range) return;
+
+        const draft = await prisma.decisionDraft.create({
+            data: {
+                createdDate: range.start,
+                title: "Untraceable draft",
+                rationale: "Missing signals",
+                recommendedActions: ["Action"],
+                confidence: 22,
+                status: "NEW",
+                signalIds: [],
+            },
+        });
+
+        const response = await request
+            .post(`/v1/decision-drafts/${draft.id}/promote`)
+            .set({ Authorization: `Bearer ${token}` })
+            .send({})
+            .expect(409);
+
+        expect(response.body.code).toBe("TRACEABILITY_REQUIRED");
     });
 });

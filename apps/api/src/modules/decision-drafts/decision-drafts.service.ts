@@ -1,135 +1,98 @@
 import { prisma } from "../../infrastructure/db/prisma.js";
 import { AppError } from "../../types/app-error.js";
+import { getDecisionDateRange } from "../decisions/decision-date-range.js";
 import { buildDedupeKey } from "../decisions/decision-dedupe.js";
 import { generateDecisionDrafts } from "../llm/llm.service.js";
 
-type DraftContext = {
-    weeklyFocus: {
-        id: string;
-        asOf: Date;
-        limit: number;
-        itemsJson: unknown;
-    };
-    promotedSignals: Array<{
-        id: string;
-        keyword: string;
-        engine: string;
-        language: string;
-        country: string;
-        interestScore: number | null;
-        competitionScore: number | null;
-        priority: string;
-    }>;
-    keywordJobItems: Array<{
-        id: string;
-        jobId: string;
-        term: string;
-        source: string;
-        resultJson: unknown;
-        createdAt: Date;
-    }>;
-    products: Array<{
-        id: string;
-        name: string;
-        productType: string;
-        status: string;
-        shopifyProductId: string | null;
-    }>;
-    recentDecisions: Array<{
-        id: string;
-        title: string;
-        status: string;
-        createdAt: Date;
-    }>;
-};
+const MAX_SIGNALS = 20;
 
-export async function buildDraftContext(weeklyFocusId: string): Promise<DraftContext> {
-    const weeklyFocus = await prisma.weeklyFocus.findUnique({
-        where: { id: weeklyFocusId },
-    });
-
-    if (!weeklyFocus) {
-        throw new AppError(404, "WEEKLY_FOCUS_NOT_FOUND", "Weekly focus not found.");
+function resolveCreatedDate(date?: string) {
+    const range = getDecisionDateRange(
+        date ? { date } : { now: new Date() }
+    );
+    if (!range) {
+        throw new AppError(400, "INVALID_DATE", "Invalid date format.");
     }
-
-    const [promotedSignals, keywordJobItems, products, recentDecisions] = await Promise.all([
-        prisma.promotedKeywordSignal.findMany({
-            orderBy: { promotedAt: "desc" },
-            take: 50,
-        }),
-        prisma.keywordJobItem.findMany({
-            where: {
-                status: "DONE",
-                source: { not: "CUSTOM" },
-                job: { status: "DONE" },
-            },
-            orderBy: { createdAt: "desc" },
-            take: 100,
-        }),
-        prisma.product.findMany({
-            where: { status: "ACTIVE" },
-            select: {
-                id: true,
-                name: true,
-                productType: true,
-                status: true,
-                shopifyProductId: true,
-            },
-        }),
-        prisma.decision.findMany({
-            orderBy: { createdAt: "desc" },
-            take: 10,
-            select: {
-                id: true,
-                title: true,
-                status: true,
-                createdAt: true,
-            },
-        }),
-    ]);
-
-    if (promotedSignals.length === 0 && keywordJobItems.length === 0 && products.length === 0) {
-        throw new AppError(
-            409,
-            "INSUFFICIENT_CONTEXT",
-            "Not enough real data to generate drafts."
-        );
-    }
-
-    return {
-        weeklyFocus,
-        promotedSignals,
-        keywordJobItems,
-        products,
-        recentDecisions,
-    };
+    return range.start;
 }
 
-export async function createDecisionDrafts(weeklyFocusId: string, maxDrafts: number) {
-    const context = await buildDraftContext(weeklyFocusId);
-    const output = await generateDecisionDrafts({
-        weeklyFocus: { id: context.weeklyFocus.id, asOf: context.weeklyFocus.asOf.toISOString() },
-        context: {
-            weeklyFocus: context.weeklyFocus.itemsJson,
-            promotedSignals: context.promotedSignals,
-            keywordJobItems: context.keywordJobItems,
-            products: context.products,
-            recentDecisions: context.recentDecisions,
-        },
-        maxDrafts,
+async function fetchSignals(input: { batchId?: string; signalIds?: string[] }) {
+    const byId =
+        input.signalIds && input.signalIds.length > 0
+            ? await prisma.keywordSignal.findMany({
+                where: { id: { in: input.signalIds } },
+                orderBy: { capturedAt: "desc" },
+                take: MAX_SIGNALS,
+            })
+            : [];
+
+    if (input.batchId && byId.length < MAX_SIGNALS) {
+        const remaining = MAX_SIGNALS - byId.length;
+        const batchSignals = await prisma.keywordSignal.findMany({
+            where: { batchId: input.batchId },
+            orderBy: { capturedAt: "desc" },
+            take: remaining,
+        });
+        const existingIds = new Set(byId.map((signal) => signal.id));
+        const filtered = batchSignals.filter((signal) => !existingIds.has(signal.id));
+        return [...byId, ...filtered].slice(0, MAX_SIGNALS);
+    }
+
+    return byId.slice(0, MAX_SIGNALS);
+}
+
+export async function createDecisionDrafts(input: {
+    batchId?: string;
+    signalIds?: string[];
+    seeds?: string[];
+    context?: string;
+}) {
+    const signals = await fetchSignals({
+        batchId: input.batchId,
+        signalIds: input.signalIds,
     });
+
+    if (signals.length === 0) {
+        throw new AppError(400, "SIGNALS_REQUIRED", "At least one signal is required.");
+    }
+
+    const payloadSignals = signals.map((signal) => ({
+        id: signal.id,
+        term: signal.term,
+        termNormalized: signal.termNormalized,
+        source: signal.source,
+        geo: signal.geo,
+        language: signal.language,
+        capturedAt: signal.capturedAt.toISOString(),
+        avgMonthlySearches: signal.avgMonthlySearches,
+        competition: signal.competition,
+        topOfPageBidLow: signal.topOfPageBidLow,
+        topOfPageBidHigh: signal.topOfPageBidHigh,
+    }));
+
+    const output = await generateDecisionDrafts({
+        signals: payloadSignals,
+        seeds: input.seeds ?? [],
+        context: input.context ?? "",
+        maxDrafts: 3,
+    });
+
+    const signalIds = signals.map((signal) => signal.id);
+    const createdDate = resolveCreatedDate();
 
     const created = await prisma.$transaction(
         output.drafts.map((draft) =>
             prisma.decisionDraft.create({
                 data: {
-                    weeklyFocusId,
+                    createdDate,
                     title: draft.title,
                     rationale: draft.rationale,
-                    actions: draft.actions,
+                    recommendedActions: draft.recommendedActions,
                     confidence: draft.confidence,
-                    sources: draft.sources,
-                    status: "ACTIVE",
+                    status: "NEW",
+                    signalIds,
+                    seedSet: input.seeds ?? undefined,
+                    model: output.meta.model,
                 },
             })
         )
@@ -138,12 +101,27 @@ export async function createDecisionDrafts(weeklyFocusId: string, maxDrafts: num
     return created;
 }
 
-export async function listDecisionDrafts(weeklyFocusId: string, status?: "active" | "all") {
+export async function listDecisionDrafts(options: {
+    date?: string;
+    status?: "NEW" | "DISMISSED" | "PROMOTED" | "ALL";
+}) {
+    const dateRange = getDecisionDateRange(
+        options.date ? { date: options.date } : { now: new Date() }
+    );
+    if (!dateRange) {
+        throw new AppError(400, "INVALID_DATE", "Invalid date format.");
+    }
+
     return prisma.decisionDraft.findMany({
-        where:
-            status === "active" || !status
-                ? { weeklyFocusId, status: "ACTIVE" }
-                : { weeklyFocusId },
+        where: {
+            createdDate: {
+                gte: dateRange.start,
+                lt: dateRange.end,
+            },
+            ...(options.status && options.status !== "ALL"
+                ? { status: options.status }
+                : {}),
+        },
         orderBy: { createdAt: "desc" },
     });
 }
@@ -165,9 +143,18 @@ export async function promoteDecisionDraft(id: string) {
         throw new AppError(404, "DRAFT_NOT_FOUND", "Decision draft not found.");
     }
 
+    const signalIds = Array.isArray(draft.signalIds) ? (draft.signalIds as string[]) : [];
+    if (signalIds.length === 0) {
+        throw new AppError(409, "TRACEABILITY_REQUIRED", "Draft must include signal IDs.");
+    }
+    if (draft.status === "PROMOTED" && draft.promotedDecisionId) {
+        throw new AppError(409, "DRAFT_ALREADY_PROMOTED", "Draft already promoted.");
+    }
+
+    const sources = [{ signalIds, seedSet: draft.seedSet ?? [] }];
     const dedupeKey = buildDedupeKey({
         actionType: "CREATE",
-        sources: [draft.sources],
+        sources,
     });
 
     const existing = await prisma.decision.findUnique({ where: { dedupeKey } });
@@ -178,8 +165,11 @@ export async function promoteDecisionDraft(id: string) {
                 actionType: "CREATE",
                 title: draft.title,
                 rationale: draft.rationale,
-                sources: draft.sources,
-                priorityScore: draft.confidence,
+                sources,
+                priorityScore:
+                    typeof draft.confidence === "number"
+                        ? Math.round(draft.confidence)
+                        : undefined,
                 dedupeKey,
             },
         }));
