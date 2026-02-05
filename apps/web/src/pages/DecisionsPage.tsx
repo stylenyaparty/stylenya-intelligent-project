@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, dismissDraft, listDecisionDrafts, promoteDraft, type DecisionDraft } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,8 +29,8 @@ import {
   type DecisionStatus,
 } from "@/components/dashboard";
 import type { ActionType } from "@/components/dashboard/ActionBadge";
-import { RefreshCw, ClipboardList, Calendar } from "lucide-react";
-import { format } from "date-fns";
+import { RefreshCw, ClipboardList, Calendar, ChevronLeft, ChevronRight, Inbox } from "lucide-react";
+import { addDays, format, parseISO } from "date-fns";
 
 type Decision = {
   id: string;
@@ -55,18 +55,22 @@ export default function DecisionsPage() {
   const [data, setData] = useState<DecisionsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [range, setRange] = useState<"today" | "all">("today");
-  const [selectedDate, setSelectedDate] = useState("");
+  const [mode, setMode] = useState<"daily" | "all">("daily");
+  const [selectedDate, setSelectedDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [drafts, setDrafts] = useState<DecisionDraft[]>([]);
+  const [draftsBusy, setDraftsBusy] = useState(false);
+  const [draftsError, setDraftsError] = useState<string | null>(null);
+  const [draftActionId, setDraftActionId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
       const params = new URLSearchParams({ limit: "50" });
-      if (selectedDate) {
+      if (mode === "all") {
+        params.set("mode", "all");
+      } else if (selectedDate) {
         params.set("date", selectedDate);
-      } else {
-        params.set("range", range);
       }
       const res = await api<DecisionsResponse>(`/decisions?${params.toString()}`);
       setData(res);
@@ -75,11 +79,34 @@ export default function DecisionsPage() {
     } finally {
       setBusy(false);
     }
-  }, [range, selectedDate]);
+  }, [mode, selectedDate]);
+
+  const loadDrafts = useCallback(async () => {
+    if (mode === "all") {
+      setDrafts([]);
+      setDraftsBusy(false);
+      setDraftsError(null);
+      return;
+    }
+    setDraftsBusy(true);
+    setDraftsError(null);
+    try {
+      const response = await listDecisionDrafts({ date: selectedDate, status: "NEW" });
+      setDrafts(response.drafts);
+    } catch (e: unknown) {
+      setDraftsError(e instanceof Error ? e.message : "Failed to load drafts");
+    } finally {
+      setDraftsBusy(false);
+    }
+  }, [mode, selectedDate]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void loadDrafts();
+  }, [loadDrafts]);
 
   async function updateStatus(id: string, status: DecisionStatus) {
     setBusy(true);
@@ -97,8 +124,39 @@ export default function DecisionsPage() {
     }
   }
 
+  async function handleDismiss(draftId: string) {
+    setDraftActionId(draftId);
+    try {
+      await dismissDraft(draftId);
+      await loadDrafts();
+    } catch (e: unknown) {
+      setDraftsError(e instanceof Error ? e.message : "Failed to dismiss draft");
+    } finally {
+      setDraftActionId(null);
+    }
+  }
+
+  async function handlePromote(draftId: string) {
+    setDraftActionId(draftId);
+    try {
+      await promoteDraft(draftId);
+      await Promise.all([load(), loadDrafts()]);
+    } catch (e: unknown) {
+      setDraftsError(e instanceof Error ? e.message : "Failed to promote draft");
+    } finally {
+      setDraftActionId(null);
+    }
+  }
+
+  function shiftDate(days: number) {
+    const base = selectedDate ? parseISO(selectedDate) : new Date();
+    const next = addDays(base, days);
+    setSelectedDate(format(next, "yyyy-MM-dd"));
+    setMode("daily");
+  }
+
   const decisions = data?.decisions ?? [];
-  const hasDayFilter = Boolean(selectedDate) || range === "today";
+  const hasDayFilter = mode !== "all";
   const emptyTitle = hasDayFilter ? "No decisions for this day" : "No decisions yet";
   const emptyDescription = hasDayFilter
     ? "Try another date or switch to all time."
@@ -130,10 +188,14 @@ export default function DecisionsPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <Tabs
-          value={range}
+          value={mode === "all" ? "all" : "today"}
           onValueChange={(value) => {
-            setRange(value as "today" | "all");
-            setSelectedDate("");
+            if (value === "all") {
+              setMode("all");
+            } else {
+              setMode("daily");
+              setSelectedDate(format(new Date(), "yyyy-MM-dd"));
+            }
           }}
         >
           <TabsList>
@@ -143,24 +205,47 @@ export default function DecisionsPage() {
         </Tabs>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-muted-foreground">Date</span>
-          <Input
-            type="date"
-            value={selectedDate}
-            onChange={(event) => setSelectedDate(event.target.value)}
-            className="w-[160px]"
-          />
-          {selectedDate && (
+          <div className="flex items-center gap-1">
             <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setSelectedDate("");
-                setRange("today");
-              }}
+              variant="outline"
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => shiftDate(-1)}
+              disabled={mode === "all"}
             >
-              Clear date
+              <ChevronLeft className="h-4 w-4" />
             </Button>
-          )}
+            <Input
+              type="date"
+              value={selectedDate}
+              onChange={(event) => {
+                setSelectedDate(event.target.value);
+                setMode("daily");
+              }}
+              className="w-[160px]"
+              disabled={mode === "all"}
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => shiftDate(1)}
+              disabled={mode === "all"}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSelectedDate(format(new Date(), "yyyy-MM-dd"));
+              setMode("daily");
+            }}
+            disabled={mode === "all"}
+          >
+            Today
+          </Button>
         </div>
       </div>
 
@@ -177,6 +262,85 @@ export default function DecisionsPage() {
 
       {/* Loading state */}
       {busy && !data && <LoadingState message="Loading decisions..." />}
+
+      {mode !== "all" && (
+        <Card className="mb-6">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Inbox className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Inbox</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {draftsBusy && <LoadingState message="Loading drafts..." />}
+            {!draftsBusy && draftsError && (
+              <div className="p-6">
+                <ErrorState message={draftsError} onRetry={loadDrafts} />
+              </div>
+            )}
+            {!draftsBusy && !draftsError && drafts.length === 0 ? (
+              <div className="p-6">
+                <EmptyState
+                  title="No new drafts today"
+                  description="Signals without action-ready drafts will appear here."
+                  icon={<Inbox className="h-6 w-6 text-muted-foreground" />}
+                />
+              </div>
+            ) : (
+              !draftsBusy &&
+              !draftsError && (
+                <div className="divide-y divide-border">
+                  {drafts.map((draft) => (
+                    <div key={draft.id} className="p-6 space-y-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <h3 className="text-base font-semibold">{draft.title}</h3>
+                          <p className="text-sm text-muted-foreground">{draft.rationale}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {draft.signalIds.length} signals
+                          </p>
+                        </div>
+                        {typeof draft.confidence === "number" && (
+                          <span className="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-semibold">
+                            {Math.round(draft.confidence)}% confidence
+                          </span>
+                        )}
+                      </div>
+                      <details className="rounded-md border border-border/60 px-3 py-2">
+                        <summary className="cursor-pointer text-sm font-medium">
+                          Recommended actions ({draft.recommendedActions.length})
+                        </summary>
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                          {draft.recommendedActions.map((action, index) => (
+                            <li key={`${draft.id}-action-${index}`}>{action}</li>
+                          ))}
+                        </ul>
+                      </details>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDismiss(draft.id)}
+                          disabled={draftActionId === draft.id}
+                        >
+                          Dismiss
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handlePromote(draft.id)}
+                          disabled={draftActionId === draft.id}
+                        >
+                          Promote
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Decisions table */}
       {!busy && !error && (
