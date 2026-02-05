@@ -18,6 +18,7 @@ import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+const legacyUiEnabled = import.meta.env.VITE_FEATURE_LEGACY_UI === "true";
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -47,9 +48,29 @@ const App = () => (
               }
             >
               <Route index element={<Dashboard />} />
-              <Route path="weekly-focus" element={<WeeklyFocusPage />} />
+              <Route
+                path="weekly-focus"
+                element={
+                  legacyUiEnabled ? (
+                    <WeeklyFocusPage />
+                  ) : (
+                    <Navigate to="/dashboard/seo-focus" replace />
+                  )
+                }
+              />
+              <Route path="seo-focus" element={<WeeklyFocusPage />} />
               <Route path="decisions" element={<DecisionsPage />} />
-              <Route path="keywords" element={<KeywordsPage />} />
+              <Route path="decision-drafts" element={<DecisionsPage defaultView="drafts" />} />
+              <Route
+                path="keywords"
+                element={
+                  legacyUiEnabled ? (
+                    <KeywordsPage />
+                  ) : (
+                    <Navigate to="/dashboard/signals" replace />
+                  )
+                }
+              />
               <Route path="signals" element={<SignalsPage />} />
               <Route path="products" element={<ProductsPage />} />
               <Route path="settings" element={<SettingsPage />} />

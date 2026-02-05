@@ -51,7 +51,13 @@ type DecisionsResponse = {
   decisions: Decision[];
 };
 
-export default function DecisionsPage() {
+type DecisionsPageProps = {
+  defaultView?: "log" | "drafts";
+};
+
+export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProps) {
+  const showLog = defaultView === "log";
+  const showDrafts = defaultView === "drafts";
   const [data, setData] = useState<DecisionsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -101,12 +107,14 @@ export default function DecisionsPage() {
   }, [mode, selectedDate]);
 
   useEffect(() => {
+    if (!showLog) return;
     void load();
-  }, [load]);
+  }, [load, showLog]);
 
   useEffect(() => {
+    if (!showDrafts) return;
     void loadDrafts();
-  }, [loadDrafts]);
+  }, [loadDrafts, showDrafts]);
 
   async function updateStatus(id: string, status: DecisionStatus) {
     setBusy(true);
@@ -160,7 +168,7 @@ export default function DecisionsPage() {
   const emptyTitle = hasDayFilter ? "No decisions for this day" : "No decisions yet";
   const emptyDescription = hasDayFilter
     ? "Try another date or switch to all time."
-    : "Decisions you create from Weekly Focus will appear here.";
+    : "Decisions you create from SEO Focus will appear here.";
 
   // Group decisions by status for summary
   const statusCounts = decisions.reduce((acc, d) => {
@@ -171,38 +179,46 @@ export default function DecisionsPage() {
   return (
     <div className="animate-fade-in">
       <PageHeader 
-        title="Decision Log" 
-        description="Track and manage your product decisions"
+        title={showDrafts ? "Decision Drafts" : "Decision Log"} 
+        description={
+          showDrafts
+            ? "Review signal-driven drafts before promoting to the log."
+            : "Track and manage your product decisions"
+        }
       >
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={load} 
-          disabled={busy}
-          className="gap-2"
-        >
-          <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        {showLog && (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={load} 
+            disabled={busy}
+            className="gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        )}
       </PageHeader>
 
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <Tabs
-          value={mode === "all" ? "all" : "today"}
-          onValueChange={(value) => {
-            if (value === "all") {
-              setMode("all");
-            } else {
-              setMode("daily");
-              setSelectedDate(format(new Date(), "yyyy-MM-dd"));
-            }
-          }}
-        >
-          <TabsList>
-            <TabsTrigger value="today">Today</TabsTrigger>
-            <TabsTrigger value="all">All time</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {showLog && (
+          <Tabs
+            value={mode === "all" ? "all" : "today"}
+            onValueChange={(value) => {
+              if (value === "all") {
+                setMode("all");
+              } else {
+                setMode("daily");
+                setSelectedDate(format(new Date(), "yyyy-MM-dd"));
+              }
+            }}
+          >
+            <TabsList>
+              <TabsTrigger value="today">Today</TabsTrigger>
+              <TabsTrigger value="all">All time</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-muted-foreground">Date</span>
           <div className="flex items-center gap-1">
@@ -250,20 +266,22 @@ export default function DecisionsPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <SummaryCard label="Total" value={decisions.length} />
-        <SummaryCard label="Planned" value={statusCounts.PLANNED || 0} variant="info" />
-        <SummaryCard label="Executed" value={statusCounts.EXECUTED || 0} variant="success" />
-        <SummaryCard label="Measured" value={statusCounts.MEASURED || 0} variant="primary" />
-      </div>
+      {showLog && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          <SummaryCard label="Total" value={decisions.length} />
+          <SummaryCard label="Planned" value={statusCounts.PLANNED || 0} variant="info" />
+          <SummaryCard label="Executed" value={statusCounts.EXECUTED || 0} variant="success" />
+          <SummaryCard label="Measured" value={statusCounts.MEASURED || 0} variant="primary" />
+        </div>
+      )}
 
       {/* Error state */}
-      {error && <ErrorState message={error} onRetry={load} />}
+      {showLog && error && <ErrorState message={error} onRetry={load} />}
 
       {/* Loading state */}
-      {busy && !data && <LoadingState message="Loading decisions..." />}
+      {showLog && busy && !data && <LoadingState message="Loading decisions..." />}
 
-      {mode !== "all" && (
+      {showDrafts && mode !== "all" && (
         <Card className="mb-6">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
@@ -343,7 +361,7 @@ export default function DecisionsPage() {
       )}
 
       {/* Decisions table */}
-      {!busy && !error && (
+      {showLog && !busy && !error && (
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">

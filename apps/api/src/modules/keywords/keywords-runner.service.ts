@@ -11,6 +11,7 @@ import {
     getGoogleAdsCredentials,
     getGoogleAdsStatus,
 } from "../settings/keyword-provider-settings.service.js";
+import { isLegacyEngineEnabled } from "../legacy/legacy-flags.js";
 
 const trendsProvider = new GoogleTrendsKeywordResearchProvider();
 const runningKeywordJobs = new Map<string, boolean>();
@@ -38,6 +39,10 @@ function buildResultJson(suggestion: KeywordSuggestion) {
 }
 
 export async function runKeywordJob(jobId: string, options?: { force?: boolean }) {
+    if (!isLegacyEngineEnabled()) {
+        throw new AppError(410, "LEGACY_ENGINE_DISABLED", "Legacy engine disabled.");
+    }
+
     if (runningKeywordJobs.get(jobId)) {
         throw new AppError(409, "JOB_ALREADY_RUNNING", "Job is already running.");
     }

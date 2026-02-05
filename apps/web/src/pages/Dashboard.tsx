@@ -70,10 +70,10 @@ export default function Dashboard() {
       setWeeklyFocusLoading(true);
       setWeeklyFocusError(null);
       try {
-        const response = await api<WeeklyFocusResponse>("/weekly-focus?limit=3");
+        const response = await api<WeeklyFocusResponse>("/v1/weekly-focus?limit=3");
         setWeeklyFocus(response.items ?? []);
       } catch (e: unknown) {
-        setWeeklyFocusError(e instanceof Error ? e.message : "Failed to load weekly focus");
+        setWeeklyFocusError(e instanceof Error ? e.message : "Failed to load SEO focus");
       } finally {
         setWeeklyFocusLoading(false);
       }
@@ -109,9 +109,9 @@ export default function Dashboard() {
           icon={Package}
         />
         <KPICard
-          title="Weekly Focus Items"
+          title="SEO Focus Items"
           value={kpisLoading ? "—" : kpis.weeklyFocusItems}
-          description="Prioritized actions"
+          description="Bi-weekly actions"
           icon={Target}
           variant="highlight"
         />
@@ -131,16 +131,16 @@ export default function Dashboard() {
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* This Week's Focus - Takes 2 columns */}
+        {/* SEO Focus - Takes 2 columns */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Target className="h-5 w-5 text-primary" />
-                <CardTitle className="text-lg">This Week's Focus</CardTitle>
+                <CardTitle className="text-lg">SEO Focus</CardTitle>
               </div>
               <Link
-                to="/dashboard/weekly-focus"
+                to="/dashboard/seo-focus"
                 className="text-sm text-primary hover:underline"
               >
                 View all →
@@ -150,14 +150,14 @@ export default function Dashboard() {
           <CardContent>
             <div className="space-y-3">
               {weeklyFocusLoading && (
-                <p className="text-sm text-muted-foreground">Loading weekly focus…</p>
+                <p className="text-sm text-muted-foreground">Loading SEO focus…</p>
               )}
               {!weeklyFocusLoading && weeklyFocusError && (
                 <p className="text-sm text-destructive">{weeklyFocusError}</p>
               )}
               {!weeklyFocusLoading && !weeklyFocusError && weeklyFocus.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  No promoted signals yet. Promote keywords to generate weekly actions.
+                  No promoted signals yet. Promote keywords to generate SEO focus actions.
                 </p>
               )}
               {weeklyFocus.map((item) => (
@@ -203,15 +203,15 @@ export default function Dashboard() {
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Link
-                to="/dashboard/weekly-focus"
+                to="/dashboard/seo-focus"
                 className="flex items-center gap-3 p-4 rounded-lg border border-border hover:bg-accent transition-colors"
               >
                 <div className="p-2 rounded-lg bg-primary/10">
                   <Target className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <p className="font-medium text-foreground">Weekly Focus</p>
-                  <p className="text-sm text-muted-foreground">View prioritized actions</p>
+                  <p className="font-medium text-foreground">SEO Focus</p>
+                  <p className="text-sm text-muted-foreground">View bi-weekly actions</p>
                 </div>
               </Link>
               <Link

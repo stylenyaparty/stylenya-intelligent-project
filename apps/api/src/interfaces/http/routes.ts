@@ -20,7 +20,8 @@ import {
     SetupAlreadyCompletedError,
 } from "../../application/use-cases/create-initial-admin";
 
-import { requireAuth, requireRole } from "./middleware/auth.js"; 
+import { requireAuth, requireRole } from "./middleware/auth.js";
+import { requireLegacyEnabled } from "./middleware/legacy.js";
 
 import { RecommendWeeklyFocusUseCase } from "../../application/use-cases/recommend-weekly-focus.js";
 import { PrismaDecisionLogRepository } from "../../infrastructure/repositories/prisma-decision-log-repository";
@@ -87,7 +88,7 @@ export async function registerRoutes(app: FastifyInstance) {
     
     app.get(
         "/decisions/weekly-focus/latest",
-        { preHandler: [requireAuth, requireRole("ADMIN")] },
+        { preHandler: [requireAuth, requireRole("ADMIN"), requireLegacyEnabled] },
         async () => {
             const row = await decisionLogRepo.findLatest("v1");
             return { ok: true, decisionLog: row };
@@ -126,7 +127,7 @@ export async function registerRoutes(app: FastifyInstance) {
 
     app.post(
         "/decisions/weekly-focus/generate",
-        { preHandler: [requireAuth, requireRole("ADMIN")] },
+        { preHandler: [requireAuth, requireRole("ADMIN"), requireLegacyEnabled] },
         async (request, reply) => {
             const row = await generateWeeklySnapshot.execute();
             return reply.code(201).send({ ok: true, decisionLog: row });

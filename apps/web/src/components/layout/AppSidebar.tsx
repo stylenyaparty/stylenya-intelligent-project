@@ -7,6 +7,7 @@ import {
   Package,
   Settings,
   Radar,
+  Inbox,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -22,6 +23,8 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
+const legacyUiEnabled = import.meta.env.VITE_FEATURE_LEGACY_UI === "true";
+
 const navigationItems = [
   { 
     title: "Dashboard", 
@@ -30,28 +33,28 @@ const navigationItems = [
     description: "Overview & KPIs"
   },
   { 
-    title: "Weekly Focus", 
-    url: "/dashboard/weekly-focus", 
-    icon: Target,
-    description: "Prioritized actions"
-  },
-  { 
-    title: "Decisions", 
-    url: "/dashboard/decisions", 
-    icon: ClipboardList,
-    description: "Decision log"
-  },
-  { 
-    title: "Keywords", 
-    url: "/dashboard/keywords", 
-    icon: KeyRound,
-    description: "Keyword research"
-  },
-  { 
     title: "Signals", 
     url: "/dashboard/signals", 
     icon: Radar,
-    description: "Keyword signal imports"
+    description: "CSV signal imports"
+  },
+  { 
+    title: "Decision Drafts", 
+    url: "/dashboard/decision-drafts", 
+    icon: Inbox,
+    description: "Review AI drafts"
+  },
+  { 
+    title: "Decision Log", 
+    url: "/dashboard/decisions", 
+    icon: ClipboardList,
+    description: "Daily decision log"
+  },
+  { 
+    title: "SEO Focus", 
+    url: "/dashboard/seo-focus", 
+    icon: Target,
+    description: "Bi-weekly plan"
   },
   { 
     title: "Products", 
@@ -66,6 +69,17 @@ const navigationItems = [
     description: "Preferences & integrations"
   },
 ];
+
+const legacyItems = legacyUiEnabled
+  ? [
+      { 
+        title: "Keyword Jobs", 
+        url: "/dashboard/keywords", 
+        icon: KeyRound,
+        description: "Legacy keyword research"
+      },
+    ]
+  : [];
 
 export function AppSidebar() {
   const location = useLocation();
@@ -129,6 +143,37 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        {legacyItems.length > 0 && (
+          <SidebarGroup className="mt-4">
+            <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+              Legacy
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="space-y-1">
+                {legacyItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton 
+                      asChild
+                      isActive={isActive(item.url)}
+                      tooltip={isCollapsed ? item.title : undefined}
+                    >
+                      <NavLink 
+                        to={item.url} 
+                        className="flex items-center gap-3 px-3 py-2 rounded-md transition-colors hover:bg-sidebar-accent"
+                        activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                      >
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        {!isCollapsed && (
+                          <span className="truncate">{item.title}</span>
+                        )}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
     </Sidebar>
   );
