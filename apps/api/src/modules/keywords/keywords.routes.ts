@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../../interfaces/http/middleware/auth";
+import { requireLegacyEnabled } from "../../interfaces/http/middleware/legacy";
 import {
     keywordJobCreateSchema,
     keywordJobListQuerySchema,
@@ -25,12 +26,14 @@ import { runKeywordJob } from "./keywords-runner.service";
 import { isAppError } from "../../types/app-error.js";
 
 export async function keywordsRoutes(app: FastifyInstance) {
-    app.get("/keyword-seeds/count", { preHandler: requireAuth }, async () => {
+    const legacyPreHandler = [requireAuth, requireLegacyEnabled];
+
+    app.get("/keyword-seeds/count", { preHandler: legacyPreHandler }, async () => {
         const count = await countActiveKeywordSeeds();
         return { count };
     });
 
-    app.post("/keywords/seeds", { preHandler: requireAuth }, async (request, reply) => {
+    app.post("/keywords/seeds", { preHandler: legacyPreHandler }, async (request, reply) => {
         try {
             const body = keywordSeedCreateSchema.parse(request.body);
             const result = await createKeywordSeeds(body);
@@ -40,14 +43,17 @@ export async function keywordsRoutes(app: FastifyInstance) {
         }
     });
 
-    app.get("/keywords/seeds", { preHandler: requireAuth }, async (request) => {
+    app.get("/keywords/seeds", { preHandler: legacyPreHandler }, async (request) => {
         const query = keywordSeedListQuerySchema.safeParse(request.query);
         const status = query.success ? query.data.status : undefined;
         const seeds = await listKeywordSeeds(status);
         return { ok: true, seeds };
     });
 
-    app.patch("/keywords/seeds/:id", { preHandler: requireAuth }, async (request, reply) => {
+    app.patch(
+        "/keywords/seeds/:id",
+        { preHandler: legacyPreHandler },
+        async (request, reply) => {
         try {
             const params = request.params as { id: string };
             const body = keywordSeedStatusSchema.parse((request.body as { status: string }).status);
@@ -58,7 +64,7 @@ export async function keywordsRoutes(app: FastifyInstance) {
         }
     });
 
-    app.post("/keywords/jobs", { preHandler: requireAuth }, async (request, reply) => {
+    app.post("/keywords/jobs", { preHandler: legacyPreHandler }, async (request, reply) => {
         try {
             const parsed = keywordJobCreateSchema.safeParse(request.body);
             if (!parsed.success) {
@@ -96,7 +102,7 @@ export async function keywordsRoutes(app: FastifyInstance) {
         }
     });
 
-    app.get("/keywords/jobs", { preHandler: requireAuth }, async (request, reply) => {
+    app.get("/keywords/jobs", { preHandler: legacyPreHandler }, async (request, reply) => {
         const query = keywordJobListQuerySchema.safeParse(request.query);
         if (!query.success) {
             return reply.code(400).send({ error: "Invalid job list query" });
@@ -106,7 +112,7 @@ export async function keywordsRoutes(app: FastifyInstance) {
         return reply.send({ ok: true, jobs });
     });
 
-    app.get("/keywords/jobs/:id", { preHandler: requireAuth }, async (request, reply) => {
+    app.get("/keywords/jobs/:id", { preHandler: legacyPreHandler }, async (request, reply) => {
         const params = request.params as { id: string };
         const job = await getKeywordJob(params.id);
         if (!job) {
@@ -117,7 +123,7 @@ export async function keywordsRoutes(app: FastifyInstance) {
 
     app.get(
         "/keywords/jobs/:id/items",
-        { preHandler: requireAuth },
+        { preHandler: legacyPreHandler },
         async (request, reply) => {
             const params = request.params as { id: string };
             const job = await getKeywordJob(params.id);
@@ -131,7 +137,7 @@ export async function keywordsRoutes(app: FastifyInstance) {
 
     app.post(
         "/keywords/jobs/:id/run",
-        { preHandler: requireAuth },
+        { preHandler: legacyPreHandler },
         async (request, reply) => {
             const params = request.params as { id: string };
             const query = request.query as { force?: string | boolean };
@@ -160,7 +166,7 @@ export async function keywordsRoutes(app: FastifyInstance) {
 
     app.post(
         "/keywords/jobs/:id/archive",
-        { preHandler: requireAuth },
+        { preHandler: legacyPreHandler },
         async (request, reply) => {
             const params = request.params as { id: string };
             const job = await getKeywordJob(params.id);
@@ -183,7 +189,7 @@ export async function keywordsRoutes(app: FastifyInstance) {
 
     app.post(
         "/keywords/jobs/:id/restore",
-        { preHandler: requireAuth },
+        { preHandler: legacyPreHandler },
         async (request, reply) => {
             const params = request.params as { id: string };
             const job = await getKeywordJob(params.id);
@@ -201,7 +207,7 @@ export async function keywordsRoutes(app: FastifyInstance) {
 
     app.post(
         "/keywords/job-items/:id/promote",
-        { preHandler: requireAuth },
+        { preHandler: legacyPreHandler },
         async (request, reply) => {
             const params = request.params as { id: string };
             const result = await promoteKeywordJobItem(params.id);
@@ -221,7 +227,7 @@ export async function keywordsRoutes(app: FastifyInstance) {
         }
     );
 
-    app.get("/keywords/promoted", { preHandler: requireAuth }, async () => {
+    app.get("/keywords/promoted", { preHandler: legacyPreHandler }, async () => {
         const signals = await listPromotedKeywordSignals();
         return {
             ok: true,

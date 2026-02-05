@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { requireLegacyEnabled } from "../middleware/legacy";
 import { RecommendWeeklyFocusUseCase } from "../../../application/use-cases/recommend-weekly-focus.js";
 
 export async function recommendationsRoutes(app: FastifyInstance) {
@@ -7,7 +8,7 @@ export async function recommendationsRoutes(app: FastifyInstance) {
 
     app.get(
         "/recommendations/weekly-focus",
-        { preHandler: [requireAuth, requireRole("ADMIN")] },
+        { preHandler: [requireAuth, requireRole("ADMIN"), requireLegacyEnabled] },
         async (req, reply) => {
             const q = req.query as { limit?: string };
             const parsed = q.limit ? Number(q.limit) : undefined;
