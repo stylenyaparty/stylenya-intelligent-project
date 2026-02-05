@@ -23,9 +23,9 @@ ALTER TABLE "KeywordSignal"
 
 ALTER TABLE "KeywordSignal" DROP COLUMN "capturedAt";
 
-DROP INDEX "KeywordSignal_termNormalized_idx";
-DROP INDEX "KeywordSignal_source_capturedAt_idx";
-DROP INDEX "KeywordSignal_batchId_termNormalized_geo_language_key";
+DROP INDEX IF EXISTS "KeywordSignal_termNormalized_idx";
+DROP INDEX IF EXISTS "KeywordSignal_source_capturedAt_idx";
+DROP INDEX IF EXISTS "KeywordSignal_batchId_termNormalized_geo_language_key";
 
 CREATE INDEX "KeywordSignal_keywordNormalized_idx" ON "KeywordSignal"("keywordNormalized");
 CREATE INDEX "KeywordSignal_source_createdAt_idx" ON "KeywordSignal"("source", "createdAt");
