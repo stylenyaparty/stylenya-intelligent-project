@@ -75,7 +75,7 @@ export default function WeeklyFocusPage() {
     setError(null);
     try {
       const [weeklyFocus, decisions] = await Promise.all([
-        api<WeeklyFocusResponse>(`/weekly-focus?limit=${limit}`),
+        api<WeeklyFocusResponse>(`/v1/weekly-focus?limit=${limit}`),
         api<DecisionsResponse>(`/decisions?limit=200&mode=all`),
       ]);
 
@@ -139,8 +139,8 @@ export default function WeeklyFocusPage() {
   return (
     <div className="animate-fade-in">
       <PageHeader
-        title="Weekly Focus"
-        description="Prioritized actions based on promoted keyword signals"
+        title="SEO Focus"
+        description="Bi-weekly focus plan based on promoted keyword signals"
       >
         <Select value={limit} onValueChange={setLimit}>
           <SelectTrigger className="w-[100px]">
@@ -172,7 +172,7 @@ export default function WeeklyFocusPage() {
 
       {error && <ErrorState message={error} onRetry={load} />}
 
-      {busy && !data && <LoadingState message="Loading weekly focus..." />}
+      {busy && !data && <LoadingState message="Loading SEO focus..." />}
 
       {!busy && !error && (
         <div className="space-y-6">
@@ -180,7 +180,7 @@ export default function WeeklyFocusPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
                 <Target className="h-5 w-5 text-primary" />
-                <CardTitle className="text-lg">Weekly Focus Actions</CardTitle>
+                <CardTitle className="text-lg">SEO Focus Actions</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="p-0">

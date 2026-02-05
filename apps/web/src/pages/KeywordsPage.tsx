@@ -1060,7 +1060,7 @@ export default function KeywordsPage() {
                     <SelectValue placeholder="Select provider" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border border-border shadow-lg">
-                    <SelectItem value="TRENDS">Google Trends</SelectItem>
+                    <SelectItem value="TRENDS">Google Trends (Legacy)</SelectItem>
                     <SelectItem value="AUTO">AUTO</SelectItem>
                     <SelectItem value="GOOGLE_ADS" disabled={!googleAdsConfigured}>
                       Google Ads
@@ -1070,7 +1070,7 @@ export default function KeywordsPage() {
                 <p className="text-sm text-muted-foreground">
                   {loadingProviders
                     ? "Loading provider settings..."
-                    : "Google Trends is the default. Google Ads requires setup."}
+                    : "Google Trends is a legacy default. Google Ads requires setup."}
                 </p>
               </div>
               <div className="grid gap-2">
