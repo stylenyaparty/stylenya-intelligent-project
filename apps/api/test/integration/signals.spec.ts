@@ -42,13 +42,13 @@ describe("Signals API", () => {
         const csv = await fs.readFile(csvPath);
 
         const response = await request
-            .post(apiPath("/signal-batches/gkp-csv"))
+            .post(apiPath("/signals/upload"))
             .set(headers)
             .attach("file", csv, "gkp-simple.csv")
             .expect(200);
 
-        expect(response.body.importedCount).toBeGreaterThan(0);
-        expect(response.body.skippedDuplicatesCount).toBe(0);
+        expect(response.body.importedRows).toBeGreaterThan(0);
+        expect(response.body.skippedRows).toBe(0);
         expect(response.body.batch.source).toBe("GKP_CSV");
     });
 
@@ -58,24 +58,47 @@ describe("Signals API", () => {
         const csv = await fs.readFile(csvPath);
 
         const response = await request
-            .post(apiPath("/signal-batches/gkp-csv"))
+            .post(apiPath("/signals/upload"))
             .set(headers)
             .attach("file", csv, "gkp-duplicates.csv")
             .expect(200);
 
-        expect(response.body.skippedDuplicatesCount).toBeGreaterThan(0);
+        expect(response.body.skippedRows).toBeGreaterThan(0);
+    });
+
+    it("imports UTF-16 tab separated GKP CSV", async () => {
+        const headers = await authHeader();
+        const utf16Payload = [
+            "Keyword Stats 2025-02-01",
+            "Location: United States",
+            "Keyword\tAvg. monthly searches\tCompetition\tCompetition (indexed value)\tTop of page bid (low range)\tTop of page bid (high range)\tThree month change\tYoY change\tCurrency\tSearches: Jan 2025\tSearches: Feb 2025",
+            "cafe mug\t1,200\tLow\t12\t0.4\t1.1\t-90%\t20%\tUSD\t1100\t1300",
+            "tea cup\t<10\tHigh\t80\t1.2\t2.4\t5%\t-10%\tUSD\t5\t8",
+        ].join("\n");
+        const csv = Buffer.from(utf16Payload, "utf16le");
+
+        const response = await request
+            .post(apiPath("/signals/upload"))
+            .set(headers)
+            .attach("file", csv, "gkp-utf16.csv")
+            .expect(200);
+
+        expect(response.body.importedRows).toBeGreaterThan(0);
+        expect(response.body.batch.columnsDetected.length).toBeGreaterThan(0);
     });
 
     it("lists signal batches", async () => {
         const headers = await authHeader();
 
         await request
-            .post(apiPath("/signal-batches/gkp-csv"))
+            .post(apiPath("/signals/upload"))
             .set(headers)
             .attach(
                 "file",
                 Buffer.from(
                     [
+                        "Keyword Stats 2025-01-01",
+                        "Location: United States",
                         "Keyword,Avg. monthly searches,Competition,Top of page bid (low range),Top of page bid (high range)",
                         "batch seed,111,LOW,0.4,0.9",
                     ].join("\n")
@@ -85,7 +108,7 @@ describe("Signals API", () => {
             .expect(200);
 
         const response = await request
-            .get(apiPath("/signal-batches"))
+            .get(apiPath("/signals/batches"))
             .set(headers)
             .expect(200);
 
@@ -95,12 +118,14 @@ describe("Signals API", () => {
     it("lists signals for a batch", async () => {
         const headers = await authHeader();
         const importResponse = await request
-            .post(apiPath("/signal-batches/gkp-csv"))
+            .post(apiPath("/signals/upload"))
             .set(headers)
             .attach(
                 "file",
                 Buffer.from(
                     [
+                        "Keyword Stats 2025-01-01",
+                        "Location: United States",
                         "Keyword,Avg. monthly searches,Competition,Top of page bid (low range),Top of page bid (high range)",
                         "trend hat,111,LOW,0.4,0.9",
                     ].join("\n")
@@ -120,11 +145,34 @@ describe("Signals API", () => {
         expect(response.body.signals[0].batchId).toBe(batchId);
     });
 
+    it("returns 400 when keyword column is missing", async () => {
+        const headers = await authHeader();
+
+        const response = await request
+            .post(apiPath("/signals/upload"))
+            .set(headers)
+            .attach(
+                "file",
+                Buffer.from(
+                    [
+                        "Keyword Stats 2025-01-01",
+                        "Location: United States",
+                        "Phrase,Avg. monthly searches",
+                        "no keyword,123",
+                    ].join("\n")
+                ),
+                "gkp-missing-keyword.csv"
+            )
+            .expect(400);
+
+        expect(response.body.message).toContain("keyword");
+    });
+
     it("returns 400 when file is missing", async () => {
         const headers = await authHeader();
 
         await request
-            .post(apiPath("/signal-batches/gkp-csv"))
+            .post(apiPath("/signals/upload"))
             .set(headers)
             .expect(400);
     });

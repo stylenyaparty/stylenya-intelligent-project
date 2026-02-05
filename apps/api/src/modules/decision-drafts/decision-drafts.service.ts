@@ -6,6 +6,28 @@ import { generateDecisionDrafts } from "../llm/llm.service.js";
 
 const MAX_SIGNALS = 20;
 
+function summarizeSeasonality(
+    monthlySearches?: Record<string, number> | null
+): { bestMonth: string; worstMonth: string; trend: string } | null {
+    if (!monthlySearches || Object.keys(monthlySearches).length === 0) return null;
+    const entries = Object.entries(monthlySearches).sort(([a], [b]) => a.localeCompare(b));
+    if (entries.length === 0) return null;
+
+    let best = entries[0];
+    let worst = entries[0];
+    for (const entry of entries) {
+        if (entry[1] > best[1]) best = entry;
+        if (entry[1] < worst[1]) worst = entry;
+    }
+
+    const first = entries[0][1];
+    const last = entries[entries.length - 1][1];
+    const delta = last - first;
+    const trend = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
+
+    return { bestMonth: best[0], worstMonth: worst[0], trend };
+}
+
 function resolveCreatedDate(date?: string) {
     const range = getDecisionDateRange(
         date ? { date } : { now: new Date() }
@@ -21,7 +43,7 @@ async function fetchSignals(input: { batchId?: string; signalIds?: string[] }) {
         input.signalIds && input.signalIds.length > 0
             ? await prisma.keywordSignal.findMany({
                 where: { id: { in: input.signalIds } },
-                orderBy: { capturedAt: "desc" },
+                orderBy: { createdAt: "desc" },
                 take: MAX_SIGNALS,
             })
             : [];
@@ -30,7 +52,7 @@ async function fetchSignals(input: { batchId?: string; signalIds?: string[] }) {
         const remaining = MAX_SIGNALS - byId.length;
         const batchSignals = await prisma.keywordSignal.findMany({
             where: { batchId: input.batchId },
-            orderBy: { capturedAt: "desc" },
+            orderBy: { createdAt: "desc" },
             take: remaining,
         });
         const existingIds = new Set(byId.map((signal) => signal.id));
@@ -58,16 +80,23 @@ export async function createDecisionDrafts(input: {
 
     const payloadSignals = signals.map((signal) => ({
         id: signal.id,
-        term: signal.term,
-        termNormalized: signal.termNormalized,
+        keyword: signal.keyword,
+        keywordNormalized: signal.keywordNormalized,
         source: signal.source,
         geo: signal.geo,
         language: signal.language,
-        capturedAt: signal.capturedAt.toISOString(),
+        createdAt: signal.createdAt.toISOString(),
         avgMonthlySearches: signal.avgMonthlySearches,
-        competition: signal.competition,
-        topOfPageBidLow: signal.topOfPageBidLow,
-        topOfPageBidHigh: signal.topOfPageBidHigh,
+        competitionLevel: signal.competitionLevel,
+        competitionIndex: signal.competitionIndex,
+        cpcLow: signal.cpcLow,
+        cpcHigh: signal.cpcHigh,
+        change3mPct: signal.change3mPct,
+        changeYoYPct: signal.changeYoYPct,
+        currency: signal.currency,
+        seasonality: summarizeSeasonality(
+            signal.monthlySearchesJson as Record<string, number> | null
+        ),
     }));
 
     const output = await generateDecisionDrafts({
