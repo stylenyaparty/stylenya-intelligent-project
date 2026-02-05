@@ -19,19 +19,26 @@ type SignalBatch = {
   source: string;
   filename?: string | null;
   status: string;
-  rowCount: number;
+  totalRows: number;
+  importedRows: number;
+  skippedRows: number;
+  warnings?: string[] | null;
+  uploadedAt: string;
   createdAt: string;
 };
 
 type KeywordSignal = {
   id: string;
   batchId: string;
-  term: string;
+  keyword: string;
   avgMonthlySearches?: number | null;
-  competition?: string | null;
-  topOfPageBidLow?: number | null;
-  topOfPageBidHigh?: number | null;
-  capturedAt: string;
+  competitionLevel?: string | null;
+  cpcLow?: number | null;
+  cpcHigh?: number | null;
+  change3mPct?: number | null;
+  changeYoYPct?: number | null;
+  currency?: string | null;
+  createdAt: string;
   source: string;
 };
 
@@ -47,8 +54,9 @@ type SignalResponse = {
 
 type UploadResponse = {
   batch: SignalBatch;
-  importedCount: number;
-  skippedDuplicatesCount: number;
+  importedRows: number;
+  skippedRows: number;
+  warnings?: string[];
 };
 
 export default function SignalsPage() {
@@ -83,7 +91,7 @@ export default function SignalsPage() {
     setLoadingBatches(true);
     setError(null);
     try {
-      const response = await api<SignalBatchResponse>("/signal-batches");
+      const response = await api<SignalBatchResponse>("/signals/batches");
       setBatches(response.batches);
       if (!activeBatchId && response.batches.length > 0) {
         setActiveBatchId(response.batches[0].id);
@@ -138,7 +146,7 @@ export default function SignalsPage() {
       const formData = new FormData();
       formData.append("file", uploadFile);
 
-      const response = await fetch(`${API_URL}/signal-batches/gkp-csv`, {
+      const response = await fetch(`${API_URL}/signals/upload`, {
         method: "POST",
         body: formData,
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -149,6 +157,12 @@ export default function SignalsPage() {
         try {
           const body = await response.json();
           message = body.message || body.error || message;
+          if (body.details?.columnsDetected) {
+            const columns = (body.details.columnsDetected as string[]).slice(0, 6).join(", ");
+            message = `${message} Detected headers: ${columns}${
+              body.details.columnsDetected.length > 6 ? ", ..." : ""
+            }`;
+          }
         } catch {
           // ignore JSON parse errors
         }
@@ -200,8 +214,7 @@ export default function SignalsPage() {
             <div className="rounded-md border border-border bg-muted p-3 text-sm">
               <div className="font-medium">Last import</div>
               <div className="text-muted-foreground">
-                Imported {uploadResult.importedCount} signals · Skipped{" "}
-                {uploadResult.skippedDuplicatesCount} duplicates
+                Imported {uploadResult.importedRows} signals · Skipped {uploadResult.skippedRows} rows
               </div>
             </div>
           ) : null}
@@ -217,7 +230,10 @@ export default function SignalsPage() {
             {loadingBatches ? (
               <LoadingState message="Loading batches..." />
             ) : batches.length === 0 ? (
-              <EmptyState title="No batches yet" description="Upload a CSV to get started." />
+              <EmptyState
+                title="No batches yet"
+                description="Upload a GKP CSV to get started."
+              />
             ) : (
               <div className="space-y-2">
                 {batches.map((batch) => (
@@ -236,7 +252,8 @@ export default function SignalsPage() {
                       <span className="text-xs text-muted-foreground">{batch.status}</span>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {batch.rowCount} rows · {new Date(batch.createdAt).toLocaleString()}
+                      {batch.importedRows} imported · {batch.skippedRows} skipped ·{" "}
+                      {batch.totalRows} rows · {new Date(batch.uploadedAt).toLocaleString()}
                     </div>
                   </button>
                 ))}
@@ -269,36 +286,37 @@ export default function SignalsPage() {
             ) : loadingSignals ? (
               <LoadingState message="Loading signals..." />
             ) : signals.length === 0 ? (
-              <EmptyState title="No signals found" description="Try another batch or query." />
+              <EmptyState
+                title="No signals found"
+                description={
+                  activeBatchId
+                    ? "Try another batch or query."
+                    : "Upload a GKP CSV to get started."
+                }
+              />
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Term</TableHead>
+                    <TableHead>Keyword</TableHead>
                     <TableHead>Avg. Monthly Searches</TableHead>
                     <TableHead>Competition</TableHead>
-                    <TableHead>Bid Low</TableHead>
-                    <TableHead>Bid High</TableHead>
-                    <TableHead>Captured</TableHead>
+                    <TableHead>Top of page bid</TableHead>
+                    <TableHead>3M Change</TableHead>
+                    <TableHead>YoY Change</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {signals.map((signal) => (
                     <TableRow key={signal.id}>
-                      <TableCell className="font-medium">{signal.term}</TableCell>
+                      <TableCell className="font-medium">{signal.keyword}</TableCell>
                       <TableCell>{signal.avgMonthlySearches ?? "-"}</TableCell>
-                      <TableCell>{signal.competition ?? "-"}</TableCell>
+                      <TableCell>{signal.competitionLevel ?? "-"}</TableCell>
                       <TableCell>
-                        {signal.topOfPageBidLow !== null && signal.topOfPageBidLow !== undefined
-                          ? signal.topOfPageBidLow.toFixed(2)
-                          : "-"}
+                        {formatBidRange(signal.cpcLow, signal.cpcHigh, signal.currency)}
                       </TableCell>
-                      <TableCell>
-                        {signal.topOfPageBidHigh !== null && signal.topOfPageBidHigh !== undefined
-                          ? signal.topOfPageBidHigh.toFixed(2)
-                          : "-"}
-                      </TableCell>
-                      <TableCell>{new Date(signal.capturedAt).toLocaleDateString()}</TableCell>
+                      <TableCell>{formatPercent(signal.change3mPct)}</TableCell>
+                      <TableCell>{formatPercent(signal.changeYoYPct)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -309,4 +327,37 @@ export default function SignalsPage() {
       </div>
     </div>
   );
+}
+
+function formatPercent(value?: number | null) {
+  if (value === null || value === undefined) return "-";
+  return `${(value * 100).toFixed(0)}%`;
+}
+
+function formatCurrency(value?: number | null, currency?: string | null) {
+  if (value === null || value === undefined) return "-";
+  if (!currency) return value.toFixed(2);
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return value.toFixed(2);
+  }
+}
+
+function formatBidRange(
+  low?: number | null,
+  high?: number | null,
+  currency?: string | null
+) {
+  if (low === null || low === undefined) {
+    return high === null || high === undefined ? "-" : formatCurrency(high, currency);
+  }
+  if (high === null || high === undefined) {
+    return formatCurrency(low, currency);
+  }
+  return `${formatCurrency(low, currency)}–${formatCurrency(high, currency)}`;
 }
