@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
-import { createTestServer, getAuthToken, seedAdmin, resetDatabase } from "../helpers.js";
+import { createTestServer, getAuthToken, seedAdmin, resetDatabase, apiPath } from "../helpers.js";
 import { prisma } from "../../src/infrastructure/db/prisma.js";
 
 describe("Keywords API", () => {
@@ -35,13 +35,13 @@ describe("Keywords API", () => {
 
     async function createAutoJob(headers: { Authorization: string }) {
         await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: [`auto seed ${Date.now()}-${Math.random()}`] })
             .expect(201);
 
         const response = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "AUTO",
@@ -58,7 +58,7 @@ describe("Keywords API", () => {
         const headers = await authHeader();
 
         const response = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "AI",
@@ -75,7 +75,7 @@ describe("Keywords API", () => {
         const headers = await authHeader();
 
         const response = await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: [" Party   Decorations ", "party decorations", "Gift Tags"] })
             .expect(201);
@@ -87,7 +87,7 @@ describe("Keywords API", () => {
         );
 
         const second = await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: ["Party Decorations"] })
             .expect(201);
@@ -103,14 +103,14 @@ describe("Keywords API", () => {
         await prisma.keywordSeed.deleteMany();
 
         const emptyCount = await request
-            .get("/keyword-seeds/count")
+            .get(apiPath("/keyword-seeds/count"))
             .set(headers)
             .expect(200);
 
         expect(emptyCount.body.count).toBe(0);
 
         const archivedSeed = await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: ["archived seed"] })
             .expect(201);
@@ -118,20 +118,20 @@ describe("Keywords API", () => {
         const archivedId = archivedSeed.body.created[0].id as string;
 
         await request
-            .patch(`/keywords/seeds/${archivedId}`)
+            .patch(apiPath(`/keywords/seeds/${archivedId}`))
             .set(headers)
             .send({ status: "ARCHIVED" })
             .expect(200);
 
         const archivedCount = await request
-            .get("/keyword-seeds/count")
+            .get(apiPath("/keyword-seeds/count"))
             .set(headers)
             .expect(200);
 
         expect(archivedCount.body.count).toBe(0);
 
         await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "AUTO",
@@ -145,7 +145,7 @@ describe("Keywords API", () => {
             });
 
         await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "HYBRID",
@@ -160,7 +160,7 @@ describe("Keywords API", () => {
             });
 
         const customJob = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "CUSTOM",
@@ -174,13 +174,13 @@ describe("Keywords API", () => {
         expect(customJob.body.job.mode).toBe("CUSTOM");
 
         await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: ["active seed"] })
             .expect(201);
 
         const activeCount = await request
-            .get("/keyword-seeds/count")
+            .get(apiPath("/keyword-seeds/count"))
             .set(headers)
             .expect(200);
 
@@ -191,7 +191,7 @@ describe("Keywords API", () => {
         const headers = await authHeader();
 
         const seeds = await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: ["wedding favors", "bridal shower decor"] })
             .expect(201);
@@ -201,7 +201,7 @@ describe("Keywords API", () => {
         );
 
         const response = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "CUSTOM",
@@ -221,13 +221,13 @@ describe("Keywords API", () => {
         const headers = await authHeader();
 
         await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: [`auto seed ${Date.now()}-${Math.random()}`] })
             .expect(201);
 
         const response = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "AUTO",
@@ -245,13 +245,13 @@ describe("Keywords API", () => {
         const headers = await authHeader();
 
         await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: [`auto seed ${Date.now()}-${Math.random()}`] })
             .expect(201);
 
         const response = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "AUTO",
@@ -275,7 +275,7 @@ describe("Keywords API", () => {
         const headers = await authHeader();
 
         const seeds = await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: ["Party Decorations Banner"] })
             .expect(201);
@@ -285,7 +285,7 @@ describe("Keywords API", () => {
         );
 
         const response = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "HYBRID",
@@ -313,7 +313,7 @@ describe("Keywords API", () => {
         const headers = await authHeader();
 
         const seeds = await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: ["spring banner"] })
             .expect(201);
@@ -321,7 +321,7 @@ describe("Keywords API", () => {
         const seedId = seeds.body.created[0].id as string;
 
         const customJob = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "CUSTOM",
@@ -335,7 +335,7 @@ describe("Keywords API", () => {
         const itemId = customJob.body.items[0].id as string;
 
         const first = await request
-            .post(`/keywords/job-items/${itemId}/promote`)
+            .post(apiPath(`/keywords/job-items/${itemId}/promote`))
             .set(headers)
             .send({})
             .expect(201);
@@ -344,7 +344,7 @@ describe("Keywords API", () => {
         expect(first.body.keyword).toBe(customJob.body.items[0].term);
 
         const second = await request
-            .post(`/keywords/job-items/${itemId}/promote`)
+            .post(apiPath(`/keywords/job-items/${itemId}/promote`))
             .set(headers)
             .send({})
             .expect(200);
@@ -358,13 +358,13 @@ describe("Keywords API", () => {
         const job = await createAutoJob(headers);
 
         await request
-            .post(`/keywords/jobs/${job.id}/archive`)
+            .post(apiPath(`/keywords/jobs/${job.id}/archive`))
             .set(headers)
             .send({})
             .expect(200);
 
         const list = await request
-            .get("/keywords/jobs")
+            .get(apiPath("/keywords/jobs"))
             .set(headers)
             .expect(200);
 
@@ -376,7 +376,7 @@ describe("Keywords API", () => {
 
         const archivedJob = await createAutoJob(headers);
         await request
-            .post(`/keywords/jobs/${archivedJob.id}/archive`)
+            .post(apiPath(`/keywords/jobs/${archivedJob.id}/archive`))
             .set(headers)
             .send({})
             .expect(200);
@@ -384,7 +384,7 @@ describe("Keywords API", () => {
         const activeJob = await createAutoJob(headers);
 
         const archivedList = await request
-            .get("/keywords/jobs?status=archived")
+            .get(apiPath("/keywords/jobs?status=archived"))
             .set(headers)
             .expect(200);
 
@@ -393,7 +393,7 @@ describe("Keywords API", () => {
         ).toBeTruthy();
 
         const allList = await request
-            .get("/keywords/jobs?status=all")
+            .get(apiPath("/keywords/jobs?status=all"))
             .set(headers)
             .expect(200);
 
@@ -408,25 +408,25 @@ describe("Keywords API", () => {
         const job = await createAutoJob(headers);
 
         await request
-            .post(`/keywords/jobs/${job.id}/archive`)
+            .post(apiPath(`/keywords/jobs/${job.id}/archive`))
             .set(headers)
             .send({})
             .expect(200);
 
         await request
-            .post(`/keywords/jobs/${job.id}/archive`)
+            .post(apiPath(`/keywords/jobs/${job.id}/archive`))
             .set(headers)
             .send({})
             .expect(409);
 
         await request
-            .post(`/keywords/jobs/${job.id}/restore`)
+            .post(apiPath(`/keywords/jobs/${job.id}/restore`))
             .set(headers)
             .send({})
             .expect(200);
 
         const list = await request
-            .get("/keywords/jobs")
+            .get(apiPath("/keywords/jobs"))
             .set(headers)
             .expect(200);
 
@@ -439,7 +439,7 @@ describe("Keywords API", () => {
         const job = await createAutoJob(headers);
 
         await request
-            .post(`/keywords/jobs/${job.id}/restore`)
+            .post(apiPath(`/keywords/jobs/${job.id}/restore`))
             .set(headers)
             .send({})
             .expect(409);
@@ -451,13 +451,13 @@ describe("Keywords API", () => {
         const job = await createAutoJob(headers);
 
         await request
-            .post(`/keywords/jobs/${job.id}/archive`)
+            .post(apiPath(`/keywords/jobs/${job.id}/archive`))
             .set(headers)
             .send({})
             .expect(200);
 
         await request
-            .post(`/keywords/jobs/${job.id}/run`)
+            .post(apiPath(`/keywords/jobs/${job.id}/run`))
             .set(headers)
             .expect(409);
     });
@@ -472,7 +472,7 @@ describe("Keywords API", () => {
         });
 
         await request
-            .post(`/keywords/jobs/${job.id}/archive`)
+            .post(apiPath(`/keywords/jobs/${job.id}/archive`))
             .set(headers)
             .send({})
             .expect(409);

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
-import { createTestServer, getAuthToken, seedAdmin } from "../helpers.js";
+import { createTestServer, getAuthToken, seedAdmin, apiPath } from "../helpers.js";
 
 const mockInterestOverTime = vi.fn();
 const mockRelatedQueries = vi.fn();
@@ -75,7 +75,7 @@ describe("Keywords API (trends provider)", () => {
         );
 
         const seeds = await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: ["birthday banner"] })
             .expect(201);
@@ -83,7 +83,7 @@ describe("Keywords API (trends provider)", () => {
         const seedId = seeds.body.created[0].id as string;
 
         const job = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "CUSTOM",
@@ -96,7 +96,7 @@ describe("Keywords API (trends provider)", () => {
             .expect(201);
 
         const run = await request
-            .post(`/keywords/jobs/${job.body.job.id}/run`)
+            .post(apiPath(`/keywords/jobs/${job.body.job.id}/run`))
             .set(headers)
             .expect(200);
 
@@ -115,7 +115,7 @@ describe("Keywords API (trends provider)", () => {
         });
 
         const rerun = await request
-            .post(`/keywords/jobs/${job.body.job.id}/run`)
+            .post(apiPath(`/keywords/jobs/${job.body.job.id}/run`))
             .set(headers)
             .expect(200);
 
@@ -142,7 +142,7 @@ describe("Keywords API (trends provider)", () => {
         );
 
         const seeds = await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: ["concurrent seed"] })
             .expect(201);
@@ -150,7 +150,7 @@ describe("Keywords API (trends provider)", () => {
         const seedId = seeds.body.created[0].id as string;
 
         const job = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "CUSTOM",
@@ -164,7 +164,7 @@ describe("Keywords API (trends provider)", () => {
 
         const runRequest = () =>
             request
-                .post(`/keywords/jobs/${job.body.job.id}/run`)
+                .post(apiPath(`/keywords/jobs/${job.body.job.id}/run`))
                 .set(headers)
                 .send({});
 
@@ -225,7 +225,7 @@ describe("Keywords API (trends provider)", () => {
         );
 
         const seeds = await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: ["blocked seed"] })
             .expect(201);
@@ -233,7 +233,7 @@ describe("Keywords API (trends provider)", () => {
         const seedId = seeds.body.created[0].id as string;
 
         const job = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "CUSTOM",
@@ -246,7 +246,7 @@ describe("Keywords API (trends provider)", () => {
             .expect(201);
 
         const run = await request
-            .post(`/keywords/jobs/${job.body.job.id}/run`)
+            .post(apiPath(`/keywords/jobs/${job.body.job.id}/run`))
             .set(headers)
             .expect(503);
 
@@ -257,7 +257,7 @@ describe("Keywords API (trends provider)", () => {
         const headers = await authHeader();
 
         const seeds = await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: ["empty run seed"] })
             .expect(201);
@@ -265,7 +265,7 @@ describe("Keywords API (trends provider)", () => {
         const seedId = seeds.body.created[0].id as string;
 
         const job = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "AUTO",
@@ -277,13 +277,13 @@ describe("Keywords API (trends provider)", () => {
             .expect(201);
 
         await request
-            .patch(`/keywords/seeds/${seedId}`)
+            .patch(apiPath(`/keywords/seeds/${seedId}`))
             .set(headers)
             .send({ status: "ARCHIVED" })
             .expect(200);
 
         const run = await request
-            .post(`/keywords/jobs/${job.body.job.id}/run`)
+            .post(apiPath(`/keywords/jobs/${job.body.job.id}/run`))
             .set(headers)
             .expect(409);
 
@@ -297,7 +297,7 @@ describe("Keywords API (trends provider)", () => {
 
         try {
             const seeds = await request
-                .post("/keywords/seeds")
+                .post(apiPath("/keywords/seeds"))
                 .set(headers)
                 .send({ terms: ["banner decor"] })
                 .expect(201);
@@ -305,7 +305,7 @@ describe("Keywords API (trends provider)", () => {
             const seedId = seeds.body.created[0].id as string;
 
             const job = await request
-                .post("/keywords/jobs")
+                .post(apiPath("/keywords/jobs"))
                 .set(headers)
                 .send({
                     mode: "CUSTOM",
@@ -318,7 +318,7 @@ describe("Keywords API (trends provider)", () => {
                 .expect(201);
 
             const run = await request
-                .post(`/keywords/jobs/${job.body.job.id}/run`)
+                .post(apiPath(`/keywords/jobs/${job.body.job.id}/run`))
                 .set(headers)
                 .expect(400);
 
@@ -349,7 +349,7 @@ describe("Keywords API (trends provider)", () => {
         );
 
         const seeds = await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: ["seed only term"] })
             .expect(201);
@@ -357,7 +357,7 @@ describe("Keywords API (trends provider)", () => {
         const seedId = seeds.body.created[0].id as string;
 
         const job = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "CUSTOM",
@@ -370,7 +370,7 @@ describe("Keywords API (trends provider)", () => {
             .expect(201);
 
         const run = await request
-            .post(`/keywords/jobs/${job.body.job.id}/run`)
+            .post(apiPath(`/keywords/jobs/${job.body.job.id}/run`))
             .set(headers)
             .expect(200);
 
@@ -378,7 +378,7 @@ describe("Keywords API (trends provider)", () => {
         expect(run.body.warning).toBe("Provider returned 0 results");
 
         const items = await request
-            .get(`/keywords/jobs/${job.body.job.id}/items`)
+            .get(apiPath(`/keywords/jobs/${job.body.job.id}/items`))
             .set(headers)
             .expect(200);
 
@@ -405,7 +405,7 @@ describe("Keywords API (trends provider)", () => {
         );
 
         const seeds = await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: ["force rerun seed"] })
             .expect(201);
@@ -413,7 +413,7 @@ describe("Keywords API (trends provider)", () => {
         const seedId = seeds.body.created[0].id as string;
 
         const job = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "CUSTOM",
@@ -426,7 +426,7 @@ describe("Keywords API (trends provider)", () => {
             .expect(201);
 
         const run = await request
-            .post(`/keywords/jobs/${job.body.job.id}/run`)
+            .post(apiPath(`/keywords/jobs/${job.body.job.id}/run`))
             .set(headers)
             .expect(200);
 
@@ -436,7 +436,7 @@ describe("Keywords API (trends provider)", () => {
         expect(mockInterestOverTime).toHaveBeenCalledTimes(1);
 
         const rerun = await request
-            .post(`/keywords/jobs/${job.body.job.id}/run`)
+            .post(apiPath(`/keywords/jobs/${job.body.job.id}/run`))
             .set(headers)
             .expect(200);
 
@@ -460,7 +460,7 @@ describe("Keywords API (trends provider)", () => {
         );
 
         const forced = await request
-            .post(`/keywords/jobs/${job.body.job.id}/run?force=true`)
+            .post(apiPath(`/keywords/jobs/${job.body.job.id}/run?force=true`))
             .set(headers)
             .expect(200);
 

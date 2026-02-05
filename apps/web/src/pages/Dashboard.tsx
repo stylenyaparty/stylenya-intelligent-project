@@ -70,7 +70,7 @@ export default function Dashboard() {
       setWeeklyFocusLoading(true);
       setWeeklyFocusError(null);
       try {
-        const response = await api<WeeklyFocusResponse>("/v1/weekly-focus?limit=3");
+        const response = await api<WeeklyFocusResponse>("/weekly-focus?limit=3");
         setWeeklyFocus(response.items ?? []);
       } catch (e: unknown) {
         setWeeklyFocusError(e instanceof Error ? e.message : "Failed to load SEO focus");

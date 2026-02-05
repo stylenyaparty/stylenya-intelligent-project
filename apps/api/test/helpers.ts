@@ -11,6 +11,16 @@ type SeedUserInput = {
     role?: "ADMIN" | "USER";
 };
 
+export const API_PREFIX = "/v1";
+
+export function apiPath(path: string) {
+    const normalized = path.startsWith("/") ? path : `/${path}`;
+    if (normalized === API_PREFIX || normalized.startsWith(`${API_PREFIX}/`)) {
+        return normalized;
+    }
+    return `${API_PREFIX}${normalized}`;
+}
+
 export async function createTestServer() {
     const app = await createApp();
     await app.ready();
@@ -30,7 +40,7 @@ export async function seedAdmin(app: FastifyInstance, overrides: Partial<SeedUse
         name: overrides.name ?? "Admin User",
     };
 
-    const res = await supertest(app.server).post("/v1/initial-admin").send(payload);
+    const res = await supertest(app.server).post(apiPath("/initial-admin")).send(payload);
 
     if (![201, 409].includes(res.status)) {
         throw new Error(`seedAdmin failed: ${res.status} ${JSON.stringify(res.body)}`);
@@ -53,7 +63,7 @@ export async function createUser(input: SeedUserInput) {
 
 export async function getAuthToken(app: FastifyInstance, email: string, password: string) {
     const response = await supertest(app.server)
-        .post("/v1/auth/login")
+        .post(apiPath("/auth/login"))
         .send({ email, password })
         .expect(200);
 

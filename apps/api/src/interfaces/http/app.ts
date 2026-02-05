@@ -4,6 +4,7 @@ import jwt from "@fastify/jwt";
 import multipart from "@fastify/multipart";
 import { registerRoutes } from "./routes.js";
 import authGuardPlugin from "../../plugins/auth-guard.js";
+import { API_PREFIX } from "./api-prefix.js";
 
 type CreateAppOptions = {
     logger?: boolean | FastifyLoggerOptions;
@@ -20,13 +21,15 @@ export async function createApp(options: CreateAppOptions = {}) {
     });
     await app.register(multipart);
     await app.register(authGuardPlugin);
-    await registerRoutes(app);
+    await app.register(async (v1) => {
+        await registerRoutes(v1);
+    }, { prefix: API_PREFIX });
 
     app.setErrorHandler((err, request, reply) => {
         request.log.error({ err }, "Unhandled error");
         reply.status(500).send({
             error: "INTERNAL_SERVER_ERROR",
-            message: err.message,
+            message: err instanceof Error ? err.message : "Unknown error",
         });
     });
 

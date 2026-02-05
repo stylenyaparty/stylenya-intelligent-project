@@ -7,6 +7,7 @@ import {
     seedAdmin,
     createUser,
     getAuthToken,
+    apiPath,
 } from "../helpers.js";
 import type { FastifyInstance } from "fastify";
 
@@ -24,13 +25,13 @@ describe("API integration", () => {
     });
 
     it("responds to health check", async () => {
-        const response = await request.get("/health").expect(200);
+        const response = await request.get(apiPath("/health")).expect(200);
 
         expect(response.body).toMatchObject({ ok: true, service: "stylenya-api" });
     });
 
     it("returns bootstrap status when no users exist", async () => {
-        const response = await request.get("/v1/bootstrap-status").expect(200);
+        const response = await request.get(apiPath("/bootstrap-status")).expect(200);
 
         expect(response.body).toEqual({ usersCount: 0, shouldShowInitialSetup: true });
     });
@@ -42,7 +43,7 @@ describe("API integration", () => {
             role: "USER",
         });
 
-        const response = await request.get("/v1/bootstrap-status").expect(200);
+        const response = await request.get(apiPath("/bootstrap-status")).expect(200);
 
         expect(response.body.usersCount).toBe(1);
         expect(response.body.shouldShowInitialSetup).toBe(false);
@@ -55,7 +56,7 @@ describe("API integration", () => {
             name: "First Admin",
         };
 
-        const response = await request.post("/v1/initial-admin").send(payload).expect(201);
+        const response = await request.post(apiPath("/initial-admin")).send(payload).expect(201);
 
         expect(response.body.created).toBe(true);
         expect(response.body.user).toMatchObject({
@@ -76,12 +77,12 @@ describe("API integration", () => {
 
     it("prevents creating a second initial admin", async () => {
         const first = await request
-            .post("/v1/initial-admin")
+            .post(apiPath("/initial-admin"))
             .send({ email: "admin1@example.com", password: "AdminPass123!", name: "Admin 1" })
             .expect(201);
 
         const second = await request
-            .post("/v1/initial-admin")
+            .post(apiPath("/initial-admin"))
             .send({ email: "admin2@example.com", password: "AdminPass123!", name: "Another Admin" })
             .expect(409);
 
@@ -102,7 +103,7 @@ describe("API integration", () => {
         });
 
         const response = await request
-            .post("/v1/auth/login")
+            .post(apiPath("/auth/login"))
             .send(payload)
             .expect(200);
 
@@ -116,7 +117,7 @@ describe("API integration", () => {
         });
 
         const response = await request
-            .post("/v1/auth/login")
+            .post(apiPath("/auth/login"))
             .send({ email: payload.email, password: "IncorrectPass123!" })
             .expect(401);
 
@@ -125,20 +126,20 @@ describe("API integration", () => {
 
     it("rejects login for a nonexistent user", async () => {
         const response = await request
-            .post("/v1/auth/login")
+            .post(apiPath("/auth/login"))
             .send({ email: "missing@example.com", password: "NoPass123!" })
             .expect(401);
 
         expect(response.body).toEqual({ error: "Invalid credentials" });
     });
 
-    it("requires authentication for /v1/me", async () => {
-        const response = await request.get("/v1/me").expect(401);
+    it("requires authentication for /me", async () => {
+        const response = await request.get(apiPath("/me")).expect(401);
 
         expect(response.body).toEqual({ error: "Unauthorized" });
     });
 
-    it("returns auth claims for /v1/me and omits password hash", async () => {
+    it("returns auth claims for /me and omits password hash", async () => {
         const payload = await seedAdmin(app, {
             email: "me-admin@example.com",
             password: "MePass123!",
@@ -146,7 +147,7 @@ describe("API integration", () => {
         const token = await getAuthToken(app, payload.email, payload.password);
 
         const response = await request
-            .get("/v1/me")
+            .get(apiPath("/me"))
             .set("Authorization", `Bearer ${token}`)
             .expect(200);
 
@@ -159,7 +160,7 @@ describe("API integration", () => {
     });
 
     it("requires authentication for admin ping", async () => {
-        const response = await request.get("/v1/admin/ping").expect(401);
+        const response = await request.get(apiPath("/admin/ping")).expect(401);
 
         expect(response.body).toEqual({ error: "Unauthorized" });
     });
@@ -174,7 +175,7 @@ describe("API integration", () => {
         const token = await getAuthToken(app, user.email, "MemberPass123!");
 
         const response = await request
-            .get("/v1/admin/ping")
+            .get(apiPath("/admin/ping"))
             .set("Authorization", `Bearer ${token}`)
             .expect(403);
 
@@ -189,7 +190,7 @@ describe("API integration", () => {
         const token = await getAuthToken(app, payload.email, payload.password);
 
         const response = await request
-            .get("/v1/admin/ping")
+            .get(apiPath("/admin/ping"))
             .set("Authorization", `Bearer ${token}`)
             .expect(200);
 

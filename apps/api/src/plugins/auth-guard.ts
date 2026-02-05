@@ -1,11 +1,12 @@
 import fp from "fastify-plugin";
 import type { FastifyPluginAsync } from "fastify";
+import { API_PREFIX } from "../interfaces/http/api-prefix.js";
 
 const PUBLIC_ROUTES = new Set<string>([
-    "GET /v1/health",
-    "GET /v1/bootstrap-status",
-    "POST /v1/initial-admin",
-    "POST /v1/auth/login",
+    `GET ${API_PREFIX}/health`,
+    `GET ${API_PREFIX}/bootstrap-status`,
+    `POST ${API_PREFIX}/initial-admin`,
+    `POST ${API_PREFIX}/auth/login`,
 ]);
 
 const authGuardPlugin: FastifyPluginAsync = async (app) => {
@@ -13,7 +14,7 @@ const authGuardPlugin: FastifyPluginAsync = async (app) => {
         // url tipado (si existe), si no, fallback a req.url
         const path = ((req.routeOptions?.url as string | undefined) ?? req.url).split("?")[0];
 
-        if (!path.startsWith("/v1/")) return;
+        if (!path.startsWith(`${API_PREFIX}/`)) return;
 
         const allowKey = `${req.method} ${path}`;
         if (PUBLIC_ROUTES.has(allowKey)) return;

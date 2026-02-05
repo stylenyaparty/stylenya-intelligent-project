@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createTestServer, getAuthToken, resetDatabase, seedAdmin } from "../helpers.js";
+import { createTestServer, getAuthToken, resetDatabase, seedAdmin, apiPath } from "../helpers.js";
 
 describe("Signals API", () => {
     const __filename = fileURLToPath(import.meta.url);
@@ -42,7 +42,7 @@ describe("Signals API", () => {
         const csv = await fs.readFile(csvPath);
 
         const response = await request
-            .post("/v1/signal-batches/gkp-csv")
+            .post(apiPath("/signal-batches/gkp-csv"))
             .set(headers)
             .attach("file", csv, "gkp-simple.csv")
             .expect(200);
@@ -58,7 +58,7 @@ describe("Signals API", () => {
         const csv = await fs.readFile(csvPath);
 
         const response = await request
-            .post("/v1/signal-batches/gkp-csv")
+            .post(apiPath("/signal-batches/gkp-csv"))
             .set(headers)
             .attach("file", csv, "gkp-duplicates.csv")
             .expect(200);
@@ -70,7 +70,7 @@ describe("Signals API", () => {
         const headers = await authHeader();
 
         await request
-            .post("/v1/signal-batches/gkp-csv")
+            .post(apiPath("/signal-batches/gkp-csv"))
             .set(headers)
             .attach(
                 "file",
@@ -85,7 +85,7 @@ describe("Signals API", () => {
             .expect(200);
 
         const response = await request
-            .get("/v1/signal-batches")
+            .get(apiPath("/signal-batches"))
             .set(headers)
             .expect(200);
 
@@ -95,7 +95,7 @@ describe("Signals API", () => {
     it("lists signals for a batch", async () => {
         const headers = await authHeader();
         const importResponse = await request
-            .post("/v1/signal-batches/gkp-csv")
+            .post(apiPath("/signal-batches/gkp-csv"))
             .set(headers)
             .attach(
                 "file",
@@ -112,7 +112,7 @@ describe("Signals API", () => {
         const batchId = importResponse.body.batch.id as string;
 
         const response = await request
-            .get(`/v1/signals?batchId=${batchId}`)
+            .get(apiPath(`/signals?batchId=${batchId}`))
             .set(headers)
             .expect(200);
 
@@ -124,7 +124,7 @@ describe("Signals API", () => {
         const headers = await authHeader();
 
         await request
-            .post("/v1/signal-batches/gkp-csv")
+            .post(apiPath("/signal-batches/gkp-csv"))
             .set(headers)
             .expect(400);
     });

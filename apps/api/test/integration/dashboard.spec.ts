@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
-import { createTestServer, getAuthToken, seedAdmin } from "../helpers.js";
+import { createTestServer, getAuthToken, seedAdmin, apiPath } from "../helpers.js";
 
 describe("Dashboard KPIs API", () => {
     let app: FastifyInstance;
@@ -34,7 +34,7 @@ describe("Dashboard KPIs API", () => {
         const headers = await authHeader();
 
         const response = await request
-            .get("/dashboard/kpis")
+            .get(apiPath("/dashboard/kpis"))
             .set(headers)
             .expect(200);
 

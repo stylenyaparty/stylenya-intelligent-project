@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
-import { createTestServer, getAuthToken, resetDatabase, seedAdmin } from "../helpers.js";
+import { createTestServer, getAuthToken, resetDatabase, seedAdmin, apiPath } from "../helpers.js";
 
 const mockInterestOverTime = vi.fn();
 const mockRelatedQueries = vi.fn();
@@ -49,7 +49,7 @@ describe("Keywords provider selection", () => {
         enabled: boolean
     ) {
         await request
-            .post("/settings/google-ads")
+            .post(apiPath("/settings/google-ads"))
             .set(headers)
             .send({
                 enabled,
@@ -64,7 +64,7 @@ describe("Keywords provider selection", () => {
 
     async function createSeed(headers: { Authorization: string }, term: string) {
         const seeds = await request
-            .post("/keywords/seeds")
+            .post(apiPath("/keywords/seeds"))
             .set(headers)
             .send({ terms: [term] })
             .expect(201);
@@ -94,7 +94,7 @@ describe("Keywords provider selection", () => {
         const seedId = await createSeed(headers, "auto provider seed");
 
         const job = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "CUSTOM",
@@ -107,7 +107,7 @@ describe("Keywords provider selection", () => {
             .expect(201);
 
         const run = await request
-            .post(`/keywords/jobs/${job.body.job.id}/run`)
+            .post(apiPath(`/keywords/jobs/${job.body.job.id}/run`))
             .set(headers)
             .expect(200);
 
@@ -122,7 +122,7 @@ describe("Keywords provider selection", () => {
         const seedId = await createSeed(headers, "auto ads seed");
 
         const job = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "CUSTOM",
@@ -135,7 +135,7 @@ describe("Keywords provider selection", () => {
             .expect(201);
 
         const run = await request
-            .post(`/keywords/jobs/${job.body.job.id}/run`)
+            .post(apiPath(`/keywords/jobs/${job.body.job.id}/run`))
             .set(headers)
             .expect(503);
 
@@ -149,7 +149,7 @@ describe("Keywords provider selection", () => {
         const seedId = await createSeed(headers, "ads explicit seed");
 
         const response = await request
-            .post("/keywords/jobs")
+            .post(apiPath("/keywords/jobs"))
             .set(headers)
             .send({
                 mode: "CUSTOM",

@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { prisma } from "../../src/infrastructure/db/prisma.js";
 import { resetLLMProviderCache } from "../../src/modules/llm/get-llm-provider.js";
 import { getDecisionDateRange } from "../../src/modules/decisions/decision-date-range.js";
-import { createTestServer, getAuthToken, resetDatabase, seedAdmin } from "../helpers.js";
+import { createTestServer, getAuthToken, resetDatabase, seedAdmin, apiPath } from "../helpers.js";
 
 describe("Decision Drafts API", () => {
     let app: FastifyInstance;
@@ -64,14 +64,14 @@ describe("Decision Drafts API", () => {
     }
 
     it("rejects draft generation without auth", async () => {
-        await request.post("/v1/decision-drafts/generate").send({}).expect(401);
+        await request.post(apiPath("/decision-drafts/generate")).send({}).expect(401);
     });
 
     it("guards against generation without signals", async () => {
         process.env.LLM_PROVIDER = "mock";
 
         const response = await request
-            .post("/v1/decision-drafts/generate")
+            .post(apiPath("/decision-drafts/generate"))
             .set({ Authorization: `Bearer ${token}` })
             .send({ seeds: ["candle"] })
             .expect(400);
@@ -84,7 +84,7 @@ describe("Decision Drafts API", () => {
         const { batch, signals } = await seedSignalBatch();
 
         const response = await request
-            .post("/v1/decision-drafts/generate")
+            .post(apiPath("/decision-drafts/generate"))
             .set({ Authorization: `Bearer ${token}` })
             .send({ batchId: batch.id, seeds: ["candle"], context: "Holiday upsell" })
             .expect(201);
@@ -141,7 +141,7 @@ describe("Decision Drafts API", () => {
         });
 
         const response = await request
-            .get("/v1/decision-drafts")
+            .get(apiPath("/decision-drafts"))
             .set({ Authorization: `Bearer ${token}` })
             .expect(200);
 
@@ -168,7 +168,7 @@ describe("Decision Drafts API", () => {
         });
 
         const dismissed = await request
-            .post(`/v1/decision-drafts/${draft.id}/dismiss`)
+            .post(apiPath(`/decision-drafts/${draft.id}/dismiss`))
             .set({ Authorization: `Bearer ${token}` })
             .send({})
             .expect(200);
@@ -194,7 +194,7 @@ describe("Decision Drafts API", () => {
         });
 
         const promoted = await request
-            .post(`/v1/decision-drafts/${draft.id}/promote`)
+            .post(apiPath(`/decision-drafts/${draft.id}/promote`))
             .set({ Authorization: `Bearer ${token}` })
             .send({})
             .expect(200);
@@ -226,7 +226,7 @@ describe("Decision Drafts API", () => {
         });
 
         const response = await request
-            .post(`/v1/decision-drafts/${draft.id}/promote`)
+            .post(apiPath(`/decision-drafts/${draft.id}/promote`))
             .set({ Authorization: `Bearer ${token}` })
             .send({})
             .expect(409);

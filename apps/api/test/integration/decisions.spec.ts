@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
-import { createTestServer, getAuthToken, seedAdmin, resetDatabase } from "../helpers.js";
+import { createTestServer, getAuthToken, seedAdmin, resetDatabase, apiPath } from "../helpers.js";
 import { prisma } from "../../src/infrastructure/db/prisma.js";
 import { getDecisionDateRange } from "../../src/modules/decisions/decision-date-range.js";
 
@@ -64,7 +64,7 @@ describe("Decisions API", () => {
         const headers = await authHeader();
 
         const response = await request
-            .post("/decisions")
+            .post(apiPath("/decisions"))
             .set(headers)
             .send({
                 actionType: "PROMOTE",
@@ -93,7 +93,7 @@ describe("Decisions API", () => {
         const headers = await authHeader();
 
         const created = await request
-            .post("/decisions")
+            .post(apiPath("/decisions"))
             .set(headers)
             .send({
                 actionType: "PAUSE",
@@ -106,7 +106,7 @@ describe("Decisions API", () => {
             .expect(201);
 
         const response = await request
-            .get("/decisions?limit=10")
+            .get(apiPath("/decisions?limit=10"))
             .set(headers)
             .expect(200);
 
@@ -119,7 +119,7 @@ describe("Decisions API", () => {
         const headers = await authHeader();
 
         const created = await request
-            .post("/decisions")
+            .post(apiPath("/decisions"))
             .set(headers)
             .send({
                 actionType: "OPTIMIZE",
@@ -132,7 +132,7 @@ describe("Decisions API", () => {
             .expect(201);
 
         const response = await request
-            .patch(`/decisions/${created.body.decision.id}`)
+            .patch(apiPath(`/decisions/${created.body.decision.id}`))
             .set(headers)
             .send({ status: "EXECUTED" })
             .expect(200);
@@ -155,13 +155,13 @@ describe("Decisions API", () => {
         };
 
         const first = await request
-            .post("/decisions")
+            .post(apiPath("/decisions"))
             .set(headers)
             .send(payload)
             .expect(201);
 
         const second = await request
-            .post("/decisions")
+            .post(apiPath("/decisions"))
             .set(headers)
             .send(payload)
             .expect(200);
@@ -169,7 +169,7 @@ describe("Decisions API", () => {
         expect(second.body.decision.id).toBe(first.body.decision.id);
 
         const list = await request
-            .get("/decisions?limit=50")
+            .get(apiPath("/decisions?limit=50"))
             .set(headers)
             .expect(200);
 
@@ -206,7 +206,7 @@ describe("Decisions API", () => {
         });
 
         const response = await request
-            .get("/decisions?limit=50")
+            .get(apiPath("/decisions?limit=50"))
             .set(headers)
             .expect(200);
 
@@ -239,7 +239,7 @@ describe("Decisions API", () => {
         });
 
         const response = await request
-            .get("/decisions?mode=all&limit=50")
+            .get(apiPath("/decisions?mode=all&limit=50"))
             .set(headers)
             .expect(200);
 
@@ -277,7 +277,7 @@ describe("Decisions API", () => {
         });
 
         const response = await request
-            .get(`/decisions?date=${targetDate}&limit=50`)
+            .get(apiPath(`/decisions?date=${targetDate}&limit=50`))
             .set(headers)
             .expect(200);
 
@@ -327,7 +327,7 @@ describe("Decisions API", () => {
         });
 
         const response = await request
-            .get(`/decisions?date=${dateString}&limit=50`)
+            .get(apiPath(`/decisions?date=${dateString}&limit=50`))
             .set(headers)
             .expect(200);
 

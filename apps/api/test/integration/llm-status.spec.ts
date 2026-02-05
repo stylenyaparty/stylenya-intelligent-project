@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
-import { createTestServer, getAuthToken, resetDatabase, seedAdmin } from "../helpers.js";
+import { createTestServer, getAuthToken, resetDatabase, seedAdmin, apiPath } from "../helpers.js";
 import { resetLLMProviderCache } from "../../src/modules/llm/get-llm-provider.js";
 
 describe("LLM Status API", () => {
@@ -34,7 +34,7 @@ describe("LLM Status API", () => {
         process.env.LLM_PROVIDER = "disabled";
 
         const response = await request
-            .get("/v1/llm/status")
+            .get(apiPath("/llm/status"))
             .set({ Authorization: `Bearer ${token}` })
             .expect(200);
 
@@ -46,7 +46,7 @@ describe("LLM Status API", () => {
         process.env.LLM_PROVIDER = "openai";
 
         const response = await request
-            .get("/v1/llm/status")
+            .get(apiPath("/llm/status"))
             .set({ Authorization: `Bearer ${token}` })
             .expect(200);
 

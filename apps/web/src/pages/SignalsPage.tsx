@@ -83,7 +83,7 @@ export default function SignalsPage() {
     setLoadingBatches(true);
     setError(null);
     try {
-      const response = await api<SignalBatchResponse>("/v1/signal-batches");
+      const response = await api<SignalBatchResponse>("/signal-batches");
       setBatches(response.batches);
       if (!activeBatchId && response.batches.length > 0) {
         setActiveBatchId(response.batches[0].id);
@@ -105,7 +105,7 @@ export default function SignalsPage() {
       if (batchId) params.set("batchId", batchId);
       if (debouncedQuery) params.set("q", debouncedQuery);
       params.set("limit", "100");
-      const response = await api<SignalResponse>(`/v1/signals?${params.toString()}`);
+      const response = await api<SignalResponse>(`/signals?${params.toString()}`);
       setSignals(response.signals);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Failed to load signals.";
@@ -138,7 +138,7 @@ export default function SignalsPage() {
       const formData = new FormData();
       formData.append("file", uploadFile);
 
-      const response = await fetch(`${API_URL}/v1/signal-batches/gkp-csv`, {
+      const response = await fetch(`${API_URL}/signal-batches/gkp-csv`, {
         method: "POST",
         body: formData,
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -265,7 +265,7 @@ export default function SignalsPage() {
             </div>
 
             {error ? (
-              <ErrorState title="Something went wrong" description={error} />
+              <ErrorState message={error} />
             ) : loadingSignals ? (
               <LoadingState message="Loading signals..." />
             ) : signals.length === 0 ? (

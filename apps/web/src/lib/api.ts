@@ -109,7 +109,7 @@ export async function generateDecisionDrafts(input: {
   seeds?: string[];
   context?: string;
 }) {
-  return api<{ ok: boolean; drafts: DecisionDraft[] }>("/v1/decision-drafts/generate", {
+  return api<{ ok: boolean; drafts: DecisionDraft[] }>("/decision-drafts/generate", {
     method: "POST",
     body: JSON.stringify(input),
   });
@@ -121,12 +121,12 @@ export async function listDecisionDrafts(params: { date?: string; status?: "NEW"
   if (params.status) query.set("status", params.status);
   const suffix = query.toString();
   return api<{ ok: boolean; drafts: DecisionDraft[] }>(
-    `/v1/decision-drafts${suffix ? `?${suffix}` : ""}`,
+    `/decision-drafts${suffix ? `?${suffix}` : ""}`,
   );
 }
 
 export async function dismissDraft(draftId: string) {
-  return api<{ ok: boolean; draft: DecisionDraft }>(`/v1/decision-drafts/${draftId}/dismiss`, {
+  return api<{ ok: boolean; draft: DecisionDraft }>(`/decision-drafts/${draftId}/dismiss`, {
     method: "POST",
     body: JSON.stringify({}),
   });
@@ -134,7 +134,7 @@ export async function dismissDraft(draftId: string) {
 
 export async function promoteDraft(draftId: string) {
   return api<{ ok: boolean; draft: DecisionDraft; decision: { id: string } }>(
-    `/v1/decision-drafts/${draftId}/promote`,
+    `/decision-drafts/${draftId}/promote`,
     {
       method: "POST",
       body: JSON.stringify({}),

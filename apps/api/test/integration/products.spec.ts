@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
-import { createTestServer, getAuthToken, seedAdmin, resetDatabase } from "../helpers.js";
+import { createTestServer, getAuthToken, seedAdmin, resetDatabase, apiPath } from "../helpers.js";
 import { prisma } from "../../src/infrastructure/db/prisma.js";
 
 describe("Products API", () => {
@@ -43,7 +43,7 @@ describe("Products API", () => {
         ].join("\n");
 
         const response = await request
-            .post("/products/import-csv")
+            .post(apiPath("/products/import-csv"))
             .set(headers)
             .attach("file", Buffer.from(csv), "shopify.csv")
             .expect(200);
@@ -61,7 +61,7 @@ describe("Products API", () => {
         ].join("\n");
 
         const updateResponse = await request
-            .post("/products/import-csv")
+            .post(apiPath("/products/import-csv"))
             .set(headers)
             .attach("file", Buffer.from(updatedCsv), "shopify.csv")
             .expect(200);
@@ -84,7 +84,7 @@ describe("Products API", () => {
         ].join("\n");
 
         const response = await request
-            .post("/products/import-csv")
+            .post(apiPath("/products/import-csv"))
             .set(headers)
             .attach("file", Buffer.from(csv), "etsy.csv")
             .expect(200);
@@ -103,7 +103,7 @@ describe("Products API", () => {
         const headers = await authHeader();
 
         const createResponse = await request
-            .post("/products")
+            .post(apiPath("/products"))
             .set(headers)
             .send({
                 name: "Manual Product",
@@ -117,19 +117,19 @@ describe("Products API", () => {
         const productId = createResponse.body.product.id as string;
 
         const archiveResponse = await request
-            .post(`/products/${productId}/archive`)
+            .post(apiPath(`/products/${productId}/archive`))
             .set(headers)
             .expect(200);
         expect(archiveResponse.body.product.archivedAt).toBeTruthy();
 
         const restoreResponse = await request
-            .post(`/products/${productId}/restore`)
+            .post(apiPath(`/products/${productId}/restore`))
             .set(headers)
             .expect(200);
         expect(restoreResponse.body.product.archivedAt).toBeNull();
 
         await request
-            .delete(`/products/${productId}`)
+            .delete(apiPath(`/products/${productId}`))
             .set(headers)
             .send({ confirm: true })
             .expect(200);
