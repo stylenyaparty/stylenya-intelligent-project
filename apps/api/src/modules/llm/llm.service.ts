@@ -8,24 +8,21 @@ import { buildSandboxPrompt, type SandboxPromptInput } from "./sandbox.prompt.js
 
 type LLMStatus = {
     configured: boolean;
-    provider: "openai" | "disabled";
+    provider: "openai" | "mock" | "disabled";
     model?: string;
 };
 
 function resolveLLMStatus(): LLMStatus {
-    const provider = process.env.LLM_PROVIDER ?? "disabled";
-    if (provider === "openai") {
-        const configured = Boolean(process.env.OPENAI_API_KEY);
-        return {
-            configured,
-            provider: configured ? "openai" : "disabled",
-            model: configured ? process.env.OPENAI_MODEL ?? "gpt-4o-mini" : undefined,
-        };
+    const enabled = process.env.LLM_ENABLED === "true";
+    if (!enabled) {
+        return { configured: true, provider: "mock", model: "mock" };
     }
-    if (provider === "mock") {
-        return { configured: true, provider: "openai", model: "mock" };
-    }
-    return { configured: false, provider: "disabled" };
+    const configured = Boolean(process.env.OPENAI_API_KEY);
+    return {
+        configured,
+        provider: configured ? "openai" : "disabled",
+        model: configured ? process.env.OPENAI_MODEL ?? "gpt-4o-mini" : undefined,
+    };
 }
 
 export function getLLMStatus(): LLMStatus {
@@ -34,92 +31,36 @@ export function getLLMStatus(): LLMStatus {
 
 export async function generateDecisionDrafts(input: {
     signals: Array<{
-        id: string;
         keyword: string;
-        keywordNormalized: string;
-        source: string;
-        geo?: string | null;
-        language?: string | null;
-        createdAt: string;
-        avgMonthlySearches?: number | null;
-        competitionLevel?: string | null;
-        competitionIndex?: number | null;
-        cpcLow?: number | null;
-        cpcHigh?: number | null;
-        change3mPct?: number | null;
-        changeYoYPct?: number | null;
-        currency?: string | null;
-        seasonality?: { bestMonth: string; worstMonth: string; trend: string } | null;
+        avgMonthlySearches: number | null;
+        competition: "LOW" | "MEDIUM" | "HIGH" | null;
+        cpcLow: number | null;
+        cpcHigh: number | null;
+        change3mPct: number | null;
+        changeYoYPct: number | null;
+        score: number;
+        scoreReasons: string;
+        seasonalitySummary?: string;
     }>;
-    seeds?: string[];
-    context?: string;
     maxDrafts: number;
 }): Promise<{ drafts: DecisionDraftsResponse["drafts"]; meta: { model?: string } }> {
     try {
         const provider = getLLMProvider();
-        const system = [
-            "You are an assistant that outputs strict JSON only.",
-            "Return JSON matching this structure:",
-            JSON.stringify(
-                {
-                    drafts: [
-                        {
-                            title: "string",
-                            rationale: "string",
-                            recommendedActions: ["string"],
-                            confidence: 0,
-                        },
-                    ],
-                },
-                null,
-                2
-            ),
-            "Confidence must be a number from 0 to 100.",
-            "Do not include markdown, code fences, or extra text.",
-        ].join("\n");
-        const user = JSON.stringify(
-            {
-                maxDrafts: input.maxDrafts,
-                signals: input.signals,
-                seeds: input.seeds ?? [],
-                context: input.context ?? "",
-            },
-            null,
-            2
-        );
-
-        const response = await provider.generateText({
-            system,
-            user,
-            temperature: 0.2,
-            maxTokens: 1200,
-            responseFormat: "json_object",
+        const response = await provider.generateDecisionDrafts({
+            signals: input.signals,
+            maxDrafts: input.maxDrafts,
         });
 
-        let parsed: unknown;
-        try {
-            parsed = JSON.parse(response.text);
-        } catch (error) {
-            throw new AppError(502, "LLM_BAD_OUTPUT", "LLM returned invalid JSON.");
-        }
-
-        const validated = decisionDraftsResponseSchema.safeParse(parsed);
+        const validated = decisionDraftsResponseSchema.safeParse({ drafts: response.drafts });
         if (!validated.success) {
-            throw new AppError(
-                502,
-                "LLM_BAD_OUTPUT",
-                "LLM response did not match the expected schema."
-            );
+            throw new AppError(502, "LLM_BAD_OUTPUT", "LLM response did not match the expected schema.");
         }
 
         const limitedDrafts = validated.data.drafts.slice(0, input.maxDrafts);
         return {
             drafts: limitedDrafts,
             meta: {
-                model:
-                    process.env.LLM_PROVIDER === "mock"
-                        ? "mock"
-                        : process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+                model: response.meta?.model,
             },
         };
     } catch (error) {

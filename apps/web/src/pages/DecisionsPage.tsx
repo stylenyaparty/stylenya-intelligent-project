@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, dismissDraft, listDecisionDrafts, promoteDraft, type DecisionDraft } from "@/lib/api";
+import {
+  api,
+  dismissDraft,
+  generateDecisionDrafts,
+  listDecisionDrafts,
+  listSignalBatches,
+  promoteDraft,
+  type DecisionDraft,
+  type SignalBatch,
+} from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -67,6 +76,9 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
   const [draftsBusy, setDraftsBusy] = useState(false);
   const [draftsError, setDraftsError] = useState<string | null>(null);
   const [draftActionId, setDraftActionId] = useState<string | null>(null);
+  const [batches, setBatches] = useState<SignalBatch[]>([]);
+  const [batchesBusy, setBatchesBusy] = useState(false);
+  const [generateBusy, setGenerateBusy] = useState(false);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -116,6 +128,23 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
     void loadDrafts();
   }, [loadDrafts, showDrafts]);
 
+  const loadBatches = useCallback(async () => {
+    setBatchesBusy(true);
+    try {
+      const response = await listSignalBatches();
+      setBatches(response.batches);
+    } catch (e: unknown) {
+      setDraftsError(e instanceof Error ? e.message : "Failed to load batches");
+    } finally {
+      setBatchesBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!showDrafts) return;
+    void loadBatches();
+  }, [loadBatches, showDrafts]);
+
   async function updateStatus(id: string, status: DecisionStatus) {
     setBusy(true);
     setError(null);
@@ -156,6 +185,21 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
     }
   }
 
+  async function handleGenerateDrafts() {
+    const latestBatch = batches[0];
+    if (!latestBatch) return;
+    setGenerateBusy(true);
+    setDraftsError(null);
+    try {
+      await generateDecisionDrafts({ batchId: latestBatch.id });
+      await loadDrafts();
+    } catch (e: unknown) {
+      setDraftsError(e instanceof Error ? e.message : "Failed to generate drafts");
+    } finally {
+      setGenerateBusy(false);
+    }
+  }
+
   function shiftDate(days: number) {
     const base = selectedDate ? parseISO(selectedDate) : new Date();
     const next = addDays(base, days);
@@ -169,6 +213,8 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
   const emptyDescription = hasDayFilter
     ? "Try another date or switch to all time."
     : "Decisions you create from SEO Focus will appear here.";
+  const hasBatches = batches.length > 0;
+  const latestBatch = batches[0];
 
   // Group decisions by status for summary
   const statusCounts = decisions.reduce((acc, d) => {
@@ -196,6 +242,18 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
           >
             <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
             Refresh
+          </Button>
+        )}
+        {showDrafts && (
+          <Button
+            variant="default"
+            size="sm"
+            onClick={handleGenerateDrafts}
+            disabled={!latestBatch || generateBusy}
+            className="gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${generateBusy ? "animate-spin" : ""}`} />
+            Generate drafts from latest batch
           </Button>
         )}
       </PageHeader>
@@ -290,51 +348,74 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            {draftsBusy && <LoadingState message="Loading drafts..." />}
-            {!draftsBusy && draftsError && (
+            {(draftsBusy || batchesBusy) && <LoadingState message="Loading drafts..." />}
+            {!draftsBusy && !batchesBusy && draftsError && (
               <div className="p-6">
                 <ErrorState message={draftsError} onRetry={loadDrafts} />
               </div>
             )}
-            {!draftsBusy && !draftsError && drafts.length === 0 ? (
+            {!draftsBusy && !batchesBusy && !draftsError && !hasBatches && (
               <div className="p-6">
                 <EmptyState
-                  title="No new drafts today"
-                  description="Signals without action-ready drafts will appear here."
+                  title="No signals yet"
+                  description="Upload a CSV to generate signal-driven drafts."
                   icon={<Inbox className="h-6 w-6 text-muted-foreground" />}
                 />
               </div>
-            ) : (
-              !draftsBusy &&
-              !draftsError && (
-                <div className="divide-y divide-border">
-                  {drafts.map((draft) => (
-                    <div key={draft.id} className="p-6 space-y-3">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <h3 className="text-base font-semibold">{draft.title}</h3>
-                          <p className="text-sm text-muted-foreground">{draft.rationale}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {draft.signalIds.length} signals
-                          </p>
-                        </div>
-                        {typeof draft.confidence === "number" && (
-                          <span className="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-semibold">
-                            {Math.round(draft.confidence)}% confidence
-                          </span>
-                        )}
-                      </div>
-                      <details className="rounded-md border border-border/60 px-3 py-2">
-                        <summary className="cursor-pointer text-sm font-medium">
-                          Recommended actions ({draft.recommendedActions.length})
-                        </summary>
-                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                          {draft.recommendedActions.map((action, index) => (
-                            <li key={`${draft.id}-action-${index}`}>{action}</li>
+            )}
+            {!draftsBusy && !batchesBusy && !draftsError && hasBatches && drafts.length === 0 && (
+              <div className="p-6">
+                <EmptyState
+                  title="No drafts yet"
+                  description="Generate drafts from the latest signal batch to review them here."
+                  icon={<Inbox className="h-6 w-6 text-muted-foreground" />}
+                />
+              </div>
+            )}
+            {!draftsBusy && !batchesBusy && !draftsError && drafts.length > 0 && (
+              <div className="divide-y divide-border">
+                {drafts.map((draft) => (
+                  <div key={draft.id} className="p-6 space-y-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-2">
+                        <h3 className="text-base font-semibold">{draft.title}</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {draft.keywords.map((keyword) => (
+                            <span
+                              key={`${draft.id}-${keyword}`}
+                              className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium"
+                            >
+                              {keyword}
+                            </span>
                           ))}
-                        </ul>
-                      </details>
-                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2 text-sm text-muted-foreground">
+                      <div>
+                        <p className="text-xs font-semibold uppercase text-muted-foreground">Why now</p>
+                        <p>{draft.whyNow}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase text-muted-foreground">Risk notes</p>
+                        <p>{draft.riskNotes}</p>
+                      </div>
+                    </div>
+                    <div className="rounded-md border border-border/60 px-3 py-2">
+                      <p className="text-xs font-semibold uppercase text-muted-foreground">
+                        Next steps
+                      </p>
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                        {draft.nextSteps.map((action, index) => (
+                          <li key={`${draft.id}-action-${index}`}>{action}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">
+                        {draft.signalIds.length} signals · Batch {draft.sourceBatchId ?? "—"}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -348,13 +429,13 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
                           onClick={() => handlePromote(draft.id)}
                           disabled={draftActionId === draft.id}
                         >
-                          Promote
+                          Promote → SEO Focus
                         </Button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>

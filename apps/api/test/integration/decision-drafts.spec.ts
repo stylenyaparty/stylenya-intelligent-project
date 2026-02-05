@@ -1,10 +1,16 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { prisma } from "../../src/infrastructure/db/prisma.js";
 import { resetLLMProviderCache } from "../../src/modules/llm/get-llm-provider.js";
 import { getDecisionDateRange } from "../../src/modules/decisions/decision-date-range.js";
 import { createTestServer, getAuthToken, resetDatabase, seedAdmin, apiPath } from "../helpers.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 describe("Decision Drafts API", () => {
     let app: FastifyInstance;
@@ -27,40 +33,24 @@ describe("Decision Drafts API", () => {
         await resetDatabase();
         resetLLMProviderCache();
         delete process.env.OPENAI_API_KEY;
+        process.env.LLM_ENABLED = "false";
     });
 
     afterAll(async () => {
         await app.close();
     });
 
-    async function seedSignalBatch() {
-        const batch = await prisma.signalBatch.create({
-            data: {
-                source: "TEST",
-                status: "READY",
-                totalRows: 2,
-            },
-        });
+    async function uploadSignals() {
+        const csvPath = path.resolve(__dirname, "..", "fixtures", "gkp-simple.csv");
+        const csv = await fs.readFile(csvPath);
 
-        const signalOne = await prisma.keywordSignal.create({
-            data: {
-                batchId: batch.id,
-                keyword: "handmade candle",
-                keywordNormalized: "handmade candle",
-                source: "GKP",
-            },
-        });
+        const response = await request
+            .post(apiPath("/signals/upload"))
+            .set({ Authorization: `Bearer ${token}` })
+            .attach("file", csv, "gkp-simple.csv")
+            .expect(200);
 
-        const signalTwo = await prisma.keywordSignal.create({
-            data: {
-                batchId: batch.id,
-                keyword: "gift wrap",
-                keywordNormalized: "gift wrap",
-                source: "GKP",
-            },
-        });
-
-        return { batch, signals: [signalOne, signalTwo] };
+        return response.body.batch.id as string;
     }
 
     it("rejects draft generation without auth", async () => {
@@ -68,31 +58,33 @@ describe("Decision Drafts API", () => {
     });
 
     it("guards against generation without signals", async () => {
-        process.env.LLM_PROVIDER = "mock";
-
         const response = await request
             .post(apiPath("/decision-drafts/generate"))
             .set({ Authorization: `Bearer ${token}` })
-            .send({ seeds: ["candle"] })
             .expect(400);
 
-        expect(response.body.code).toBe("SIGNALS_REQUIRED");
+        expect(response.body.code).toBe("BATCH_REQUIRED");
     });
 
     it("generates drafts with the mock provider and persists them", async () => {
-        process.env.LLM_PROVIDER = "mock";
-        const { batch, signals } = await seedSignalBatch();
+        const batchId = await uploadSignals();
 
         const response = await request
-            .post(apiPath("/decision-drafts/generate"))
+            .post(apiPath(`/decision-drafts/generate?batchId=${batchId}`))
             .set({ Authorization: `Bearer ${token}` })
-            .send({ batchId: batch.id, seeds: ["candle"], context: "Holiday upsell" })
             .expect(201);
 
         expect(response.body.drafts.length).toBeGreaterThan(0);
-        expect(response.body.drafts[0].signalIds).toEqual(
-            expect.arrayContaining([signals[0].id, signals[1].id])
+        expect(response.body.drafts.length).toBeLessThanOrEqual(5);
+
+        const keywords = response.body.drafts.flatMap(
+            (draft: { keywords: string[] }) => draft.keywords
         );
+        const signals = await prisma.keywordSignal.findMany({
+            where: { keyword: { in: keywords } },
+            select: { keyword: true },
+        });
+        expect(signals.length).toBeGreaterThan(0);
 
         const stored = await prisma.decisionDraft.findMany();
         expect(stored.length).toBeGreaterThan(0);
@@ -120,9 +112,11 @@ describe("Decision Drafts API", () => {
             data: {
                 createdDate: range.start,
                 title: "Today draft",
-                rationale: "Based on signals",
-                recommendedActions: ["Action"],
-                confidence: 55,
+                whyNow: "Based on signals",
+                riskNotes: "Low",
+                nextSteps: ["Action"],
+                keywords: ["signal"],
+                confidence: null,
                 status: "NEW",
                 signalIds: ["sig-1"],
             },
@@ -132,9 +126,11 @@ describe("Decision Drafts API", () => {
             data: {
                 createdDate: yesterdayRange.start,
                 title: "Yesterday draft",
-                rationale: "Older",
-                recommendedActions: ["Action"],
-                confidence: 40,
+                whyNow: "Older",
+                riskNotes: "Low",
+                nextSteps: ["Action"],
+                keywords: ["signal"],
+                confidence: null,
                 status: "NEW",
                 signalIds: ["sig-2"],
             },
@@ -159,9 +155,11 @@ describe("Decision Drafts API", () => {
             data: {
                 createdDate: range.start,
                 title: "Dismiss draft",
-                rationale: "Test",
-                recommendedActions: ["Action"],
-                confidence: 45,
+                whyNow: "Test",
+                riskNotes: "Low",
+                nextSteps: ["Action"],
+                keywords: ["signal"],
+                confidence: null,
                 status: "NEW",
                 signalIds: ["sig-1"],
             },
@@ -185,8 +183,10 @@ describe("Decision Drafts API", () => {
             data: {
                 createdDate: range.start,
                 title: "Promote draft",
-                rationale: "Test",
-                recommendedActions: ["Action"],
+                whyNow: "Test",
+                riskNotes: "Low",
+                nextSteps: ["Action"],
+                keywords: ["signal"],
                 confidence: 85,
                 status: "NEW",
                 signalIds: ["sig-1"],
@@ -217,8 +217,10 @@ describe("Decision Drafts API", () => {
             data: {
                 createdDate: range.start,
                 title: "Untraceable draft",
-                rationale: "Missing signals",
-                recommendedActions: ["Action"],
+                whyNow: "Missing signals",
+                riskNotes: "Low",
+                nextSteps: ["Action"],
+                keywords: ["signal"],
                 confidence: 22,
                 status: "NEW",
                 signalIds: [],

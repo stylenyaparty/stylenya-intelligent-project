@@ -14,13 +14,10 @@ export async function decisionDraftRoutes(app: FastifyInstance) {
         "/decision-drafts/generate",
         { preHandler: requireAuth },
         async (request, reply) => {
-            const BodySchema = z.object({
+            const QuerySchema = z.object({
                 batchId: z.string().optional(),
-                signalIds: z.array(z.string()).optional(),
-                seeds: z.array(z.string()).optional(),
-                context: z.string().optional(),
             });
-            const parsed = BodySchema.safeParse(request.body ?? {});
+            const parsed = QuerySchema.safeParse(request.query ?? {});
             if (!parsed.success) {
                 return reply.code(400).send({ error: "Invalid request" });
             }
