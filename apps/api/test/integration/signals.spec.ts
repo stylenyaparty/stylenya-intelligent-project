@@ -145,6 +145,43 @@ describe("Signals API", () => {
         expect(response.body.signals[0].batchId).toBe(batchId);
     });
 
+    it("computes scores and reasons on import", async () => {
+        const headers = await authHeader();
+        const importResponse = await request
+            .post(apiPath("/signals/upload"))
+            .set(headers)
+            .attach(
+                "file",
+                Buffer.from(
+                    [
+                        "Keyword Stats 2025-01-01",
+                        "Location: United States",
+                        "Keyword,Avg. monthly searches,Competition,Top of page bid (low range),Top of page bid (high range),Three month change,YoY change",
+                        "scored keyword,1000,HIGH,1.0,2.0,-90%,20%",
+                    ].join("\n")
+                ),
+                "gkp-score.csv"
+            )
+            .expect(200);
+
+        const batchId = importResponse.body.batch.id as string;
+
+        const response = await request
+            .get(apiPath(`/signals?batchId=${batchId}&sort=score&order=desc`))
+            .set(headers)
+            .expect(200);
+
+        const [signal] = response.body.signals;
+        expect(signal.keyword).toBe("scored keyword");
+        expect(signal.score).toBeGreaterThan(5.8);
+        expect(signal.score).toBeLessThan(6.1);
+        expect(signal.scoreReasons).toContain("V:1k");
+        expect(signal.scoreReasons).toContain("C:HIGH");
+        expect(signal.scoreReasons).toContain("CPC:$2.00");
+        expect(signal.scoreReasons).toContain("3M:-90%");
+        expect(signal.scoreReasons).toContain("YoY:+");
+    });
+
     it("returns 400 when keyword column is missing", async () => {
         const headers = await authHeader();
 
