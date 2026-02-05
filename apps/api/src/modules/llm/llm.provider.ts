@@ -1,11 +1,34 @@
-export type GenerateTextInput = {
-    system?: string;
-    user: string;
-    temperature?: number;
-    maxTokens?: number;
-    responseFormat?: "json_object" | "text";
+export type DecisionDraftSignal = {
+    keyword: string;
+    avgMonthlySearches: number | null;
+    competition: "LOW" | "MEDIUM" | "HIGH" | null;
+    cpcLow: number | null;
+    cpcHigh: number | null;
+    change3mPct: number | null;
+    changeYoYPct: number | null;
+    score: number;
+    scoreReasons: string;
+    seasonalitySummary?: string;
+};
+
+export type DecisionDraftPayload = {
+    signals: DecisionDraftSignal[];
+    maxDrafts: number;
+};
+
+export type DecisionDraftResult = {
+    drafts: Array<{
+        title: string;
+        keywords: string[];
+        why_now: string;
+        risk_notes: string;
+        next_steps: string[];
+    }>;
+    meta?: {
+        model?: string;
+    };
 };
 
 export interface LLMProvider {
-    generateText(input: GenerateTextInput): Promise<{ text: string }>;
+    generateDecisionDrafts(payload: DecisionDraftPayload): Promise<DecisionDraftResult>;
 }

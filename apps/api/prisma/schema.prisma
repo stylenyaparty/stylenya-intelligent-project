@@ -255,13 +255,17 @@ model DecisionDraft {
   createdDate        DateTime
   status             DecisionDraftStatus @default(NEW)
   title              String
-  rationale          String
-  recommendedActions Json
+  whyNow             String              @map("rationale")
+  riskNotes          String
+  nextSteps          Json                @map("recommendedActions")
+  keywords           Json
   confidence         Float?
   signalIds          Json
   seedSet            Json?
   model              String?
   usage              Json?
+  payloadSnapshot    Json?
+  sourceBatchId      String?
   promotedDecisionId String?             @unique
   promotedDecision   Decision?           @relation(fields: [promotedDecisionId], references: [id])
 

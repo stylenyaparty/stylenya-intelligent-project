@@ -1,7 +1,10 @@
-import type { GenerateTextInput, LLMProvider } from "./llm.provider";
+import { AppError } from "../../types/app-error.js";
+import { decisionDraftsResponseSchema } from "./llm.schemas.js";
+import type { DecisionDraftPayload, DecisionDraftResult, LLMProvider } from "./llm.provider";
+import { buildDecisionDraftPrompt } from "./decision-drafts.prompt.js";
 
 export class OpenAIProvider implements LLMProvider {
-    async generateText(input: GenerateTextInput): Promise<{ text: string }> {
+    async generateDecisionDrafts(payload: DecisionDraftPayload): Promise<DecisionDraftResult> {
         try {
             const apiKey = process.env.OPENAI_API_KEY;
             if (!apiKey) {
@@ -9,11 +12,11 @@ export class OpenAIProvider implements LLMProvider {
             }
 
             const model = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
-            const messages = [] as Array<{ role: string; content: string }>;
-            if (input.system) {
-                messages.push({ role: "system", content: input.system });
-            }
-            messages.push({ role: "user", content: input.user });
+            const { system, user } = buildDecisionDraftPrompt(payload);
+            const messages = [
+                { role: "system", content: system },
+                { role: "user", content: user },
+            ];
 
             const response = await fetch("https://api.openai.com/v1/chat/completions", {
                 method: "POST",
@@ -24,11 +27,9 @@ export class OpenAIProvider implements LLMProvider {
                 body: JSON.stringify({
                     model,
                     messages,
-                    temperature: input.temperature ?? 0.7,
-                    max_tokens: input.maxTokens ?? 256,
-                    ...(input.responseFormat === "json_object"
-                        ? { response_format: { type: "json_object" } }
-                        : {}),
+                    temperature: 0.2,
+                    max_tokens: 900,
+                    response_format: { type: "json_object" },
                 }),
             });
 
@@ -44,8 +45,30 @@ export class OpenAIProvider implements LLMProvider {
                 throw new Error("LLM provider error");
             }
 
-            return { text };
-        } catch {
+            let parsed: unknown;
+            try {
+                parsed = JSON.parse(text);
+            } catch {
+                throw new AppError(502, "LLM_BAD_OUTPUT", "LLM returned invalid JSON.");
+            }
+
+            const validated = decisionDraftsResponseSchema.safeParse(parsed);
+            if (!validated.success) {
+                throw new AppError(
+                    502,
+                    "LLM_BAD_OUTPUT",
+                    "LLM response did not match the expected schema."
+                );
+            }
+
+            return {
+                drafts: validated.data.drafts,
+                meta: { model },
+            };
+        } catch (error) {
+            if (error instanceof AppError) {
+                throw error;
+            }
             throw new Error("LLM provider error");
         }
     }

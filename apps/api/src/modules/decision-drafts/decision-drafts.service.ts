@@ -3,126 +3,90 @@ import { AppError } from "../../types/app-error.js";
 import { getDecisionDateRange } from "../decisions/decision-date-range.js";
 import { buildDedupeKey } from "../decisions/decision-dedupe.js";
 import { generateDecisionDrafts } from "../llm/llm.service.js";
+import { getTopSignalsForBatch, type LlmSignalDto } from "../signals/signals.service.js";
 
-const MAX_SIGNALS = 20;
-
-function summarizeSeasonality(
-    monthlySearches?: Record<string, number> | null
-): { bestMonth: string; worstMonth: string; trend: string } | null {
-    if (!monthlySearches || Object.keys(monthlySearches).length === 0) return null;
-    const entries = Object.entries(monthlySearches).sort(([a], [b]) => a.localeCompare(b));
-    if (entries.length === 0) return null;
-
-    let best = entries[0];
-    let worst = entries[0];
-    for (const entry of entries) {
-        if (entry[1] > best[1]) best = entry;
-        if (entry[1] < worst[1]) worst = entry;
-    }
-
-    const first = entries[0][1];
-    const last = entries[entries.length - 1][1];
-    const delta = last - first;
-    const trend = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
-
-    return { bestMonth: best[0], worstMonth: worst[0], trend };
-}
+const MAX_SIGNALS = 30;
 
 function resolveCreatedDate(date?: string) {
-    const range = getDecisionDateRange(
-        date ? { date } : { now: new Date() }
-    );
+    const range = getDecisionDateRange(date ? { date } : { now: new Date() });
     if (!range) {
         throw new AppError(400, "INVALID_DATE", "Invalid date format.");
     }
     return range.start;
 }
 
-async function fetchSignals(input: { batchId?: string; signalIds?: string[] }) {
-    const byId =
-        input.signalIds && input.signalIds.length > 0
-            ? await prisma.keywordSignal.findMany({
-                where: { id: { in: input.signalIds } },
-                orderBy: { createdAt: "desc" },
-                take: MAX_SIGNALS,
-            })
-            : [];
-
-    if (input.batchId && byId.length < MAX_SIGNALS) {
-        const remaining = MAX_SIGNALS - byId.length;
-        const batchSignals = await prisma.keywordSignal.findMany({
-            where: { batchId: input.batchId },
-            orderBy: { createdAt: "desc" },
-            take: remaining,
-        });
-        const existingIds = new Set(byId.map((signal) => signal.id));
-        const filtered = batchSignals.filter((signal) => !existingIds.has(signal.id));
-        return [...byId, ...filtered].slice(0, MAX_SIGNALS);
+export async function createDecisionDrafts(input: { batchId?: string }) {
+    if (!input.batchId) {
+        throw new AppError(400, "BATCH_REQUIRED", "batchId is required.");
     }
 
-    return byId.slice(0, MAX_SIGNALS);
-}
-
-export async function createDecisionDrafts(input: {
-    batchId?: string;
-    signalIds?: string[];
-    seeds?: string[];
-    context?: string;
-}) {
-    const signals = await fetchSignals({
-        batchId: input.batchId,
-        signalIds: input.signalIds,
+    const batch = await prisma.signalBatch.findUnique({
+        where: { id: input.batchId },
+        select: { id: true },
     });
+    if (!batch) {
+        throw new AppError(404, "BATCH_NOT_FOUND", "Batch not found.");
+    }
 
-    if (signals.length === 0) {
+    const payloadSignals = await getTopSignalsForBatch(input.batchId, MAX_SIGNALS);
+    if (payloadSignals.length === 0) {
         throw new AppError(400, "SIGNALS_REQUIRED", "At least one signal is required.");
     }
 
-    const payloadSignals = signals.map((signal) => ({
-        id: signal.id,
-        keyword: signal.keyword,
-        keywordNormalized: signal.keywordNormalized,
-        source: signal.source,
-        geo: signal.geo,
-        language: signal.language,
-        createdAt: signal.createdAt.toISOString(),
-        avgMonthlySearches: signal.avgMonthlySearches,
-        competitionLevel: signal.competitionLevel,
-        competitionIndex: signal.competitionIndex,
-        cpcLow: signal.cpcLow,
-        cpcHigh: signal.cpcHigh,
-        change3mPct: signal.change3mPct,
-        changeYoYPct: signal.changeYoYPct,
-        currency: signal.currency,
-        seasonality: summarizeSeasonality(
-            signal.monthlySearchesJson as Record<string, number> | null
-        ),
-    }));
+    const keywordRows = await prisma.keywordSignal.findMany({
+        where: {
+            batchId: input.batchId,
+            keyword: { in: payloadSignals.map((signal) => signal.keyword) },
+        },
+        select: { id: true, keyword: true },
+    });
+    const keywordToId = new Map(keywordRows.map((row) => [row.keyword, row.id]));
 
     const output = await generateDecisionDrafts({
         signals: payloadSignals,
-        seeds: input.seeds ?? [],
-        context: input.context ?? "",
-        maxDrafts: 3,
+        maxDrafts: 5,
     });
 
-    const signalIds = signals.map((signal) => signal.id);
     const createdDate = resolveCreatedDate();
 
+    const createInputs = output.drafts
+        .map((draft) => {
+            const keywords = Array.from(
+                new Set(draft.keywords.filter((keyword) => keywordToId.has(keyword)))
+            );
+            const signalIds = keywords
+                .map((keyword) => keywordToId.get(keyword))
+                .filter((id): id is string => Boolean(id));
+
+            if (keywords.length === 0 || signalIds.length === 0) {
+                return null;
+            }
+
+            return {
+                createdDate,
+                title: draft.title,
+                whyNow: draft.why_now,
+                riskNotes: draft.risk_notes,
+                nextSteps: draft.next_steps,
+                keywords,
+                confidence: null,
+                status: "NEW" as const,
+                signalIds,
+                model: output.meta.model,
+                payloadSnapshot: payloadSignals as LlmSignalDto[],
+                sourceBatchId: input.batchId,
+            };
+        })
+        .filter((draft): draft is NonNullable<typeof draft> => Boolean(draft));
+
+    if (createInputs.length === 0) {
+        throw new AppError(502, "LLM_BAD_OUTPUT", "LLM drafts lacked valid keywords.");
+    }
+
     const created = await prisma.$transaction(
-        output.drafts.map((draft) =>
+        createInputs.map((data) =>
             prisma.decisionDraft.create({
-                data: {
-                    createdDate,
-                    title: draft.title,
-                    rationale: draft.rationale,
-                    recommendedActions: draft.recommendedActions,
-                    confidence: draft.confidence,
-                    status: "NEW",
-                    signalIds,
-                    seedSet: input.seeds ?? undefined,
-                    model: output.meta.model,
-                },
+                data,
             })
         )
     );
@@ -193,7 +157,7 @@ export async function promoteDecisionDraft(id: string) {
             data: {
                 actionType: "CREATE",
                 title: draft.title,
-                rationale: draft.rationale,
+                rationale: draft.whyNow,
                 sources,
                 priorityScore:
                     typeof draft.confidence === "number"
