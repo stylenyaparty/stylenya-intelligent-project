@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../infrastructure/db/prisma.js";
 import { AppError } from "../../types/app-error.js";
 import { parseGkpCsvBuffer } from "./gkp/gkpCsvParser.js";
+import { computeSignalScore } from "./scoring/signalScoring.js";
 
 type GkpImportResult = {
     ok: true;
@@ -37,6 +38,14 @@ export async function importGkpCsv(buffer: Buffer, filename?: string | null): Pr
             return;
         }
 
+        const { score, reasons } = computeSignalScore({
+            avgMonthlySearches: row.avgMonthlySearches,
+            competitionLevel: row.competitionLevel,
+            cpcHigh: row.cpcHigh,
+            change3mPct: row.change3mPct,
+            changeYoYPct: row.changeYoYPct,
+        });
+
         dedupe.set(key, {
             keyword: row.keyword,
             keywordNormalized: row.keywordNormalized,
@@ -51,6 +60,8 @@ export async function importGkpCsv(buffer: Buffer, filename?: string | null): Pr
             change3mPct: row.change3mPct ?? null,
             changeYoYPct: row.changeYoYPct ?? null,
             currency: row.currency ?? null,
+            score,
+            scoreReasons: reasons,
             monthlySearchesJson: row.monthlySearches ?? null,
             rawRowHash: row.rawRowHash,
             rawRow: row.rawRow,
@@ -113,6 +124,8 @@ type SignalListFilters = {
     batchId?: string;
     source?: string;
     q?: string;
+    sort?: "score" | "avgMonthlySearches" | "cpcHigh" | "createdAt" | "change3mPct" | "changeYoYPct";
+    order?: "asc" | "desc";
     limit?: number;
     offset?: number;
 };
@@ -120,6 +133,9 @@ type SignalListFilters = {
 export async function listSignals(filters: SignalListFilters) {
     const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
     const offset = Math.max(filters.offset ?? 0, 0);
+
+    const sortField = filters.sort ?? "score";
+    const sortOrder = filters.order ?? "desc";
 
     const where: Prisma.KeywordSignalWhereInput = {};
     if (filters.batchId) {
@@ -132,9 +148,14 @@ export async function listSignals(filters: SignalListFilters) {
         where.keyword = { contains: filters.q, mode: "insensitive" };
     }
 
+    const orderBy: Prisma.KeywordSignalOrderByWithRelationInput[] = [
+        { [sortField]: sortOrder } as Prisma.KeywordSignalOrderByWithRelationInput,
+        { keyword: "asc" },
+    ];
+
     return prisma.keywordSignal.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        orderBy,
         skip: offset,
         take: limit,
         select: {
@@ -148,6 +169,8 @@ export async function listSignals(filters: SignalListFilters) {
             change3mPct: true,
             changeYoYPct: true,
             currency: true,
+            score: true,
+            scoreReasons: true,
             createdAt: true,
             source: true,
         },
@@ -174,4 +197,34 @@ export async function listTopSignals(limit = 20) {
             source: true,
         },
     });
+}
+
+export async function recomputeSignalScoresForBatch(batchId: string) {
+    const signals = await prisma.keywordSignal.findMany({
+        where: { batchId },
+        select: {
+            id: true,
+            avgMonthlySearches: true,
+            competitionLevel: true,
+            cpcHigh: true,
+            change3mPct: true,
+            changeYoYPct: true,
+        },
+    });
+
+    if (signals.length === 0) {
+        return { updated: 0 };
+    }
+
+    await prisma.$transaction(
+        signals.map((signal) => {
+            const { score, reasons } = computeSignalScore(signal);
+            return prisma.keywordSignal.update({
+                where: { id: signal.id },
+                data: { score, scoreReasons: reasons },
+            });
+        })
+    );
+
+    return { updated: signals.length };
 }
