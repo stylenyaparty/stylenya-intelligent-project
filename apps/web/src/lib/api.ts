@@ -48,9 +48,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 }
 
 export type KeywordProviderSettings = {
-  trends: { enabled: boolean };
   googleAds: { enabled: boolean; configured: boolean; customerId?: string };
-  auto: { prefers: string };
 };
 
 export type GoogleAdsSettingsPayload = {

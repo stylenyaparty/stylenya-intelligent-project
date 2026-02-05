@@ -1,20 +1,7 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
 import { createTestServer, getAuthToken, resetDatabase, seedAdmin, apiPath } from "../helpers.js";
-
-const mockInterestOverTime = vi.fn();
-const mockRelatedQueries = vi.fn();
-
-vi.mock(
-    "google-trends-api",
-    () => ({
-        default: {
-            interestOverTime: (...args: unknown[]) => mockInterestOverTime(...args),
-            relatedQueries: (...args: unknown[]) => mockRelatedQueries(...args),
-        },
-    })
-);
 
 describe("Keywords provider selection", () => {
     let app: FastifyInstance;
@@ -72,24 +59,8 @@ describe("Keywords provider selection", () => {
         return seeds.body.created[0].id as string;
     }
 
-    it("AUTO selects TRENDS when Google Ads is not configured", async () => {
+    it("AUTO returns not configured when Google Ads is missing", async () => {
         const headers = await authHeader();
-
-        mockInterestOverTime.mockResolvedValue(
-            JSON.stringify({
-                default: { timelineData: [{ value: [12] }, { value: [44] }] },
-            })
-        );
-        mockRelatedQueries.mockResolvedValue(
-            JSON.stringify({
-                default: {
-                    rankedList: [
-                        { rankedKeyword: [{ query: "auto seed idea", value: 50 }] },
-                        { rankedKeyword: [] },
-                    ],
-                },
-            })
-        );
 
         const seedId = await createSeed(headers, "auto provider seed");
 
@@ -109,10 +80,9 @@ describe("Keywords provider selection", () => {
         const run = await request
             .post(apiPath(`/keywords/jobs/${job.body.job.id}/run`))
             .set(headers)
-            .expect(200);
+            .expect(400);
 
-        expect(run.body.job.providerUsed).toBe("AUTO");
-        expect(run.body.items.length).toBeGreaterThan(0);
+        expect(run.body.code).toBe("PROVIDER_NOT_CONFIGURED");
     });
 
     it("AUTO selects GOOGLE_ADS when configured", async () => {
