@@ -24,26 +24,27 @@ describe("LLM Status API", () => {
     beforeEach(() => {
         resetLLMProviderCache();
         delete process.env.OPENAI_API_KEY;
+        delete process.env.LLM_ENABLED;
     });
 
     afterAll(async () => {
         await app.close();
     });
 
-    it("returns configured=false when disabled", async () => {
-        process.env.LLM_PROVIDER = "disabled";
+    it("returns mock when disabled", async () => {
+        process.env.LLM_ENABLED = "false";
 
         const response = await request
             .get(apiPath("/llm/status"))
             .set({ Authorization: `Bearer ${token}` })
             .expect(200);
 
-        expect(response.body.configured).toBe(false);
-        expect(response.body.provider).toBe("disabled");
+        expect(response.body.configured).toBe(true);
+        expect(response.body.provider).toBe("mock");
     });
 
     it("returns configured=false when openai is missing API key", async () => {
-        process.env.LLM_PROVIDER = "openai";
+        process.env.LLM_ENABLED = "true";
 
         const response = await request
             .get(apiPath("/llm/status"))

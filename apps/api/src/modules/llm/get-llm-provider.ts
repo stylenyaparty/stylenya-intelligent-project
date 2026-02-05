@@ -7,17 +7,17 @@ let cached: LLMProvider | null = null;
 
 export function getLLMProvider(): LLMProvider {
     if (cached) return cached;
-    const provider = process.env.LLM_PROVIDER ?? "disabled";
-    if (provider === "mock") {
+    const enabled = process.env.LLM_ENABLED === "true";
+    if (!enabled) {
         cached = new MockLLMProvider();
         return cached;
     }
-    if (provider === "openai" && process.env.OPENAI_API_KEY) {
+    if (process.env.OPENAI_API_KEY) {
         cached = new OpenAIProvider();
         return cached;
     }
     throw new LLMNotConfiguredError(
-        "LLM provider is not configured. Set LLM_PROVIDER=openai and OPENAI_API_KEY."
+        "LLM provider is not configured. Set LLM_ENABLED=true and OPENAI_API_KEY."
     );
 }
 

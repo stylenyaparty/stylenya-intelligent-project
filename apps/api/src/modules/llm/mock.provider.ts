@@ -1,29 +1,34 @@
-import type { GenerateTextInput, LLMProvider } from "./llm.provider";
-
-function clampConfidence(value: number) {
-    return Math.max(0, Math.min(100, Math.round(value)));
-}
+import type { DecisionDraftPayload, DecisionDraftResult, LLMProvider } from "./llm.provider";
 
 export class MockLLMProvider implements LLMProvider {
-    async generateText(input: GenerateTextInput): Promise<{ text: string }> {
-        if (input.responseFormat === "json_object") {
-            const payload = {
-                drafts: [
-                    {
-                        title: "Launch a seasonal keyword bundle",
-                        rationale:
-                            "Promoted keyword signals show rising intent for the current season. Bundling products can capture demand.",
-                        recommendedActions: [
-                            "Create a seasonal landing page for top promoted keywords.",
-                            "Bundle top 3 matching products into a featured collection.",
-                        ],
-                        confidence: clampConfidence(78),
-                    },
-                ],
-            };
-            return { text: JSON.stringify(payload) };
+    async generateDecisionDrafts(payload: DecisionDraftPayload): Promise<DecisionDraftResult> {
+        const maxDrafts = Math.min(Math.max(payload.maxDrafts, 1), 5);
+        const signals = payload.signals;
+        const chunks: Array<typeof signals> = [];
+
+        for (let i = 0; i < signals.length; i += 3) {
+            chunks.push(signals.slice(i, i + 3));
+            if (chunks.length >= maxDrafts) break;
         }
 
-        return { text: "{}" };
+        const drafts = chunks.map((group, index) => {
+            const keywords = group.map((signal) => signal.keyword);
+            const topKeyword = keywords[0] ?? "keyword";
+            return {
+                title: `Prioritize ${topKeyword} intent`,
+                keywords,
+                why_now: `Signals show strong momentum with score ${group[0]?.score ?? 0}.`,
+                risk_notes: "Demand could be seasonal; validate with recent listings performance.",
+                next_steps: [
+                    "Draft two SEO-optimized listings using the exact keyword phrasing.",
+                    "Publish a Shopify collection landing page aligned to the keyword set.",
+                ],
+            };
+        });
+
+        return {
+            drafts,
+            meta: { model: "mock" },
+        };
     }
 }
