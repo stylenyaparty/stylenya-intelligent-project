@@ -1,7 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../infrastructure/db/prisma.js";
 import { AppError } from "../../types/app-error.js";
+import { getActiveSeoContextSeeds } from "../settings/seo-context.service.js";
 import { parseGkpCsvBuffer } from "./gkp/gkpCsvParser.js";
+import { filterSignals } from "./relevance/seedRelevance.js";
 import { computeSignalScore } from "./scoring/signalScoring.js";
 
 type GkpImportResult = {
@@ -128,6 +130,7 @@ type SignalListFilters = {
     order?: "asc" | "desc";
     limit?: number;
     offset?: number;
+    relevance?: "all" | "seeded";
 };
 
 export async function listSignals(filters: SignalListFilters) {
@@ -153,7 +156,7 @@ export async function listSignals(filters: SignalListFilters) {
         { keyword: "asc" },
     ];
 
-    return prisma.keywordSignal.findMany({
+    const signals = await prisma.keywordSignal.findMany({
         where,
         orderBy,
         skip: offset,
@@ -175,6 +178,13 @@ export async function listSignals(filters: SignalListFilters) {
             source: true,
         },
     });
+
+    if (filters.relevance === "seeded") {
+        const { includeSeeds, excludeSeeds } = await getActiveSeoContextSeeds();
+        return filterSignals(signals, includeSeeds, excludeSeeds).filteredSignals;
+    }
+
+    return signals;
 }
 
 export async function listTopSignals(limit = 20) {

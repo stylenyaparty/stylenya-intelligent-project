@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -22,6 +23,7 @@ import {
   SidebarHeader,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { getKeywordProviderSettings } from "@/lib/api";
 
 const navigationItems = [
   { 
@@ -78,6 +80,32 @@ export function AppSidebar() {
   const location = useLocation();
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
+  const [googleAdsEnabled, setGoogleAdsEnabled] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function loadSettings() {
+      try {
+        const data = await getKeywordProviderSettings();
+        if (!active) return;
+        setGoogleAdsEnabled(data.googleAds.enabled);
+      } catch {
+        if (!active) return;
+        setGoogleAdsEnabled(false);
+      }
+    }
+    loadSettings();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const visibleNavigationItems = useMemo(() => {
+    if (!googleAdsEnabled) {
+      return navigationItems.filter((item) => item.title !== "Keyword Jobs");
+    }
+    return navigationItems;
+  }, [googleAdsEnabled]);
 
   const isActive = (path: string) => {
     if (path === "/dashboard") {
@@ -112,7 +140,7 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
-              {navigationItems.map((item) => (
+              {visibleNavigationItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton 
                     asChild
