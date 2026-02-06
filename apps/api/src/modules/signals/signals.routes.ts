@@ -18,7 +18,7 @@ const signalListQuerySchema = z.object({
         .enum(["score", "avgMonthlySearches", "cpcHigh", "createdAt", "change3mPct", "changeYoYPct"])
         .optional(),
     order: z.enum(["asc", "desc"]).optional(),
-    relevance: z.enum(["all", "seeded"]).optional(),
+    relevanceMode: z.enum(["strict", "broad", "all"]).optional(),
     limit: z.coerce.number().int().optional(),
     offset: z.coerce.number().int().optional(),
 });
@@ -100,8 +100,15 @@ export async function signalsRoutes(app: FastifyInstance) {
             return reply.code(400).send({ error: "Invalid signals query" });
         }
 
-        const signals = await listSignals(query.data);
-        return reply.send({ ok: true, signals });
+        const { signals, filteredOutCount } = await listSignals(query.data);
+        return reply.send({
+            ok: true,
+            signals,
+            meta: {
+                relevanceMode: query.data.relevanceMode ?? "strict",
+                filteredOutCount,
+            },
+        });
     });
 
     app.get("/signals/latest", { preHandler: requireAuth }, async (request) => {

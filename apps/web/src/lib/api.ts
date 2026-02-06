@@ -63,6 +63,56 @@ export type SeoContextResponse = {
   excludeSeeds: SeoContextSeed[];
 };
 
+export type ProductTypeDefinition = {
+  id: string;
+  key: string;
+  label: string;
+  synonymsJson?: string[] | null;
+  required: boolean;
+  status: "ACTIVE" | "ARCHIVED";
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function getProductTypes(status: "active" | "archived" | "all" = "all") {
+  return api<{ ok: boolean; productTypes: ProductTypeDefinition[] }>(
+    `/settings/product-types?status=${status}`,
+  );
+}
+
+export async function createProductType(payload: {
+  label: string;
+  key?: string;
+  synonyms?: string[];
+  required?: boolean;
+}) {
+  return api<{ ok: boolean; productType: ProductTypeDefinition }>(
+    "/settings/product-types",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function updateProductType(
+  id: string,
+  payload: {
+    label?: string;
+    synonyms?: string[];
+    required?: boolean;
+    status?: ProductTypeDefinition["status"];
+  },
+) {
+  return api<{ ok: boolean; productType: ProductTypeDefinition }>(
+    `/settings/product-types/${id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export type GoogleAdsSettingsPayload = {
   enabled: boolean;
   customerId?: string;
