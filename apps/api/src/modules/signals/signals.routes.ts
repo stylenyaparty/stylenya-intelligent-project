@@ -18,6 +18,7 @@ const signalListQuerySchema = z.object({
         .enum(["score", "avgMonthlySearches", "cpcHigh", "createdAt", "change3mPct", "changeYoYPct"])
         .optional(),
     order: z.enum(["asc", "desc"]).optional(),
+    relevance: z.enum(["all", "seeded"]).optional(),
     limit: z.coerce.number().int().optional(),
     offset: z.coerce.number().int().optional(),
 });
