@@ -5,6 +5,7 @@ import { decisionsRoutes } from "./decisions/routes";
 import { keywordsRoutes } from "../../modules/keywords/keywords.routes";
 import { llmRoutes } from "../../modules/llm/llm.routes";
 import { weeklyFocusRoutes } from "../../modules/weekly-focus/weekly-focus.routes";
+import { seoFocusRoutes } from "../../modules/seo-focus/seo-focus.routes";
 import { dashboardRoutes } from "../../modules/dashboard/dashboard.routes";
 import { productsRoutes } from "../../modules/products/products.routes";
 import { keywordProviderSettingsRoutes } from "../../modules/settings/keyword-provider-settings.routes";
@@ -44,6 +45,7 @@ export async function registerRoutes(app: FastifyInstance) {
     app.register(llmRoutes);
 
     app.register(weeklyFocusRoutes);
+    app.register(seoFocusRoutes);
 
     app.register(dashboardRoutes);
 
