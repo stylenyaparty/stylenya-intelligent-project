@@ -5,9 +5,17 @@ import { buildDedupeKey } from "../decisions/decision-dedupe.js";
 import { generateDecisionDrafts } from "../llm/llm.service.js";
 import { getTopSignalsForBatch, type LlmSignalDto } from "../signals/signals.service.js";
 import { getActiveSeoContextSeeds } from "../settings/seo-context.service.js";
-import { filterSignals, matchesAny, normalize } from "../signals/relevance/seedRelevance.js";
+import { getActiveProductTypes } from "../settings/product-types.service.js";
+import {
+    buildProductTypeMatches,
+    filterSignals,
+    matchProductTypes,
+    matchTerms,
+    normalize,
+} from "../signals/relevance/seedRelevance.js";
 
 const MAX_SIGNALS = 30;
+const TOP_SIGNALS_LIMIT = 50;
 
 function resolveCreatedDate(date?: string) {
     const range = getDecisionDateRange(date ? { date } : { now: new Date() });
@@ -38,17 +46,30 @@ export async function createDecisionDrafts(input: { batchId?: string }) {
         throw new AppError(404, "BATCH_NOT_FOUND", "Batch not found.");
     }
 
-    const topSignals = await getTopSignalsForBatch(batchId, MAX_SIGNALS * 3);
+    const topSignals = await getTopSignalsForBatch(batchId, TOP_SIGNALS_LIMIT);
     if (topSignals.length === 0) {
         throw new AppError(400, "SIGNALS_REQUIRED", "At least one signal is required.");
     }
 
-    const { includeSeeds, excludeSeeds } = await getActiveSeoContextSeeds();
-    const { filteredSignals, filteredOutCount } = filterSignals(
-        topSignals,
-        includeSeeds,
-        excludeSeeds
-    );
+    const [productTypes, { includeSeeds, excludeSeeds }] = await Promise.all([
+        getActiveProductTypes(),
+        getActiveSeoContextSeeds(),
+    ]);
+    const relevanceMode = "strict" as const;
+    const productTypeMatches = buildProductTypeMatches(productTypes);
+    const relevanceContext = {
+        productTypes: productTypeMatches,
+        occasionTerms: includeSeeds,
+        excludeTerms: excludeSeeds,
+    };
+
+    const {
+        filteredSignals,
+        filteredOutCount,
+        matchedProductTypeKeys,
+        matchedOccasionTerms,
+        matchedExcludeTerms,
+    } = filterSignals(topSignals, relevanceContext, relevanceMode);
 
     const finalSignals = filteredSignals.slice(0, MAX_SIGNALS);
     if (finalSignals.length < MAX_SIGNALS) {
@@ -60,10 +81,16 @@ export async function createDecisionDrafts(input: { batchId?: string }) {
             if (selectedKeywords.has(signal.keyword)) continue;
 
             const keywordNorm = normalize(signal.keyword ?? "");
-            if (excludeNorm.length > 0 && matchesAny(keywordNorm, excludeNorm)) {
+            if (matchTerms(keywordNorm, excludeNorm).length > 0) {
                 continue;
             }
 
+            const productMatches = matchProductTypes(keywordNorm, productTypeMatches);
+            if (productMatches.length === 0) {
+                continue;
+            }
+
+            productMatches.forEach((key) => matchedProductTypeKeys.add(key));
             finalSignals.push(signal);
             selectedKeywords.add(signal.keyword);
         }
@@ -115,8 +142,11 @@ export async function createDecisionDrafts(input: { batchId?: string }) {
                 model: output.meta.model,
                 payloadSnapshot: {
                     sourceBatchId: batchId,
-                    includeSeedsUsed: includeSeeds,
-                    excludeSeedsUsed: excludeSeeds,
+                    relevanceMode,
+                    productTypesActiveCount: productTypes.length,
+                    productTypesMatched: Array.from(matchedProductTypeKeys),
+                    occasionTermsUsed: Array.from(matchedOccasionTerms),
+                    excludeTermsUsed: Array.from(matchedExcludeTerms),
                     filteredOutCount,
                     finalSignalCount: finalSignals.length,
                     signals: finalSignals as LlmSignalDto[],

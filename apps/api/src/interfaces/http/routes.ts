@@ -9,6 +9,7 @@ import { dashboardRoutes } from "../../modules/dashboard/dashboard.routes";
 import { productsRoutes } from "../../modules/products/products.routes";
 import { keywordProviderSettingsRoutes } from "../../modules/settings/keyword-provider-settings.routes";
 import { seoContextRoutes } from "../../modules/settings/seo-context.routes";
+import { productTypesRoutes } from "../../modules/settings/product-types.routes";
 import { decisionDraftRoutes } from "../../modules/decision-drafts/decision-drafts.routes";
 import { signalsRoutes } from "../../modules/signals/signals.routes";
 
@@ -49,6 +50,7 @@ export async function registerRoutes(app: FastifyInstance) {
     app.register(productsRoutes);
     app.register(signalsRoutes);
     app.register(keywordProviderSettingsRoutes);
+    app.register(productTypesRoutes);
     app.register(seoContextRoutes);
     app.register(decisionDraftRoutes);
     
