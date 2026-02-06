@@ -2,8 +2,9 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../infrastructure/db/prisma.js";
 import { AppError } from "../../types/app-error.js";
 import { getActiveSeoContextSeeds } from "../settings/seo-context.service.js";
+import { getActiveProductTypes } from "../settings/product-types.service.js";
 import { parseGkpCsvBuffer } from "./gkp/gkpCsvParser.js";
-import { filterSignals } from "./relevance/seedRelevance.js";
+import { buildProductTypeMatches, filterSignals } from "./relevance/seedRelevance.js";
 import { computeSignalScore } from "./scoring/signalScoring.js";
 
 type GkpImportResult = {
@@ -130,7 +131,7 @@ type SignalListFilters = {
     order?: "asc" | "desc";
     limit?: number;
     offset?: number;
-    relevance?: "all" | "seeded";
+    relevanceMode?: "strict" | "broad" | "all";
 };
 
 export async function listSignals(filters: SignalListFilters) {
@@ -159,8 +160,6 @@ export async function listSignals(filters: SignalListFilters) {
     const signals = await prisma.keywordSignal.findMany({
         where,
         orderBy,
-        skip: offset,
-        take: limit,
         select: {
             id: true,
             batchId: true,
@@ -179,12 +178,29 @@ export async function listSignals(filters: SignalListFilters) {
         },
     });
 
-    if (filters.relevance === "seeded") {
-        const { includeSeeds, excludeSeeds } = await getActiveSeoContextSeeds();
-        return filterSignals(signals, includeSeeds, excludeSeeds).filteredSignals;
+    const relevanceMode = filters.relevanceMode ?? "strict";
+
+    if (relevanceMode !== "all") {
+        const [productTypes, { includeSeeds, excludeSeeds }] = await Promise.all([
+            getActiveProductTypes(),
+            getActiveSeoContextSeeds(),
+        ]);
+        const context = {
+            productTypes: buildProductTypeMatches(productTypes),
+            occasionTerms: includeSeeds,
+            excludeTerms: excludeSeeds,
+        };
+        const { filteredSignals, filteredOutCount } = filterSignals(
+            signals,
+            context,
+            relevanceMode
+        );
+        const sliced = filteredSignals.slice(offset, offset + limit);
+        return { signals: sliced, filteredOutCount };
     }
 
-    return signals;
+    const sliced = signals.slice(offset, offset + limit);
+    return { signals: sliced, filteredOutCount: 0 };
 }
 
 export async function listTopSignals(limit = 20) {
@@ -292,6 +308,51 @@ export async function getTopSignalsForBatch(batchId: string, limit = 30): Promis
         },
         orderBy: [{ score: "desc" }, { createdAt: "desc" }],
         take: Math.min(Math.max(limit, 1), 200),
+        select: {
+            keyword: true,
+            avgMonthlySearches: true,
+            competitionLevel: true,
+            cpcLow: true,
+            cpcHigh: true,
+            change3mPct: true,
+            changeYoYPct: true,
+            score: true,
+            scoreReasons: true,
+            monthlySearchesJson: true,
+        },
+    });
+
+    return rows.map((signal) => {
+        const seasonalitySummary = summarizeSeasonality(
+            signal.monthlySearchesJson as Record<string, number> | null
+        );
+        return {
+            keyword: signal.keyword,
+            avgMonthlySearches: signal.avgMonthlySearches ?? null,
+            competition: normalizeCompetition(signal.competitionLevel),
+            cpcLow: signal.cpcLow ?? null,
+            cpcHigh: signal.cpcHigh ?? null,
+            change3mPct: signal.change3mPct ?? null,
+            changeYoYPct: signal.changeYoYPct ?? null,
+            score: signal.score ?? 0,
+            scoreReasons: signal.scoreReasons ?? "",
+            ...(seasonalitySummary ? { seasonalitySummary } : {}),
+        };
+    });
+}
+
+export async function getSignalsForBatchKeywords(
+    batchId: string,
+    keywords: string[]
+): Promise<LlmSignalDto[]> {
+    if (keywords.length === 0) {
+        return [];
+    }
+    const rows = await prisma.keywordSignal.findMany({
+        where: {
+            batchId,
+            keyword: { in: keywords },
+        },
         select: {
             keyword: true,
             avgMonthlySearches: true,

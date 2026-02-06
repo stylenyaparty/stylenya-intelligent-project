@@ -63,6 +63,56 @@ export type SeoContextResponse = {
   excludeSeeds: SeoContextSeed[];
 };
 
+export type ProductTypeDefinition = {
+  id: string;
+  key: string;
+  label: string;
+  synonymsJson?: string[] | null;
+  required: boolean;
+  status: "ACTIVE" | "ARCHIVED";
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function getProductTypes(status: "active" | "archived" | "all" = "all") {
+  return api<{ ok: boolean; productTypes: ProductTypeDefinition[] }>(
+    `/settings/product-types?status=${status}`,
+  );
+}
+
+export async function createProductType(payload: {
+  label: string;
+  key?: string;
+  synonyms?: string[];
+  required?: boolean;
+}) {
+  return api<{ ok: boolean; productType: ProductTypeDefinition }>(
+    "/settings/product-types",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function updateProductType(
+  id: string,
+  payload: {
+    label?: string;
+    synonyms?: string[];
+    required?: boolean;
+    status?: ProductTypeDefinition["status"];
+  },
+) {
+  return api<{ ok: boolean; productType: ProductTypeDefinition }>(
+    `/settings/product-types/${id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export type GoogleAdsSettingsPayload = {
   enabled: boolean;
   customerId?: string;
@@ -131,6 +181,24 @@ export type DecisionDraft = {
   payloadSnapshot?: unknown;
   sourceBatchId?: string | null;
   promotedDecisionId?: string | null;
+  lastExpandedAt?: string | null;
+  expansionsCount?: number;
+  createdAt: string;
+};
+
+export type DecisionDraftExpansion = {
+  id: string;
+  draftId: string;
+  kind: "EXPAND" | "REFORMULATE" | "RERUN";
+  focus?: string | null;
+  promptSnapshot: unknown;
+  responseJson: unknown;
+  responseRaw?: string | null;
+  model?: string | null;
+  provider?: string | null;
+  tokensIn?: number | null;
+  tokensOut?: number | null;
+  latencyMs?: number | null;
   createdAt: string;
 };
 
@@ -188,5 +256,24 @@ export async function promoteDraft(draftId: string) {
       method: "POST",
       body: JSON.stringify({}),
     },
+  );
+}
+
+export async function expandDraft(
+  draftId: string,
+  payload: { focus?: string; kind?: "EXPAND" | "REFORMULATE" | "RERUN" } = {},
+) {
+  return api<{ ok: boolean; expansion: DecisionDraftExpansion; draft: DecisionDraft }>(
+    `/decision-drafts/${draftId}/expand`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function listDraftExpansions(draftId: string) {
+  return api<{ ok: boolean; items: DecisionDraftExpansion[] }>(
+    `/decision-drafts/${draftId}/expansions`,
   );
 }

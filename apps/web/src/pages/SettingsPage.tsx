@@ -2,11 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ApiError,
   createSeoContextSeed,
+  createProductType,
   getKeywordProviderSettings,
+  getProductTypes,
   getSeoContext,
   updateSeoContextSeed,
   updateKeywordProviderSettings,
+  updateProductType,
   type KeywordProviderSettings,
+  type ProductTypeDefinition,
   type SeoContextResponse,
   type SeoContextSeed,
 } from "@/lib/api";
@@ -35,8 +39,16 @@ export default function SettingsPage() {
   const [seoContext, setSeoContext] = useState<SeoContextResponse>(emptySeoContext);
   const [seoLoading, setSeoLoading] = useState(true);
   const [seoSaving, setSeoSaving] = useState(false);
-  const [includeTerm, setIncludeTerm] = useState("");
+  const [occasionTerm, setOccasionTerm] = useState("");
   const [excludeTerm, setExcludeTerm] = useState("");
+  const [productTypes, setProductTypes] = useState<ProductTypeDefinition[]>([]);
+  const [productTypesLoading, setProductTypesLoading] = useState(true);
+  const [productTypesSaving, setProductTypesSaving] = useState(false);
+  const [newProductTypeLabel, setNewProductTypeLabel] = useState("");
+  const [newProductTypeSynonyms, setNewProductTypeSynonyms] = useState("");
+  const [productTypeEdits, setProductTypeEdits] = useState<
+    Record<string, { label: string; synonyms: string }>
+  >({});
   const [formState, setFormState] = useState({
     enabled: false,
     customerId: "",
@@ -105,6 +117,43 @@ export default function SettingsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadProductTypes() {
+      setProductTypesLoading(true);
+      try {
+        const data = await getProductTypes("all");
+        if (!active) return;
+        setProductTypes(data.productTypes);
+        setProductTypeEdits(
+          data.productTypes.reduce((acc, productType) => {
+            acc[productType.id] = {
+              label: productType.label,
+              synonyms: Array.isArray(productType.synonymsJson)
+                ? productType.synonymsJson.join(", ")
+                : "",
+            };
+            return acc;
+          }, {} as Record<string, { label: string; synonyms: string }>)
+        );
+      } catch (error) {
+        if (!active) return;
+        const message =
+          error instanceof ApiError ? error.message : "Failed to load product types.";
+        toast.error(message);
+      } finally {
+        if (active) setProductTypesLoading(false);
+      }
+    }
+
+    loadProductTypes();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const missingFields = useMemo(() => {
     if (!formState.enabled) return [];
     return [
@@ -162,7 +211,7 @@ export default function SettingsPage() {
   }
 
   async function handleAddSeed(kind: SeoContextSeed["kind"]) {
-    const term = kind === "INCLUDE" ? includeTerm : excludeTerm;
+    const term = kind === "INCLUDE" ? occasionTerm : excludeTerm;
     if (!term.trim()) {
       toast.error("Enter a term to add.");
       return;
@@ -177,7 +226,7 @@ export default function SettingsPage() {
           kind === "EXCLUDE" ? [response.seed, ...prev.excludeSeeds] : prev.excludeSeeds,
       }));
       if (kind === "INCLUDE") {
-        setIncludeTerm("");
+        setOccasionTerm("");
       } else {
         setExcludeTerm("");
       }
@@ -217,6 +266,99 @@ export default function SettingsPage() {
     }
   }
 
+  function parseSynonyms(value: string) {
+    return value
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+  }
+
+  async function handleAddProductType() {
+    if (!newProductTypeLabel.trim()) {
+      toast.error("Enter a product type label.");
+      return;
+    }
+    setProductTypesSaving(true);
+    try {
+      const response = await createProductType({
+        label: newProductTypeLabel,
+        synonyms: parseSynonyms(newProductTypeSynonyms),
+      });
+      setProductTypes((prev) => [response.productType, ...prev]);
+      setProductTypeEdits((prev) => ({
+        ...prev,
+        [response.productType.id]: {
+          label: response.productType.label,
+          synonyms: Array.isArray(response.productType.synonymsJson)
+            ? response.productType.synonymsJson.join(", ")
+            : "",
+        },
+      }));
+      setNewProductTypeLabel("");
+      setNewProductTypeSynonyms("");
+      toast.success("Product type added.");
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : "Failed to add product type.";
+      toast.error(message);
+    } finally {
+      setProductTypesSaving(false);
+    }
+  }
+
+  async function handleUpdateProductType(id: string) {
+    const edits = productTypeEdits[id];
+    if (!edits?.label.trim()) {
+      toast.error("Product type label is required.");
+      return;
+    }
+    setProductTypesSaving(true);
+    try {
+      const response = await updateProductType(id, {
+        label: edits.label,
+        synonyms: parseSynonyms(edits.synonyms),
+      });
+      setProductTypes((prev) =>
+        prev.map((item) => (item.id === id ? response.productType : item))
+      );
+      setProductTypeEdits((prev) => ({
+        ...prev,
+        [response.productType.id]: {
+          label: response.productType.label,
+          synonyms: Array.isArray(response.productType.synonymsJson)
+            ? response.productType.synonymsJson.join(", ")
+            : "",
+        },
+      }));
+      toast.success("Product type updated.");
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : "Failed to update product type.";
+      toast.error(message);
+    } finally {
+      setProductTypesSaving(false);
+    }
+  }
+
+  async function handleToggleProductTypeStatus(productType: ProductTypeDefinition) {
+    setProductTypesSaving(true);
+    try {
+      const response = await updateProductType(productType.id, {
+        status: productType.status === "ARCHIVED" ? "ACTIVE" : "ARCHIVED",
+      });
+      setProductTypes((prev) =>
+        prev.map((item) => (item.id === productType.id ? response.productType : item))
+      );
+      toast.success("Product type updated.");
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : "Failed to update product type.";
+      toast.error(message);
+    } finally {
+      setProductTypesSaving(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -226,9 +368,132 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Stylenya Product Types</CardTitle>
+          <CardDescription>
+            Define the core product taxonomy that gates relevance for signals and drafts.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {productTypesLoading ? (
+            <LoadingState message="Loading product types..." />
+          ) : (
+            <div className="space-y-4">
+              <div className="grid gap-2 md:grid-cols-[2fr_3fr_auto] md:items-end">
+                <div className="space-y-1">
+                  <Label>Label</Label>
+                  <Input
+                    placeholder="Custom Cake Toppers"
+                    value={newProductTypeLabel}
+                    onChange={(event) => setNewProductTypeLabel(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Synonyms (comma separated)</Label>
+                  <Input
+                    placeholder="cake topper, personalized cake topper"
+                    value={newProductTypeSynonyms}
+                    onChange={(event) => setNewProductTypeSynonyms(event.target.value)}
+                  />
+                </div>
+                <Button
+                  onClick={handleAddProductType}
+                  disabled={productTypesSaving || !newProductTypeLabel.trim()}
+                >
+                  Add
+                </Button>
+              </div>
+              {productTypes.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No product types yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {productTypes.map((productType) => {
+                    const edits = productTypeEdits[productType.id];
+                    return (
+                      <div
+                        key={productType.id}
+                        className="rounded-lg border border-border p-4 space-y-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <h4 className="text-sm font-semibold text-foreground">
+                              {productType.label}
+                            </h4>
+                            <p className="text-xs text-muted-foreground">
+                              Key: {productType.key}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {productType.status === "ARCHIVED" && (
+                              <Badge variant="outline">Archived</Badge>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleToggleProductTypeStatus(productType)}
+                              disabled={productTypesSaving}
+                            >
+                              {productType.status === "ARCHIVED" ? "Restore" : "Archive"}
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-[2fr_3fr_auto] md:items-end">
+                          <div className="space-y-1">
+                            <Label>Label</Label>
+                            <Input
+                              value={edits?.label ?? productType.label}
+                              onChange={(event) =>
+                                setProductTypeEdits((prev) => ({
+                                  ...prev,
+                                  [productType.id]: {
+                                    label: event.target.value,
+                                    synonyms:
+                                      prev[productType.id]?.synonyms ??
+                                      (Array.isArray(productType.synonymsJson)
+                                        ? productType.synonymsJson.join(", ")
+                                        : ""),
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Synonyms</Label>
+                            <Input
+                              value={edits?.synonyms ?? ""}
+                              onChange={(event) =>
+                                setProductTypeEdits((prev) => ({
+                                  ...prev,
+                                  [productType.id]: {
+                                    label: prev[productType.id]?.label ?? productType.label,
+                                    synonyms: event.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => handleUpdateProductType(productType.id)}
+                            disabled={productTypesSaving}
+                          >
+                            Save
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>SEO Context</CardTitle>
           <CardDescription>
-            Define include and exclude terms that keep signals relevant to Stylenya.
+            Expand and protect relevance with occasion intent terms and exclusions.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -238,27 +503,31 @@ export default function SettingsPage() {
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground">Include Terms</h3>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Occasion &amp; Intent Terms
+                  </h3>
                   <p className="text-xs text-muted-foreground">
-                    Signals must match at least one include term.
+                    Signals that match these terms expand beyond product-type matches.
                   </p>
                 </div>
                 <div className="flex gap-2">
                   <Input
-                    placeholder="Add include term"
-                    value={includeTerm}
-                    onChange={(event) => setIncludeTerm(event.target.value)}
+                    placeholder="Add occasion or intent term"
+                    value={occasionTerm}
+                    onChange={(event) => setOccasionTerm(event.target.value)}
                   />
                   <Button
                     onClick={() => handleAddSeed("INCLUDE")}
-                    disabled={seoSaving || !includeTerm.trim()}
+                    disabled={seoSaving || !occasionTerm.trim()}
                   >
                     Add
                   </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {seoContext.includeSeeds.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No include terms yet.</p>
+                    <p className="text-xs text-muted-foreground">
+                      No occasion or intent terms yet.
+                    </p>
                   ) : (
                     seoContext.includeSeeds.map((seed) => (
                       <div
@@ -362,7 +631,7 @@ export default function SettingsPage() {
                           onClick={() => handleUpdateSeed(seed, { kind: "INCLUDE" })}
                           disabled={seoSaving}
                         >
-                          Move to include
+                          Move to occasion
                         </Button>
                       </div>
                     ))
