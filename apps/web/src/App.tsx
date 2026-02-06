@@ -10,6 +10,7 @@ import AuthGate from "./auth/AuthGate";
 import { AppLayout } from "./components/layout";
 import Dashboard from "./pages/Dashboard";
 import WeeklyFocusPage from "./pages/WeeklyFocusPage";
+import SEOFocusPage from "./pages/SEOFocusPage";
 import DecisionsPage from "./pages/DecisionsPage";
 import KeywordsPage from "./pages/KeywordsPage";
 import ProductsPage from "./pages/ProductsPage";
@@ -47,7 +48,7 @@ const App = () => (
             >
               <Route index element={<Dashboard />} />
               <Route path="weekly-focus" element={<WeeklyFocusPage />} />
-              <Route path="seo-focus" element={<WeeklyFocusPage />} />
+              <Route path="seo-focus" element={<SEOFocusPage />} />
               <Route path="decisions" element={<DecisionsPage />} />
               <Route path="decision-drafts" element={<DecisionsPage defaultView="drafts" />} />
               <Route path="keywords" element={<KeywordsPage />} />

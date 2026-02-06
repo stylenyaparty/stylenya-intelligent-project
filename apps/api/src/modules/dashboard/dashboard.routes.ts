@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../../interfaces/http/middleware/auth";
 import { prisma } from "../../infrastructure/db/prisma.js";
-import { buildWeeklyFocusSuggestions } from "../weekly-focus/weekly-focus.service.js";
 
 export async function dashboardRoutes(app: FastifyInstance) {
     app.get("/dashboard/kpis", { preHandler: requireAuth }, async (request) => {
@@ -42,8 +41,18 @@ export async function dashboardRoutes(app: FastifyInstance) {
         });
 
         const weeklyFocusItems = await safeCount("weekly-focus", async () => {
-            const snapshot = await buildWeeklyFocusSuggestions();
-            return snapshot.items.length;
+            const to = new Date();
+            const from = new Date(to);
+            from.setDate(from.getDate() - 13);
+            return prisma.decision.count({
+                where: {
+                    status: { in: ["PLANNED", "EXECUTED"] },
+                    createdAt: {
+                        gte: from,
+                        lte: to,
+                    },
+                },
+            });
         });
 
         return {

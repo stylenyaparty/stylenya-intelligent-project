@@ -299,7 +299,7 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
   const emptyTitle = hasDayFilter ? "No decisions for this day" : "No decisions yet";
   const emptyDescription = hasDayFilter
     ? "Try another date or switch to all time."
-    : "Decisions you create from SEO Focus will appear here.";
+    : "Decisions created from promoted drafts will appear here.";
   const hasBatches = batches.length > 0;
   const latestBatch = batches[0];
 
@@ -549,7 +549,7 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
                           onClick={() => handlePromote(draft.id)}
                           disabled={draftActionId === draft.id}
                         >
-                          Promote → SEO Focus
+                          Promote → Decision Log
                         </Button>
                       </div>
                     </div>
