@@ -14,12 +14,16 @@ CREATE TABLE "DecisionDraft" (
     "status" "DecisionDraftStatus" NOT NULL DEFAULT 'NEW',
     "title" TEXT NOT NULL,
     "rationale" TEXT NOT NULL,
+    "riskNotes" TEXT NOT NULL,
     "recommendedActions" JSONB NOT NULL,
+    "keywords" JSONB NOT NULL,
     "confidence" DOUBLE PRECISION,
     "signalIds" JSONB NOT NULL,
     "seedSet" JSONB,
     "model" TEXT,
     "usage" JSONB,
+    "payloadSnapshot" JSONB,
+    "sourceBatchId" TEXT,
     "promotedDecisionId" TEXT,
 
     CONSTRAINT "DecisionDraft_pkey" PRIMARY KEY ("id")
