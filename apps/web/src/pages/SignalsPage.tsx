@@ -3,7 +3,6 @@ import { api, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -61,6 +60,10 @@ type SignalBatchResponse = {
 type SignalResponse = {
   ok: boolean;
   signals: KeywordSignal[];
+  meta?: {
+    relevanceMode: "strict" | "broad" | "all";
+    filteredOutCount: number;
+  };
 };
 
 type UploadResponse = {
@@ -92,7 +95,7 @@ export default function SignalsPage() {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [sortBy, setSortBy] = useState<SignalSortOption>("score");
-  const [onlyRelevant, setOnlyRelevant] = useState(true);
+  const [relevanceMode, setRelevanceMode] = useState<"strict" | "broad" | "all">("strict");
 
   const [loadingBatches, setLoadingBatches] = useState(false);
   const [loadingSignals, setLoadingSignals] = useState(false);
@@ -137,7 +140,7 @@ export default function SignalsPage() {
       if (debouncedQuery) params.set("q", debouncedQuery);
       params.set("sort", sortBy);
       params.set("order", "desc");
-      params.set("relevance", onlyRelevant ? "seeded" : "all");
+      params.set("relevanceMode", relevanceMode);
       params.set("limit", "100");
       const response = await api<SignalResponse>(`/signals?${params.toString()}`);
       setSignals(response.signals);
@@ -155,7 +158,7 @@ export default function SignalsPage() {
 
   useEffect(() => {
     void loadSignals();
-  }, [activeBatchId, debouncedQuery, sortBy, onlyRelevant]);
+  }, [activeBatchId, debouncedQuery, sortBy, relevanceMode]);
 
   async function handleUpload() {
     if (!uploadFile) {
@@ -301,12 +304,22 @@ export default function SignalsPage() {
               </div>
               <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:items-center">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span className="whitespace-nowrap">Only relevant to Stylenya</span>
-                  <Switch
-                    checked={onlyRelevant}
-                    onCheckedChange={(checked) => setOnlyRelevant(checked)}
-                    aria-label="Only relevant to Stylenya"
-                  />
+                  <span className="whitespace-nowrap">Relevance</span>
+                  <Select
+                    value={relevanceMode}
+                    onValueChange={(value) =>
+                      setRelevanceMode(value as "strict" | "broad" | "all")
+                    }
+                  >
+                    <SelectTrigger className="h-9 w-[180px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="strict">Strict</SelectItem>
+                      <SelectItem value="broad">Broad</SelectItem>
+                      <SelectItem value="all">All</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <span className="whitespace-nowrap">Sort by</span>

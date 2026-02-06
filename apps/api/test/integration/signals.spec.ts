@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { prisma } from "../../src/infrastructure/db/prisma.js";
 import { createTestServer, getAuthToken, resetDatabase, seedAdmin, apiPath } from "../helpers.js";
 
 describe("Signals API", () => {
@@ -137,7 +138,7 @@ describe("Signals API", () => {
         const batchId = importResponse.body.batch.id as string;
 
         const response = await request
-            .get(apiPath(`/signals?batchId=${batchId}`))
+            .get(apiPath(`/signals?batchId=${batchId}&relevanceMode=all`))
             .set(headers)
             .expect(200);
 
@@ -167,7 +168,7 @@ describe("Signals API", () => {
         const batchId = importResponse.body.batch.id as string;
 
         const response = await request
-            .get(apiPath(`/signals?batchId=${batchId}&sort=score&order=desc`))
+            .get(apiPath(`/signals?batchId=${batchId}&sort=score&order=desc&relevanceMode=all`))
             .set(headers)
             .expect(200);
 
@@ -212,5 +213,56 @@ describe("Signals API", () => {
             .post(apiPath("/signals/upload"))
             .set(headers)
             .expect(400);
+    });
+
+    it("filters strict relevance to exclude noise keywords", async () => {
+        const headers = await authHeader();
+        await prisma.productTypeDefinition.create({
+            data: {
+                key: "cake_toppers",
+                label: "Custom Cake Toppers",
+                synonymsJson: ["cake topper", "cake toppers"],
+                status: "ACTIVE",
+            },
+        });
+        await prisma.keywordSeed.createMany({
+            data: [
+                { term: "party", source: "CUSTOM", status: "ACTIVE", kind: "INCLUDE" },
+                { term: "car", source: "CUSTOM", status: "ACTIVE", kind: "EXCLUDE" },
+            ],
+        });
+
+        const importResponse = await request
+            .post(apiPath("/signals/upload"))
+            .set(headers)
+            .attach(
+                "file",
+                Buffer.from(
+                    [
+                        "Keyword Stats 2025-01-01",
+                        "Location: United States",
+                        "Keyword,Avg. monthly searches,Competition,Top of page bid (low range),Top of page bid (high range)",
+                        "party cake topper,111,LOW,0.4,0.9",
+                        "car accessories,222,LOW,0.4,0.9",
+                    ].join("\n")
+                ),
+                "gkp-relevance-inline.csv"
+            )
+            .expect(200);
+
+        const batchId = importResponse.body.batch.id as string;
+
+        const response = await request
+            .get(apiPath(`/signals?batchId=${batchId}&relevanceMode=strict`))
+            .set(headers)
+            .expect(200);
+
+        const keywords = response.body.signals.map((signal: { keyword: string }) =>
+            signal.keyword.toLowerCase()
+        );
+        expect(keywords).toContain("party cake topper");
+        expect(keywords).not.toContain("car accessories");
+        expect(response.body.meta.relevanceMode).toBe("strict");
+        expect(response.body.meta.filteredOutCount).toBeGreaterThan(0);
     });
 });

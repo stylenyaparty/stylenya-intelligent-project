@@ -29,7 +29,7 @@ export async function createTestServer() {
 
 export async function resetDatabase() {
     await prisma.$executeRawUnsafe(
-        'TRUNCATE TABLE "KeywordSignal", "SignalBatch", "DecisionDraft", "WeeklyFocus", "PromotedKeywordSignal", "KeywordJobItem", "KeywordJob", "KeywordSeed", "Decision", "DecisionLog", "SalesRecord", "Request", "Product", "Settings", "User" CASCADE;'
+        'TRUNCATE TABLE "ProductTypeDefinition", "KeywordSignal", "SignalBatch", "DecisionDraft", "WeeklyFocus", "PromotedKeywordSignal", "KeywordJobItem", "KeywordJob", "KeywordSeed", "Decision", "DecisionLog", "SalesRecord", "Request", "Product", "Settings", "User" CASCADE;'
     );
 }
 

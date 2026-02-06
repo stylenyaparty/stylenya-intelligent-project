@@ -1,12 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   api,
+  ApiError,
   dismissDraft,
+  expandDraft,
   generateDecisionDrafts,
   listDecisionDrafts,
+  listDraftExpansions,
   listSignalBatches,
   promoteDraft,
   type DecisionDraft,
+  type DecisionDraftExpansion,
   type SignalBatch,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -38,8 +43,16 @@ import {
   type DecisionStatus,
 } from "@/components/dashboard";
 import type { ActionType } from "@/components/dashboard/ActionBadge";
-import { RefreshCw, ClipboardList, Calendar, ChevronLeft, ChevronRight, Inbox } from "lucide-react";
+import {
+  RefreshCw,
+  ClipboardList,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Inbox,
+} from "lucide-react";
 import { addDays, format, parseISO } from "date-fns";
+import { AuthContext } from "@/auth/AuthContext";
 
 type Decision = {
   id: string;
@@ -67,6 +80,8 @@ type DecisionsPageProps = {
 export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProps) {
   const showLog = defaultView === "log";
   const showDrafts = defaultView === "drafts";
+  const navigate = useNavigate();
+  const { logout } = useContext(AuthContext);
   const [data, setData] = useState<DecisionsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -79,6 +94,26 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
   const [batches, setBatches] = useState<SignalBatch[]>([]);
   const [batchesBusy, setBatchesBusy] = useState(false);
   const [generateBusy, setGenerateBusy] = useState(false);
+  const [expansionFocus, setExpansionFocus] = useState<Record<string, string>>({});
+  const [expansionBusy, setExpansionBusy] = useState<Record<string, boolean>>({});
+  const [expansionHistoryBusy, setExpansionHistoryBusy] = useState<Record<string, boolean>>({});
+  const [expansionsByDraft, setExpansionsByDraft] = useState<
+    Record<string, DecisionDraftExpansion[]>
+  >({});
+  const [selectedExpansionId, setSelectedExpansionId] = useState<Record<string, string>>({});
+  const [expandedDrafts, setExpandedDrafts] = useState<Record<string, boolean>>({});
+
+  const handleAuthError = useCallback(
+    (error: unknown) => {
+      if (error instanceof ApiError && error.status === 401) {
+        logout();
+        navigate("/login", { replace: true });
+        return true;
+      }
+      return false;
+    },
+    [logout, navigate],
+  );
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -93,11 +128,12 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
       const res = await api<DecisionsResponse>(`/decisions?${params.toString()}`);
       setData(res);
     } catch (e: unknown) {
+      if (handleAuthError(e)) return;
       setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
       setBusy(false);
     }
-  }, [mode, selectedDate]);
+  }, [handleAuthError, mode, selectedDate]);
 
   const loadDrafts = useCallback(async () => {
     if (mode === "all") {
@@ -112,11 +148,12 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
       const response = await listDecisionDrafts({ date: selectedDate, status: "NEW" });
       setDrafts(response.drafts);
     } catch (e: unknown) {
+      if (handleAuthError(e)) return;
       setDraftsError(e instanceof Error ? e.message : "Failed to load drafts");
     } finally {
       setDraftsBusy(false);
     }
-  }, [mode, selectedDate]);
+  }, [handleAuthError, mode, selectedDate]);
 
   useEffect(() => {
     if (!showLog) return;
@@ -134,11 +171,12 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
       const response = await listSignalBatches();
       setBatches(response.batches);
     } catch (e: unknown) {
+      if (handleAuthError(e)) return;
       setDraftsError(e instanceof Error ? e.message : "Failed to load batches");
     } finally {
       setBatchesBusy(false);
     }
-  }, []);
+  }, [handleAuthError]);
 
   useEffect(() => {
     if (!showDrafts) return;
@@ -155,6 +193,7 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
       });
       await load();
     } catch (e: unknown) {
+      if (handleAuthError(e)) return;
       setError(e instanceof Error ? e.message : "Failed to update");
     } finally {
       setBusy(false);
@@ -167,6 +206,7 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
       await dismissDraft(draftId);
       await loadDrafts();
     } catch (e: unknown) {
+      if (handleAuthError(e)) return;
       setDraftsError(e instanceof Error ? e.message : "Failed to dismiss draft");
     } finally {
       setDraftActionId(null);
@@ -179,6 +219,7 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
       await promoteDraft(draftId);
       await Promise.all([load(), loadDrafts()]);
     } catch (e: unknown) {
+      if (handleAuthError(e)) return;
       setDraftsError(e instanceof Error ? e.message : "Failed to promote draft");
     } finally {
       setDraftActionId(null);
@@ -194,9 +235,55 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
       await generateDecisionDrafts({ batchId: latestBatch.id });
       await loadDrafts();
     } catch (e: unknown) {
+      if (handleAuthError(e)) return;
       setDraftsError(e instanceof Error ? e.message : "Failed to generate drafts");
     } finally {
       setGenerateBusy(false);
+    }
+  }
+
+  async function handleExpandDraft(draftId: string) {
+    setExpansionBusy((prev) => ({ ...prev, [draftId]: true }));
+    setDraftsError(null);
+    try {
+      const response = await expandDraft(draftId, {
+        focus: expansionFocus[draftId]?.trim() || undefined,
+        kind: "EXPAND",
+      });
+      setDrafts((prev) =>
+        prev.map((item) => (item.id === draftId ? response.draft : item)),
+      );
+      setExpansionsByDraft((prev) => {
+        const existing = prev[draftId] ?? [];
+        return { ...prev, [draftId]: [response.expansion, ...existing] };
+      });
+      setSelectedExpansionId((prev) => ({ ...prev, [draftId]: response.expansion.id }));
+      setExpandedDrafts((prev) => ({ ...prev, [draftId]: true }));
+    } catch (e: unknown) {
+      if (handleAuthError(e)) return;
+      setDraftsError(e instanceof Error ? e.message : "Failed to expand draft");
+    } finally {
+      setExpansionBusy((prev) => ({ ...prev, [draftId]: false }));
+    }
+  }
+
+  async function handleLoadExpansionHistory(draftId: string) {
+    setExpansionHistoryBusy((prev) => ({ ...prev, [draftId]: true }));
+    try {
+      const response = await listDraftExpansions(draftId);
+      setExpansionsByDraft((prev) => ({ ...prev, [draftId]: response.items }));
+      if (response.items.length > 0) {
+        setSelectedExpansionId((prev) => ({
+          ...prev,
+          [draftId]: prev[draftId] ?? response.items[0].id,
+        }));
+        setExpandedDrafts((prev) => ({ ...prev, [draftId]: true }));
+      }
+    } catch (e: unknown) {
+      if (handleAuthError(e)) return;
+      setDraftsError(e instanceof Error ? e.message : "Failed to load expansion history");
+    } finally {
+      setExpansionHistoryBusy((prev) => ({ ...prev, [draftId]: false }));
     }
   }
 
@@ -374,7 +461,21 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
             )}
             {!draftsBusy && !batchesBusy && !draftsError && drafts.length > 0 && (
               <div className="divide-y divide-border">
-                {drafts.map((draft) => (
+                {drafts.map((draft) => {
+                  const expansions = expansionsByDraft[draft.id] ?? [];
+                  const selectedId = selectedExpansionId[draft.id];
+                  const selectedExpansion =
+                    expansions.find((item) => item.id === selectedId) ?? expansions[0];
+                  const selectedIndex = selectedExpansion
+                    ? expansions.findIndex((item) => item.id === selectedExpansion.id)
+                    : -1;
+                  const expansionNumber =
+                    selectedIndex >= 0
+                      ? (draft.expansionsCount ?? expansions.length) - selectedIndex
+                      : null;
+                  const isExpanded = expandedDrafts[draft.id] ?? false;
+
+                  return (
                   <div key={draft.id} className="p-6 space-y-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="space-y-2">
@@ -416,6 +517,25 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
                         {draft.signalIds.length} signals · Batch {draft.sourceBatchId ?? "—"}
                       </p>
                       <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                          placeholder="Focus (optional)"
+                          value={expansionFocus[draft.id] ?? ""}
+                          onChange={(event) =>
+                            setExpansionFocus((prev) => ({
+                              ...prev,
+                              [draft.id]: event.target.value,
+                            }))
+                          }
+                          className="h-8 w-[200px]"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleExpandDraft(draft.id)}
+                          disabled={expansionBusy[draft.id]}
+                        >
+                          {expansionBusy[draft.id] ? "Expanding..." : "Expand"}
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
@@ -433,8 +553,92 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
                         </Button>
                       </div>
                     </div>
+                    <div className="rounded-md border border-border/60 bg-muted/30 px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-semibold uppercase text-muted-foreground">
+                            Draft expansions
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {draft.expansionsCount ?? expansions.length} total ·{" "}
+                            {draft.lastExpandedAt
+                              ? `Last expanded ${format(
+                                  new Date(draft.lastExpandedAt),
+                                  "MMM d, yyyy",
+                                )}`
+                              : "No expansions yet"}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleLoadExpansionHistory(draft.id)}
+                            disabled={expansionHistoryBusy[draft.id]}
+                          >
+                            {expansionHistoryBusy[draft.id] ? "Loading..." : "View history"}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setExpandedDrafts((prev) => ({
+                                ...prev,
+                                [draft.id]: !isExpanded,
+                              }))
+                            }
+                          >
+                            {isExpanded ? "Hide" : "Show"}
+                          </Button>
+                          {expansions.length > 0 && (
+                            <Select
+                              value={selectedExpansion?.id}
+                              onValueChange={(value) =>
+                                setSelectedExpansionId((prev) => ({
+                                  ...prev,
+                                  [draft.id]: value,
+                                }))
+                              }
+                            >
+                              <SelectTrigger className="h-8 w-[200px]">
+                                <SelectValue placeholder="Select expansion" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-popover border border-border shadow-lg z-50">
+                                {expansions.map((item, index) => (
+                                  <SelectItem key={item.id} value={item.id}>
+                                    Expansion{" "}
+                                    {(draft.expansionsCount ?? expansions.length) - index}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </div>
+                      </div>
+                      {isExpanded && selectedExpansion && (
+                        <div className="mt-4 space-y-4 text-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="font-semibold text-foreground">
+                              Expansion {expansionNumber ?? 1}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {format(new Date(selectedExpansion.createdAt), "MMM d, yyyy")} ·{" "}
+                              {selectedExpansion.provider ?? "provider"}{" "}
+                              {selectedExpansion.model ? `(${selectedExpansion.model})` : ""}
+                            </p>
+                          </div>
+                          <ExpansionDetails responseJson={selectedExpansion.responseJson} />
+                        </div>
+                      )}
+                      {isExpanded && !selectedExpansion && (
+                        <p className="mt-3 text-xs text-muted-foreground">
+                          Expand this draft to see structured execution details.
+                        </p>
+                      )}
+                    </div>
                   </div>
-                ))}
+                );
+                })}
               </div>
             )}
           </CardContent>
@@ -555,6 +759,124 @@ const ACTION_TYPES: ActionType[] = [
 
 function isActionType(value: string): value is ActionType {
   return ACTION_TYPES.includes(value as ActionType);
+}
+
+type ExpansionResponse = {
+  expanded: {
+    objective: string;
+    checklist: string[];
+    seo: {
+      titleIdeas: string[];
+      tagIdeas: string[];
+      descriptionBullets: string[];
+    };
+    assetsNeeded: string[];
+    twoWeekPlan: { week1: string[]; week2: string[] };
+    risks: string[];
+    successMetrics: string[];
+  };
+};
+
+function ExpansionDetails({ responseJson }: { responseJson: unknown }) {
+  const data = responseJson as ExpansionResponse;
+  if (!data?.expanded) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Expansion data unavailable. Try re-expanding this draft.
+      </p>
+    );
+  }
+
+  const { expanded } = data;
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-xs font-semibold uppercase text-muted-foreground">Objective</p>
+        <p className="text-sm text-muted-foreground">{expanded.objective}</p>
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase text-muted-foreground">Checklist</p>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+          {expanded.checklist.map((item, index) => (
+            <li key={`check-${index}`}>{item}</li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase text-muted-foreground">SEO</p>
+        <div className="mt-2 grid gap-3 md:grid-cols-3">
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground">Title ideas</p>
+            <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+              {expanded.seo.titleIdeas.map((item, index) => (
+                <li key={`title-${index}`}>{item}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground">Tag ideas</p>
+            <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+              {expanded.seo.tagIdeas.map((item, index) => (
+                <li key={`tag-${index}`}>{item}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground">Description bullets</p>
+            <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+              {expanded.seo.descriptionBullets.map((item, index) => (
+                <li key={`desc-${index}`}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <p className="text-xs font-semibold uppercase text-muted-foreground">Assets needed</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            {expanded.assetsNeeded.map((item, index) => (
+              <li key={`asset-${index}`}>{item}</li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase text-muted-foreground">Risks</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            {expanded.risks.map((item, index) => (
+              <li key={`risk-${index}`}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <p className="text-xs font-semibold uppercase text-muted-foreground">Week 1 plan</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            {expanded.twoWeekPlan.week1.map((item, index) => (
+              <li key={`week1-${index}`}>{item}</li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase text-muted-foreground">Week 2 plan</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            {expanded.twoWeekPlan.week2.map((item, index) => (
+              <li key={`week2-${index}`}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase text-muted-foreground">Success metrics</p>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+          {expanded.successMetrics.map((item, index) => (
+            <li key={`metric-${index}`}>{item}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
 }
 
 // Summary card component
