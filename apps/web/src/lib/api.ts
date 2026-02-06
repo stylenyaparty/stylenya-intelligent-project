@@ -181,6 +181,24 @@ export type DecisionDraft = {
   payloadSnapshot?: unknown;
   sourceBatchId?: string | null;
   promotedDecisionId?: string | null;
+  lastExpandedAt?: string | null;
+  expansionsCount?: number;
+  createdAt: string;
+};
+
+export type DecisionDraftExpansion = {
+  id: string;
+  draftId: string;
+  kind: "EXPAND" | "REFORMULATE" | "RERUN";
+  focus?: string | null;
+  promptSnapshot: unknown;
+  responseJson: unknown;
+  responseRaw?: string | null;
+  model?: string | null;
+  provider?: string | null;
+  tokensIn?: number | null;
+  tokensOut?: number | null;
+  latencyMs?: number | null;
   createdAt: string;
 };
 
@@ -238,5 +256,24 @@ export async function promoteDraft(draftId: string) {
       method: "POST",
       body: JSON.stringify({}),
     },
+  );
+}
+
+export async function expandDraft(
+  draftId: string,
+  payload: { focus?: string; kind?: "EXPAND" | "REFORMULATE" | "RERUN" } = {},
+) {
+  return api<{ ok: boolean; expansion: DecisionDraftExpansion; draft: DecisionDraft }>(
+    `/decision-drafts/${draftId}/expand`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function listDraftExpansions(draftId: string) {
+  return api<{ ok: boolean; items: DecisionDraftExpansion[] }>(
+    `/decision-drafts/${draftId}/expansions`,
   );
 }

@@ -1,11 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { requireAuth } from "../../interfaces/http/middleware/auth";
+import { requireAuth, requireRole } from "../../interfaces/http/middleware/auth";
 import { isAppError } from "../../types/app-error.js";
 import {
     createDecisionDrafts,
     dismissDecisionDraft,
+    expandDecisionDraftById,
     listDecisionDrafts,
+    listDecisionDraftExpansions,
     promoteDecisionDraft,
 } from "./decision-drafts.service.js";
 
@@ -98,6 +100,57 @@ export async function decisionDraftRoutes(app: FastifyInstance) {
             try {
                 const result = await promoteDecisionDraft(params.id);
                 return reply.send({ ok: true, ...result });
+            } catch (error) {
+                if (isAppError(error)) {
+                    return reply
+                        .code(error.statusCode)
+                        .send({ code: error.code, message: error.message });
+                }
+                throw error;
+            }
+        }
+    );
+
+    app.post(
+        "/decision-drafts/:id/expand",
+        { preHandler: [requireAuth, requireRole("ADMIN")] },
+        async (request, reply) => {
+            const params = request.params as { id: string };
+            const BodySchema = z.object({
+                focus: z.string().optional(),
+                kind: z.enum(["EXPAND", "REFORMULATE", "RERUN"]).optional(),
+            });
+            const parsed = BodySchema.safeParse(request.body ?? {});
+            if (!parsed.success) {
+                return reply.code(400).send({ error: "Invalid request" });
+            }
+
+            try {
+                const result = await expandDecisionDraftById({
+                    id: params.id,
+                    focus: parsed.data.focus,
+                    kind: parsed.data.kind,
+                });
+                return reply.send({ ok: true, ...result });
+            } catch (error) {
+                if (isAppError(error)) {
+                    return reply
+                        .code(error.statusCode)
+                        .send({ code: error.code, message: error.message });
+                }
+                throw error;
+            }
+        }
+    );
+
+    app.get(
+        "/decision-drafts/:id/expansions",
+        { preHandler: [requireAuth, requireRole("ADMIN")] },
+        async (request, reply) => {
+            const params = request.params as { id: string };
+            try {
+                const items = await listDecisionDraftExpansions(params.id);
+                return reply.send({ ok: true, items });
             } catch (error) {
                 if (isAppError(error)) {
                     return reply

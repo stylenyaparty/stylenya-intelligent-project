@@ -306,4 +306,43 @@ describe("Decision Drafts API", () => {
 
         expect(response.body.code).toBe("TRACEABILITY_REQUIRED");
     });
+
+    it("expands a draft and logs the expansion event", async () => {
+        const batchId = await uploadSignals();
+
+        const generate = await request
+            .post(apiPath(`/decision-drafts/generate?batchId=${batchId}`))
+            .set({ Authorization: `Bearer ${token}` })
+            .expect(201);
+
+        const draftId = generate.body.drafts[0]?.id as string;
+        expect(draftId).toBeTruthy();
+
+        const response = await request
+            .post(apiPath(`/decision-drafts/${draftId}/expand`))
+            .set({ Authorization: `Bearer ${token}` })
+            .send({ focus: "SEO tags + title" })
+            .expect(200);
+
+        expect(response.body.expansion).toBeTruthy();
+        expect(response.body.draft).toBeTruthy();
+
+        const expansion = await prisma.decisionDraftExpansion.findFirst({
+            where: { draftId },
+            orderBy: { createdAt: "desc" },
+        });
+
+        expect(expansion).not.toBeNull();
+        const responseJson = expansion?.responseJson as { expanded?: { checklist?: string[] } };
+        expect(responseJson?.expanded?.checklist?.length ?? 0).toBeGreaterThan(0);
+
+        const logEvent = await prisma.decisionLogEvent.findFirst({
+            where: { eventType: "DRAFT_EXPANDED", refId: draftId },
+        });
+        expect(logEvent).not.toBeNull();
+
+        const updatedDraft = await prisma.decisionDraft.findUnique({ where: { id: draftId } });
+        expect(updatedDraft?.lastExpandedAt).not.toBeNull();
+        expect(updatedDraft?.expansionsCount).toBeGreaterThan(0);
+    });
 });
