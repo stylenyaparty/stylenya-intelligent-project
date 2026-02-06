@@ -206,7 +206,7 @@ export async function generateSandboxDrafts(
 ): Promise<SandboxResponse> {
     try {
         const client = getOpenAIClient();
-        const model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+        const model = process.env.OPENAI_MODEL ?? "gpt-5-mini";
         const { system, user } = buildSandboxPrompt(input);
         const start = Date.now();
 

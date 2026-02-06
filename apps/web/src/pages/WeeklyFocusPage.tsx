@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -70,7 +70,7 @@ export default function WeeklyFocusPage() {
   const [creating, setCreating] = useState<Record<string, boolean>>({});
   const [decisionByKey, setDecisionByKey] = useState<Record<string, PlannedDecision>>({});
 
-  async function load() {
+  const load = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
@@ -93,11 +93,11 @@ export default function WeeklyFocusPage() {
     } finally {
       setBusy(false);
     }
-  }
+  }, [limit]);
 
   useEffect(() => {
     void load();
-  }, [limit]);
+  }, [load]);
 
   const items = useMemo(() => data?.items ?? [], [data]);
 
