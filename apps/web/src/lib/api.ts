@@ -51,6 +51,18 @@ export type KeywordProviderSettings = {
   googleAds: { enabled: boolean; configured: boolean; customerId?: string };
 };
 
+export type SeoContextSeed = {
+  id: string;
+  term: string;
+  kind: "INCLUDE" | "EXCLUDE";
+  status: "ACTIVE" | "ARCHIVED";
+};
+
+export type SeoContextResponse = {
+  includeSeeds: SeoContextSeed[];
+  excludeSeeds: SeoContextSeed[];
+};
+
 export type GoogleAdsSettingsPayload = {
   enabled: boolean;
   customerId?: string;
@@ -72,6 +84,27 @@ export async function updateKeywordProviderSettings(payload: GoogleAdsSettingsPa
       body: JSON.stringify(payload),
     },
   );
+}
+
+export async function getSeoContext() {
+  return api<SeoContextResponse>("/settings/seo-context");
+}
+
+export async function createSeoContextSeed(payload: { term: string; kind: SeoContextSeed["kind"] }) {
+  return api<{ ok: boolean; seed: SeoContextSeed }>("/settings/seo-context/seeds", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateSeoContextSeed(
+  id: string,
+  payload: { status?: SeoContextSeed["status"]; kind?: SeoContextSeed["kind"] }
+) {
+  return api<{ ok: boolean; seed: SeoContextSeed }>(`/settings/seo-context/seeds/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 export type LLMStatus = {

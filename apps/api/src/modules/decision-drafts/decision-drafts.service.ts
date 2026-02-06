@@ -4,6 +4,8 @@ import { getDecisionDateRange } from "../decisions/decision-date-range.js";
 import { buildDedupeKey } from "../decisions/decision-dedupe.js";
 import { generateDecisionDrafts } from "../llm/llm.service.js";
 import { getTopSignalsForBatch, type LlmSignalDto } from "../signals/signals.service.js";
+import { getActiveSeoContextSeeds } from "../settings/seo-context.service.js";
+import { filterSignals, matchesAny, normalize } from "../signals/relevance/seedRelevance.js";
 
 const MAX_SIGNALS = 30;
 
@@ -16,34 +18,72 @@ function resolveCreatedDate(date?: string) {
 }
 
 export async function createDecisionDrafts(input: { batchId?: string }) {
-    if (!input.batchId) {
-        throw new AppError(400, "BATCH_REQUIRED", "batchId is required.");
+    let batchId = input.batchId;
+    if (!batchId) {
+        const latestBatch = await prisma.signalBatch.findFirst({
+            orderBy: { createdAt: "desc" },
+            select: { id: true },
+        });
+        if (!latestBatch) {
+            throw new AppError(400, "BATCH_REQUIRED", "batchId is required.");
+        }
+        batchId = latestBatch.id;
     }
 
     const batch = await prisma.signalBatch.findUnique({
-        where: { id: input.batchId },
+        where: { id: batchId },
         select: { id: true },
     });
     if (!batch) {
         throw new AppError(404, "BATCH_NOT_FOUND", "Batch not found.");
     }
 
-    const payloadSignals = await getTopSignalsForBatch(input.batchId, MAX_SIGNALS);
-    if (payloadSignals.length === 0) {
+    const topSignals = await getTopSignalsForBatch(batchId, MAX_SIGNALS * 3);
+    if (topSignals.length === 0) {
+        throw new AppError(400, "SIGNALS_REQUIRED", "At least one signal is required.");
+    }
+
+    const { includeSeeds, excludeSeeds } = await getActiveSeoContextSeeds();
+    const { filteredSignals, filteredOutCount } = filterSignals(
+        topSignals,
+        includeSeeds,
+        excludeSeeds
+    );
+
+    const finalSignals = filteredSignals.slice(0, MAX_SIGNALS);
+    if (finalSignals.length < MAX_SIGNALS) {
+        const excludeNorm = excludeSeeds.map(normalize).filter(Boolean);
+        const selectedKeywords = new Set(finalSignals.map((signal) => signal.keyword));
+
+        for (const signal of topSignals) {
+            if (finalSignals.length >= MAX_SIGNALS) break;
+            if (selectedKeywords.has(signal.keyword)) continue;
+
+            const keywordNorm = normalize(signal.keyword ?? "");
+            if (excludeNorm.length > 0 && matchesAny(keywordNorm, excludeNorm)) {
+                continue;
+            }
+
+            finalSignals.push(signal);
+            selectedKeywords.add(signal.keyword);
+        }
+    }
+
+    if (finalSignals.length === 0) {
         throw new AppError(400, "SIGNALS_REQUIRED", "At least one signal is required.");
     }
 
     const keywordRows = await prisma.keywordSignal.findMany({
         where: {
-            batchId: input.batchId,
-            keyword: { in: payloadSignals.map((signal) => signal.keyword) },
+            batchId,
+            keyword: { in: finalSignals.map((signal) => signal.keyword) },
         },
         select: { id: true, keyword: true },
     });
     const keywordToId = new Map(keywordRows.map((row) => [row.keyword, row.id]));
 
     const output = await generateDecisionDrafts({
-        signals: payloadSignals,
+        signals: finalSignals,
         maxDrafts: 5,
     });
 
@@ -73,8 +113,15 @@ export async function createDecisionDrafts(input: { batchId?: string }) {
                 status: "NEW" as const,
                 signalIds,
                 model: output.meta.model,
-                payloadSnapshot: payloadSignals as LlmSignalDto[],
-                sourceBatchId: input.batchId,
+                payloadSnapshot: {
+                    sourceBatchId: batchId,
+                    includeSeedsUsed: includeSeeds,
+                    excludeSeedsUsed: excludeSeeds,
+                    filteredOutCount,
+                    finalSignalCount: finalSignals.length,
+                    signals: finalSignals as LlmSignalDto[],
+                },
+                sourceBatchId: batchId,
             };
         })
         .filter((draft): draft is NonNullable<typeof draft> => Boolean(draft));
