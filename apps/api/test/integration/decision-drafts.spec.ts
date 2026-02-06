@@ -34,6 +34,28 @@ describe("Decision Drafts API", () => {
         resetLLMProviderCache();
         delete process.env.OPENAI_API_KEY;
         process.env.LLM_ENABLED = "false";
+        await prisma.productTypeDefinition.createMany({
+            data: [
+                {
+                    key: "custom_hats",
+                    label: "Custom Hats",
+                    synonymsJson: ["hat", "hats"],
+                    status: "ACTIVE",
+                },
+                {
+                    key: "cake_toppers",
+                    label: "Custom Cake Toppers",
+                    synonymsJson: ["cake topper", "cake toppers"],
+                    status: "ACTIVE",
+                },
+                {
+                    key: "birthday_banners",
+                    label: "Happy Birthday Banners",
+                    synonymsJson: ["party banner", "birthday banner"],
+                    status: "ACTIVE",
+                },
+            ],
+        });
     });
 
     afterAll(async () => {
@@ -91,7 +113,7 @@ describe("Decision Drafts API", () => {
         expect(stored[0].status).toBe("NEW");
     });
 
-    it("filters decision draft signals using SEO context seeds", async () => {
+    it("never includes excluded terms and stores relevance metadata", async () => {
         await prisma.keywordSeed.createMany({
             data: [
                 { term: "party", source: "CUSTOM", status: "ACTIVE", kind: "INCLUDE" },
@@ -116,19 +138,23 @@ describe("Decision Drafts API", () => {
         const snapshot = draft?.payloadSnapshot as
             | {
                   signals: Array<{ keyword: string }>;
-                  includeSeedsUsed: string[];
-                  excludeSeedsUsed: string[];
+                  relevanceMode: string;
+                  productTypesActiveCount: number;
+                  productTypesMatched: string[];
+                  occasionTermsUsed: string[];
+                  excludeTermsUsed: string[];
                   filteredOutCount: number;
                   finalSignalCount: number;
               }
             | undefined;
 
-        expect(snapshot?.includeSeedsUsed).toEqual(
-            expect.arrayContaining(["party", "cake topper"])
+        expect(snapshot?.relevanceMode).toBe("strict");
+        expect(snapshot?.productTypesActiveCount).toBeGreaterThan(0);
+        expect(snapshot?.productTypesMatched).toEqual(
+            expect.arrayContaining(["cake_toppers", "birthday_banners"])
         );
-        expect(snapshot?.excludeSeedsUsed).toEqual(
-            expect.arrayContaining(["car", "ornament"])
-        );
+        expect(snapshot?.occasionTermsUsed).toEqual(expect.arrayContaining(["party", "cake topper"]));
+        expect(snapshot?.excludeTermsUsed).toEqual(expect.arrayContaining(["car", "ornament"]));
         expect(snapshot?.signals.length).toBe(snapshot?.finalSignalCount);
 
         const signalKeywords = snapshot?.signals.map((signal) => signal.keyword.toLowerCase()) ?? [];
