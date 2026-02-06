@@ -1,10 +1,19 @@
 import { z } from "zod";
 import { AppError } from "../../types/app-error.js";
 import { LLMNotConfiguredError } from "./llm.errors.js";
-import { decisionDraftsResponseSchema, type DecisionDraftsResponse } from "./llm.schemas.js";
+import {
+    decisionDraftsResponseSchema,
+    expandDecisionDraftResponseSchema,
+    type DecisionDraftsResponse,
+    type ExpandDecisionDraftResponse,
+} from "./llm.schemas.js";
 import { getLLMProvider } from "./get-llm-provider.js";
 import { getOpenAIClient } from "./openai.client.js";
 import { buildSandboxPrompt, type SandboxPromptInput } from "./sandbox.prompt.js";
+import {
+    buildDecisionDraftExpandPrompt,
+    type DecisionDraftExpandPromptInput,
+} from "./decision-draft-expand.prompt.js";
 
 type LLMStatus = {
     configured: boolean;
@@ -61,6 +70,88 @@ export async function generateDecisionDrafts(input: {
             drafts: limitedDrafts,
             meta: {
                 model: response.meta?.model,
+            },
+        };
+    } catch (error) {
+        if (error instanceof LLMNotConfiguredError) {
+            throw new AppError(400, "LLM_NOT_CONFIGURED", error.message);
+        }
+        if (error instanceof AppError) {
+            throw error;
+        }
+        throw new AppError(502, "LLM_PROVIDER_ERROR", "LLM provider error.");
+    }
+}
+
+export async function expandDecisionDraft(input: DecisionDraftExpandPromptInput): Promise<{
+    response: ExpandDecisionDraftResponse;
+    responseRaw: string;
+    promptSnapshot: unknown;
+    meta: {
+        model?: string;
+        provider: "openai" | "mock" | "disabled";
+        tokensIn?: number;
+        tokensOut?: number;
+    };
+}> {
+    const provider = getLLMProvider();
+    const llmStatus = resolveLLMStatus();
+
+    const attempt = async (strict: boolean) => {
+        const prompt = buildDecisionDraftExpandPrompt(input, { strict });
+        const response = await provider.expandDecisionDraft({
+            prompt: { system: prompt.system, user: prompt.user },
+            input,
+        });
+        return { prompt, response };
+    };
+
+    const tryParse = (content: string) => {
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(content);
+        } catch {
+            return null;
+        }
+        const validated = expandDecisionDraftResponseSchema.safeParse(parsed);
+        if (!validated.success) {
+            return null;
+        }
+        return validated.data;
+    };
+
+    try {
+        const first = await attempt(false);
+        const parsedFirst = tryParse(first.response.content);
+        if (parsedFirst) {
+            return {
+                response: parsedFirst,
+                responseRaw: first.response.content,
+                promptSnapshot: first.prompt.promptSnapshot,
+                meta: {
+                    model: first.response.meta?.model,
+                    provider: llmStatus.provider,
+                    tokensIn: first.response.meta?.tokensIn,
+                    tokensOut: first.response.meta?.tokensOut,
+                },
+            };
+        }
+
+        const second = await attempt(true);
+        const parsedSecond = tryParse(second.response.content);
+        if (!parsedSecond) {
+            throw new AppError(502, "LLM_INVALID_JSON", "LLM returned invalid JSON.");
+        }
+
+        return {
+            response: parsedSecond,
+            responseRaw: second.response.content,
+            promptSnapshot: second.prompt.promptSnapshot,
+            meta: {
+                model: second.response.meta?.model,
+                provider: llmStatus.provider,
+                tokensIn: second.response.meta?.tokensIn,
+                tokensOut: second.response.meta?.tokensOut,
             },
         };
     } catch (error) {

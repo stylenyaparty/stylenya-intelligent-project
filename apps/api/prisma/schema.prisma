@@ -282,11 +282,46 @@ model DecisionDraft {
   usage              Json?
   payloadSnapshot    Json?
   sourceBatchId      String?
+  lastExpandedAt     DateTime?
+  expansionsCount    Int                 @default(0)
   promotedDecisionId String?             @unique
   promotedDecision   Decision?           @relation(fields: [promotedDecisionId], references: [id])
+  expansions         DecisionDraftExpansion[]
 
   @@index([createdDate])
   @@index([status])
+}
+
+model DecisionDraftExpansion {
+  id            String              @id @default(cuid())
+  draftId       String
+  kind          DraftExpansionKind  @default(EXPAND)
+  focus         String?
+  promptSnapshot Json
+  responseJson  Json
+  responseRaw   String?
+  model         String?
+  provider      String?
+  tokensIn      Int?
+  tokensOut     Int?
+  latencyMs     Int?
+  createdAt     DateTime @default(now())
+
+  draft DecisionDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@index([draftId, createdAt])
+}
+
+model DecisionLogEvent {
+  id        String               @id @default(cuid())
+  eventType DecisionLogEventType
+  refType   String
+  refId     String
+  metaJson  Json?
+  createdAt DateTime @default(now())
+
+  @@index([eventType, createdAt])
+  @@index([refType, refId])
 }
 
 enum UserRole {
@@ -398,6 +433,21 @@ enum DecisionDraftStatus {
   NEW
   DISMISSED
   PROMOTED
+}
+
+enum DraftExpansionKind {
+  EXPAND
+  REFORMULATE
+  RERUN
+}
+
+enum DecisionLogEventType {
+  DRAFT_CREATED
+  DRAFT_EXPANDED
+  DRAFT_REFORMULATED
+  DRAFT_RERUN
+  DRAFT_PROMOTED
+  DRAFT_DISMISSED
 }
 
 enum KeywordJobItemStatus {

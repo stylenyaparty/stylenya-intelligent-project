@@ -340,3 +340,48 @@ export async function getTopSignalsForBatch(batchId: string, limit = 30): Promis
         };
     });
 }
+
+export async function getSignalsForBatchKeywords(
+    batchId: string,
+    keywords: string[]
+): Promise<LlmSignalDto[]> {
+    if (keywords.length === 0) {
+        return [];
+    }
+    const rows = await prisma.keywordSignal.findMany({
+        where: {
+            batchId,
+            keyword: { in: keywords },
+        },
+        select: {
+            keyword: true,
+            avgMonthlySearches: true,
+            competitionLevel: true,
+            cpcLow: true,
+            cpcHigh: true,
+            change3mPct: true,
+            changeYoYPct: true,
+            score: true,
+            scoreReasons: true,
+            monthlySearchesJson: true,
+        },
+    });
+
+    return rows.map((signal) => {
+        const seasonalitySummary = summarizeSeasonality(
+            signal.monthlySearchesJson as Record<string, number> | null
+        );
+        return {
+            keyword: signal.keyword,
+            avgMonthlySearches: signal.avgMonthlySearches ?? null,
+            competition: normalizeCompetition(signal.competitionLevel),
+            cpcLow: signal.cpcLow ?? null,
+            cpcHigh: signal.cpcHigh ?? null,
+            change3mPct: signal.change3mPct ?? null,
+            changeYoYPct: signal.changeYoYPct ?? null,
+            score: signal.score ?? 0,
+            scoreReasons: signal.scoreReasons ?? "",
+            ...(seasonalitySummary ? { seasonalitySummary } : {}),
+        };
+    });
+}
