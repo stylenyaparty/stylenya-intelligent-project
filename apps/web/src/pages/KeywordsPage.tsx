@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { ApiError, api } from "@/lib/api";
+import { Navigate } from "react-router-dom";
+import { ApiError, api, getKeywordProviderSettings } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -145,6 +146,7 @@ export default function KeywordsPage() {
   const defaultJobProviderUsed = "AUTO";
   const defaultJobMaxResults = 10;
 
+  const [googleAdsEnabled, setGoogleAdsEnabled] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState("seeds");
   const [seedInput, setSeedInput] = useState("");
   const [seeds, setSeeds] = useState<KeywordSeed[]>([]);
@@ -206,10 +208,12 @@ export default function KeywordsPage() {
   async function loadProviderSettings() {
     setLoadingProviders(true);
     try {
-      const res = await api<KeywordProviderSettings>("/settings/keyword-providers");
+      const res = await getKeywordProviderSettings();
       setProviderSettings(res);
+      setGoogleAdsEnabled(res.googleAds.enabled);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load provider settings");
+      setGoogleAdsEnabled(false);
     } finally {
       setLoadingProviders(false);
     }
@@ -260,6 +264,13 @@ export default function KeywordsPage() {
     void loadPromotedSignals();
     void loadProviderSettings();
   }, []);
+
+  if (googleAdsEnabled === false) {
+    return <Navigate to="/dashboard/signals" replace />;
+  }
+  if (googleAdsEnabled === null) {
+    return <LoadingState message="Checking keyword provider settings..." />;
+  }
 
   useEffect(() => {
     void loadJobs();
