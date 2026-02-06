@@ -40,8 +40,8 @@ describe("Decision Drafts API", () => {
         await app.close();
     });
 
-    async function uploadSignals() {
-        const csvPath = path.resolve(__dirname, "..", "fixtures", "gkp-simple.csv");
+    async function uploadSignals(fixture = "gkp-simple.csv") {
+        const csvPath = path.resolve(__dirname, "..", "fixtures", fixture);
         const csv = await fs.readFile(csvPath);
 
         const response = await request
@@ -89,6 +89,51 @@ describe("Decision Drafts API", () => {
         const stored = await prisma.decisionDraft.findMany();
         expect(stored.length).toBeGreaterThan(0);
         expect(stored[0].status).toBe("NEW");
+    });
+
+    it("filters decision draft signals using SEO context seeds", async () => {
+        await prisma.keywordSeed.createMany({
+            data: [
+                { term: "party", source: "CUSTOM", status: "ACTIVE", kind: "INCLUDE" },
+                { term: "cake topper", source: "CUSTOM", status: "ACTIVE", kind: "INCLUDE" },
+                { term: "car", source: "CUSTOM", status: "ACTIVE", kind: "EXCLUDE" },
+                { term: "ornament", source: "CUSTOM", status: "ACTIVE", kind: "EXCLUDE" },
+            ],
+        });
+
+        const batchId = await uploadSignals("gkp-relevance.csv");
+
+        await request
+            .post(apiPath(`/decision-drafts/generate?batchId=${batchId}`))
+            .set({ Authorization: `Bearer ${token}` })
+            .expect(201);
+
+        const draft = await prisma.decisionDraft.findFirst({
+            orderBy: { createdAt: "desc" },
+        });
+
+        expect(draft).not.toBeNull();
+        const snapshot = draft?.payloadSnapshot as
+            | {
+                  signals: Array<{ keyword: string }>;
+                  includeSeedsUsed: string[];
+                  excludeSeedsUsed: string[];
+                  filteredOutCount: number;
+                  finalSignalCount: number;
+              }
+            | undefined;
+
+        expect(snapshot?.includeSeedsUsed).toEqual(
+            expect.arrayContaining(["party", "cake topper"])
+        );
+        expect(snapshot?.excludeSeedsUsed).toEqual(
+            expect.arrayContaining(["car", "ornament"])
+        );
+        expect(snapshot?.signals.length).toBe(snapshot?.finalSignalCount);
+
+        const signalKeywords = snapshot?.signals.map((signal) => signal.keyword.toLowerCase()) ?? [];
+        expect(signalKeywords.some((keyword) => keyword.includes("car"))).toBe(false);
+        expect(signalKeywords.some((keyword) => keyword.includes("ornament"))).toBe(false);
     });
 
     it("lists drafts for today by default", async () => {

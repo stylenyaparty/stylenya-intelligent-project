@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ApiError,
+  createSeoContextSeed,
   getKeywordProviderSettings,
+  getSeoContext,
+  updateSeoContextSeed,
   updateKeywordProviderSettings,
   type KeywordProviderSettings,
+  type SeoContextResponse,
+  type SeoContextSeed,
 } from "@/lib/api";
 import { PageHeader, LoadingState } from "@/components/dashboard";
 import { Badge } from "@/components/ui/badge";
@@ -18,10 +23,20 @@ const emptySettings: KeywordProviderSettings = {
   googleAds: { enabled: false, configured: false },
 };
 
+const emptySeoContext: SeoContextResponse = {
+  includeSeeds: [],
+  excludeSeeds: [],
+};
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<KeywordProviderSettings>(emptySettings);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [seoContext, setSeoContext] = useState<SeoContextResponse>(emptySeoContext);
+  const [seoLoading, setSeoLoading] = useState(true);
+  const [seoSaving, setSeoSaving] = useState(false);
+  const [includeTerm, setIncludeTerm] = useState("");
+  const [excludeTerm, setExcludeTerm] = useState("");
   const [formState, setFormState] = useState({
     enabled: false,
     customerId: "",
@@ -58,6 +73,32 @@ export default function SettingsPage() {
     }
 
     loadSettings();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadSeoContext() {
+      setSeoLoading(true);
+      try {
+        const data = await getSeoContext();
+        if (!active) return;
+        setSeoContext(data);
+      } catch (error) {
+        if (!active) return;
+        const message =
+          error instanceof ApiError ? error.message : "Failed to load SEO context.";
+        toast.error(message);
+      } finally {
+        if (active) setSeoLoading(false);
+      }
+    }
+
+    loadSeoContext();
 
     return () => {
       active = false;
@@ -120,12 +161,218 @@ export default function SettingsPage() {
     return <LoadingState message="Fetching keyword provider settings." />;
   }
 
+  async function handleAddSeed(kind: SeoContextSeed["kind"]) {
+    const term = kind === "INCLUDE" ? includeTerm : excludeTerm;
+    if (!term.trim()) {
+      toast.error("Enter a term to add.");
+      return;
+    }
+    setSeoSaving(true);
+    try {
+      const response = await createSeoContextSeed({ term, kind });
+      setSeoContext((prev) => ({
+        includeSeeds:
+          kind === "INCLUDE" ? [response.seed, ...prev.includeSeeds] : prev.includeSeeds,
+        excludeSeeds:
+          kind === "EXCLUDE" ? [response.seed, ...prev.excludeSeeds] : prev.excludeSeeds,
+      }));
+      if (kind === "INCLUDE") {
+        setIncludeTerm("");
+      } else {
+        setExcludeTerm("");
+      }
+      toast.success("SEO context term added.");
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : "Failed to add SEO context term.";
+      toast.error(message);
+    } finally {
+      setSeoSaving(false);
+    }
+  }
+
+  async function handleUpdateSeed(
+    seed: SeoContextSeed,
+    updates: { status?: SeoContextSeed["status"]; kind?: SeoContextSeed["kind"] }
+  ) {
+    setSeoSaving(true);
+    try {
+      const response = await updateSeoContextSeed(seed.id, updates);
+      setSeoContext((prev) => {
+        const nextInclude = prev.includeSeeds.filter((item) => item.id !== seed.id);
+        const nextExclude = prev.excludeSeeds.filter((item) => item.id !== seed.id);
+        const updatedSeed = response.seed;
+        if (updatedSeed.kind === "INCLUDE") {
+          return { includeSeeds: [updatedSeed, ...nextInclude], excludeSeeds: nextExclude };
+        }
+        return { includeSeeds: nextInclude, excludeSeeds: [updatedSeed, ...nextExclude] };
+      });
+      toast.success("SEO context updated.");
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : "Failed to update SEO context.";
+      toast.error(message);
+    } finally {
+      setSeoSaving(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Settings"
         description="Manage keyword provider preferences and integrations."
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>SEO Context</CardTitle>
+          <CardDescription>
+            Define include and exclude terms that keep signals relevant to Stylenya.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {seoLoading ? (
+            <LoadingState message="Loading SEO context..." />
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Include Terms</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Signals must match at least one include term.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Add include term"
+                    value={includeTerm}
+                    onChange={(event) => setIncludeTerm(event.target.value)}
+                  />
+                  <Button
+                    onClick={() => handleAddSeed("INCLUDE")}
+                    disabled={seoSaving || !includeTerm.trim()}
+                  >
+                    Add
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {seoContext.includeSeeds.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No include terms yet.</p>
+                  ) : (
+                    seoContext.includeSeeds.map((seed) => (
+                      <div
+                        key={seed.id}
+                        className="flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs"
+                      >
+                        <span
+                          className={
+                            seed.status === "ARCHIVED"
+                              ? "text-muted-foreground line-through"
+                              : "text-foreground"
+                          }
+                        >
+                          {seed.term}
+                        </span>
+                        {seed.status === "ARCHIVED" && (
+                          <Badge variant="outline">Archived</Badge>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            handleUpdateSeed(seed, {
+                              status: seed.status === "ARCHIVED" ? "ACTIVE" : "ARCHIVED",
+                            })
+                          }
+                          disabled={seoSaving}
+                        >
+                          {seed.status === "ARCHIVED" ? "Restore" : "Archive"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleUpdateSeed(seed, { kind: "EXCLUDE" })}
+                          disabled={seoSaving}
+                        >
+                          Move to exclude
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Exclude Terms</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Signals that match exclude terms are filtered out.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Add exclude term"
+                    value={excludeTerm}
+                    onChange={(event) => setExcludeTerm(event.target.value)}
+                  />
+                  <Button
+                    onClick={() => handleAddSeed("EXCLUDE")}
+                    disabled={seoSaving || !excludeTerm.trim()}
+                  >
+                    Add
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {seoContext.excludeSeeds.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No exclude terms yet.</p>
+                  ) : (
+                    seoContext.excludeSeeds.map((seed) => (
+                      <div
+                        key={seed.id}
+                        className="flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs"
+                      >
+                        <span
+                          className={
+                            seed.status === "ARCHIVED"
+                              ? "text-muted-foreground line-through"
+                              : "text-foreground"
+                          }
+                        >
+                          {seed.term}
+                        </span>
+                        {seed.status === "ARCHIVED" && (
+                          <Badge variant="outline">Archived</Badge>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            handleUpdateSeed(seed, {
+                              status: seed.status === "ARCHIVED" ? "ACTIVE" : "ARCHIVED",
+                            })
+                          }
+                          disabled={seoSaving}
+                        >
+                          {seed.status === "ARCHIVED" ? "Restore" : "Archive"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleUpdateSeed(seed, { kind: "INCLUDE" })}
+                          disabled={seoSaving}
+                        >
+                          Move to include
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

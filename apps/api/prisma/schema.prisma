@@ -121,12 +121,14 @@ model KeywordSeed {
   id        String           @id @default(cuid())
   term      String           @unique
   source    KeywordSeedSource
+  kind      KeywordSeedKind  @default(INCLUDE)
   status    KeywordSeedStatus @default(ACTIVE)
   tagsJson  Json?
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
   @@index([term])
+  @@index([kind, status])
 }
 
 model SignalBatch {
@@ -336,6 +338,11 @@ enum DecisionStatus {
 enum KeywordSeedSource {
   CUSTOM
   AUTO
+}
+
+enum KeywordSeedKind {
+  INCLUDE
+  EXCLUDE
 }
 
 enum KeywordSeedStatus {
