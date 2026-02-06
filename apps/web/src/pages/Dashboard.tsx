@@ -1,7 +1,7 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Package, Target, ClipboardList, TrendingUp, Calendar } from "lucide-react";
-import { KPICard, PageHeader, ActionBadge, type ActionType } from "@/components/dashboard";
+import { KPICard, PageHeader, ActionBadge, StatusBadge, type ActionType, type DecisionStatus } from "@/components/dashboard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/lib/api";
 
@@ -13,26 +13,24 @@ type DashboardKpis = {
   productOfWeek: string | null;
 };
 
-type WeeklyFocusItem = {
+type SeoFocusItem = {
+  id: string;
   actionType: ActionType;
-  targetType: "KEYWORD" | "PRODUCT" | "THEME";
-  targetId: string;
   title: string;
-  rationale: string;
-  priorityScore: number;
+  status: DecisionStatus;
+  rationale: string | null;
 };
 
-type WeeklyFocusResponse = {
-  ok: boolean;
-  items: WeeklyFocusItem[];
+type SeoFocusResponse = {
+  items: SeoFocusItem[];
 };
 
 export default function Dashboard() {
   const location = useLocation();
   const isRootDashboard = location.pathname === "/dashboard" || location.pathname === "/dashboard/";
-  const [weeklyFocus, setWeeklyFocus] = useState<WeeklyFocusItem[]>([]);
-  const [weeklyFocusError, setWeeklyFocusError] = useState<string | null>(null);
-  const [weeklyFocusLoading, setWeeklyFocusLoading] = useState(false);
+  const [seoFocus, setSeoFocus] = useState<SeoFocusItem[]>([]);
+  const [seoFocusError, setSeoFocusError] = useState<string | null>(null);
+  const [seoFocusLoading, setSeoFocusLoading] = useState(false);
   const [kpis, setKpis] = useState<DashboardKpis>({
     activeProducts: 0,
     weeklyFocusItems: 0,
@@ -66,21 +64,21 @@ export default function Dashboard() {
       }
     }
 
-    async function loadWeeklyFocus() {
-      setWeeklyFocusLoading(true);
-      setWeeklyFocusError(null);
+    async function loadSeoFocus() {
+      setSeoFocusLoading(true);
+      setSeoFocusError(null);
       try {
-        const response = await api<WeeklyFocusResponse>("/weekly-focus?limit=3");
-        setWeeklyFocus(response.items ?? []);
+        const response = await api<SeoFocusResponse>("/seo-focus?days=14&includeExecuted=true");
+        setSeoFocus(response.items?.slice(0, 3) ?? []);
       } catch (e: unknown) {
-        setWeeklyFocusError(e instanceof Error ? e.message : "Failed to load SEO focus");
+        setSeoFocusError(e instanceof Error ? e.message : "Failed to load SEO focus");
       } finally {
-        setWeeklyFocusLoading(false);
+        setSeoFocusLoading(false);
       }
     }
 
     void loadKpis();
-    void loadWeeklyFocus();
+    void loadSeoFocus();
   }, [isRootDashboard]);
 
   // If we're on a nested route, just render the outlet
@@ -149,23 +147,24 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {weeklyFocusLoading && (
+              {seoFocusLoading && (
                 <p className="text-sm text-muted-foreground">Loading SEO focus…</p>
               )}
-              {!weeklyFocusLoading && weeklyFocusError && (
-                <p className="text-sm text-destructive">{weeklyFocusError}</p>
+              {!seoFocusLoading && seoFocusError && (
+                <p className="text-sm text-destructive">{seoFocusError}</p>
               )}
-              {!weeklyFocusLoading && !weeklyFocusError && weeklyFocus.length === 0 && (
+              {!seoFocusLoading && !seoFocusError && seoFocus.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  No promoted signals yet. Promote keywords to generate SEO focus actions.
+                  No decisions planned or executed in the last two weeks.
                 </p>
               )}
-              {weeklyFocus.map((item) => (
+              {seoFocus.map((item) => (
                 <FocusItemPreview
-                  key={`${item.targetType}-${item.targetId}`}
+                  key={item.id}
                   title={item.title}
                   action={item.actionType}
-                  reason={item.rationale}
+                  reason={item.rationale ?? "—"}
+                  status={item.status}
                 />
               ))}
             </div>
@@ -238,10 +237,12 @@ function FocusItemPreview({
   title,
   action,
   reason,
+  status,
 }: {
   title: string;
   action: ActionType;
   reason: string;
+  status: DecisionStatus;
 }) {
   return (
     <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-card">
@@ -249,9 +250,12 @@ function FocusItemPreview({
         <ActionBadge action={action} />
         <span className="font-medium text-sm">{title}</span>
       </div>
-      <span className="text-xs text-muted-foreground line-clamp-1 max-w-[200px]">
-        {reason}
-      </span>
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-muted-foreground line-clamp-1 max-w-[200px]">
+          {reason}
+        </span>
+        <StatusBadge status={status} />
+      </div>
     </div>
   );
 }
