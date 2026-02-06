@@ -26,11 +26,16 @@ beforeAll(async () => {
     prisma = (await import("../src/infrastructure/db/prisma.js")).prisma;
     resetDatabase = (await import("./helpers.js")).resetDatabase;
 
-    execSync("npx prisma migrate deploy", {
+    const schemaPath = path.resolve(__dirname, "../prisma/schema.prisma");
+    const prismaVersion = "6.19.2";
+    execSync(
+        `npx prisma@${prismaVersion} migrate reset --force --skip-seed --schema "${schemaPath}"`,
+        {
         stdio: "inherit",
         cwd: path.resolve(__dirname, ".."),
         env: { ...process.env, DATABASE_URL: databaseUrl },
-    });
+        }
+    );
 });
 
 beforeEach(async () => {
