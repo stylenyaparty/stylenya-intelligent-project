@@ -6,6 +6,7 @@ import {
   dismissDraft,
   expandDraft,
   generateDecisionDrafts,
+  getDecisionExpansion,
   listDecisionDrafts,
   listDraftExpansions,
   listSignalBatches,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { 
   Select, 
@@ -102,6 +104,11 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
   >({});
   const [selectedExpansionId, setSelectedExpansionId] = useState<Record<string, string>>({});
   const [expandedDrafts, setExpandedDrafts] = useState<Record<string, boolean>>({});
+  const [expansionDialogOpen, setExpansionDialogOpen] = useState(false);
+  const [expansionDecision, setExpansionDecision] = useState<Decision | null>(null);
+  const [decisionExpansion, setDecisionExpansion] = useState<DecisionDraftExpansion | null>(null);
+  const [decisionExpansionError, setDecisionExpansionError] = useState<string | null>(null);
+  const [decisionExpansionLoading, setDecisionExpansionLoading] = useState(false);
 
   const handleAuthError = useCallback(
     (error: unknown) => {
@@ -265,6 +272,32 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
     } finally {
       setExpansionBusy((prev) => ({ ...prev, [draftId]: false }));
     }
+  }
+
+  async function handleViewExpansion(decision: Decision) {
+    setExpansionDialogOpen(true);
+    setExpansionDecision(decision);
+    setDecisionExpansion(null);
+    setDecisionExpansionError(null);
+    setDecisionExpansionLoading(true);
+    try {
+      const response = await getDecisionExpansion(decision.id);
+      setDecisionExpansion(response.expansion);
+    } catch (e: unknown) {
+      if (handleAuthError(e)) return;
+      setDecisionExpansionError(
+        e instanceof Error ? e.message : "Failed to load expansion",
+      );
+    } finally {
+      setDecisionExpansionLoading(false);
+    }
+  }
+
+  function resetDecisionExpansionState() {
+    setDecisionExpansion(null);
+    setDecisionExpansionError(null);
+    setDecisionExpansionLoading(false);
+    setExpansionDecision(null);
   }
 
   async function handleLoadExpansionHistory(draftId: string) {
@@ -691,6 +724,16 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
                         </TableCell>
                         <TableCell>
                           <div className="font-medium">{d.title}</div>
+                          {getDecisionExpansionId(d.sources) && (
+                            <Button
+                              variant="link"
+                              size="sm"
+                              className="h-auto p-0 text-xs"
+                              onClick={() => handleViewExpansion(d)}
+                            >
+                              View expansion
+                            </Button>
+                          )}
                         </TableCell>
                         <TableCell>
                           <ActionBadge
@@ -742,6 +785,33 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
           </CardContent>
         </Card>
       )}
+      {showLog && (
+        <Dialog
+          open={expansionDialogOpen}
+          onOpenChange={(open) => {
+            setExpansionDialogOpen(open);
+            if (!open) resetDecisionExpansionState();
+          }}
+        >
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Decision expansion</DialogTitle>
+            </DialogHeader>
+            {expansionDecision && (
+              <p className="text-sm text-muted-foreground">{expansionDecision.title}</p>
+            )}
+            {decisionExpansionLoading && <LoadingState message="Loading expansion..." />}
+            {!decisionExpansionLoading && decisionExpansionError && (
+              <ErrorState message={decisionExpansionError} />
+            )}
+            {!decisionExpansionLoading && !decisionExpansionError && decisionExpansion && (
+              <div className="mt-4">
+                <ExpansionDetails responseJson={decisionExpansion.responseJson} />
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -759,6 +829,16 @@ const ACTION_TYPES: ActionType[] = [
 
 function isActionType(value: string): value is ActionType {
   return ACTION_TYPES.includes(value as ActionType);
+}
+
+function getDecisionExpansionId(sources: unknown) {
+  if (!sources || typeof sources !== "object" || Array.isArray(sources)) {
+    return null;
+  }
+  const expansion = (sources as { expansion?: { latestExpansionId?: string } }).expansion;
+  return typeof expansion?.latestExpansionId === "string"
+    ? expansion.latestExpansionId
+    : null;
 }
 
 type ExpansionResponse = {

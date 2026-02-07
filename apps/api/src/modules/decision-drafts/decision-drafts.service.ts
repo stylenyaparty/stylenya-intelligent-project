@@ -259,6 +259,11 @@ export async function promoteDecisionDraft(id: string) {
         throw new AppError(409, "DRAFT_ALREADY_PROMOTED", "Draft already promoted.");
     }
 
+    const latestExpansion = await prisma.decisionDraftExpansion.findFirst({
+        where: { draftId: draft.id },
+        orderBy: { createdAt: "desc" },
+    });
+
     const sources = [{ signalIds, seedSet: draft.seedSet ?? [] }];
     const dedupeKey = buildDedupeKey({
         actionType: "CREATE",
@@ -266,6 +271,24 @@ export async function promoteDecisionDraft(id: string) {
     });
 
     const existing = await prisma.decision.findUnique({ where: { dedupeKey } });
+    const expansionSource = latestExpansion
+        ? {
+              latestExpansionId: latestExpansion.id,
+              kind: latestExpansion.kind,
+              createdAt: latestExpansion.createdAt.toISOString(),
+              model: latestExpansion.model ?? null,
+              provider: latestExpansion.provider ?? null,
+          }
+        : null;
+
+    const nextSources = {
+        draft: { id: draft.id },
+        signals: sources,
+        ...(expansionSource ? { expansion: expansionSource } : {}),
+    };
+
+    const mergedSources = mergeDecisionSources(existing?.sources, nextSources);
+
     const decision =
         existing ??
         (await prisma.decision.create({
@@ -273,7 +296,7 @@ export async function promoteDecisionDraft(id: string) {
                 actionType: "CREATE",
                 title: draft.title,
                 rationale: draft.whyNow,
-                sources,
+                sources: mergedSources,
                 priorityScore:
                     typeof draft.confidence === "number"
                         ? Math.round(draft.confidence)
@@ -281,6 +304,13 @@ export async function promoteDecisionDraft(id: string) {
                 dedupeKey,
             },
         }));
+
+    if (existing) {
+        await prisma.decision.update({
+            where: { id: existing.id },
+            data: { sources: mergedSources },
+        });
+    }
 
     const updated = await prisma.decisionDraft.update({
         where: { id },
@@ -298,6 +328,22 @@ export async function promoteDecisionDraft(id: string) {
     });
 
     return { draft: updated, decision };
+}
+
+function mergeDecisionSources(
+    existingSources: unknown,
+    nextSources: Record<string, unknown>
+) {
+    if (!existingSources) {
+        return nextSources;
+    }
+    if (Array.isArray(existingSources)) {
+        return { legacySources: existingSources, ...nextSources };
+    }
+    if (typeof existingSources === "object") {
+        return { ...(existingSources as Record<string, unknown>), ...nextSources };
+    }
+    return { legacySources: existingSources, ...nextSources };
 }
 
 function resolveDraftKeywords(draft: { keywords: unknown }) {
