@@ -130,6 +130,77 @@ export async function decisionsRoutes(app: FastifyInstance) {
         }
     );
 
+    app.get(
+        "/decisions/:id/expansion",
+        { preHandler: [requireAuth, requireRole("ADMIN")] },
+        async (request, reply) => {
+            try {
+                const ParamsSchema = z.object({ id: z.string().uuid() });
+                const params = ParamsSchema.parse(request.params);
+
+                const decision = await prisma.decision.findUnique({ where: { id: params.id } });
+                if (!decision) {
+                    return reply.code(404).send({
+                        ok: false,
+                        code: "DECISION_NOT_FOUND",
+                        error: "Decision not found",
+                    });
+                }
+
+                const sources = decision.sources as
+                    | {
+                          expansion?: {
+                              latestExpansionId?: string;
+                          };
+                      }
+                    | null
+                    | undefined;
+
+                const expansionId = sources?.expansion?.latestExpansionId;
+                if (!expansionId) {
+                    return reply.code(404).send({
+                        ok: false,
+                        code: "EXPANSION_NOT_FOUND",
+                        error: "Expansion not found",
+                    });
+                }
+
+                const expansion = await prisma.decisionDraftExpansion.findUnique({
+                    where: { id: expansionId },
+                });
+                if (!expansion) {
+                    return reply.code(404).send({
+                        ok: false,
+                        code: "EXPANSION_NOT_FOUND",
+                        error: "Expansion not found",
+                    });
+                }
+
+                return reply.send({
+                    ok: true,
+                    expansion: {
+                        id: expansion.id,
+                        draftId: expansion.draftId,
+                        kind: expansion.kind,
+                        createdAt: expansion.createdAt,
+                        model: expansion.model,
+                        provider: expansion.provider,
+                        tokensIn: expansion.tokensIn,
+                        tokensOut: expansion.tokensOut,
+                        latencyMs: expansion.latencyMs,
+                        responseJson: expansion.responseJson,
+                        responseRaw: expansion.responseRaw,
+                    },
+                });
+            } catch (error) {
+                if (error instanceof z.ZodError) {
+                    return reply.code(400).send({ error: "Invalid decision expansion request" });
+                }
+                throw error;
+            }
+        }
+    );
+
     // Update decision status (and optional notes)
     app.patch(
         "/decisions/:id",
