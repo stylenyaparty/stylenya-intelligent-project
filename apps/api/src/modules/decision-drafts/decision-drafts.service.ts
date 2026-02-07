@@ -398,7 +398,7 @@ export async function expandDecisionDraftById(params: {
         .map((type) => ({
             key: type.key,
             label: type.label,
-            synonyms: Array.isArray(type.synonymsJson) ? type.synonymsJson : undefined,
+            synonyms: Array.isArray(type.synonyms) ? type.synonyms : undefined,
         }));
 
     const productTypeFilter =
