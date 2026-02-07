@@ -279,6 +279,89 @@ describe("Decision Drafts API", () => {
         expect(decision).not.toBeNull();
     });
 
+    it("persists expansion references when promoting drafts", async () => {
+        const range = getDecisionDateRange({ now: new Date() });
+        expect(range).toBeTruthy();
+        if (!range) return;
+
+        const draft = await prisma.decisionDraft.create({
+            data: {
+                createdDate: range.start,
+                title: "Draft with expansion",
+                whyNow: "Test",
+                riskNotes: "Low",
+                nextSteps: ["Action"],
+                keywords: ["signal"],
+                confidence: 60,
+                status: "NEW",
+                signalIds: ["sig-1"],
+            },
+        });
+
+        const responseJson = {
+            expanded: {
+                objective: "Grow sales",
+                checklist: ["Step 1"],
+                seo: {
+                    titleIdeas: ["Idea 1"],
+                    tagIdeas: ["Tag 1"],
+                    descriptionBullets: ["Bullet 1"],
+                },
+                assetsNeeded: ["Asset 1"],
+                twoWeekPlan: {
+                    week1: ["Plan 1"],
+                    week2: ["Plan 2"],
+                },
+                risks: ["Risk 1"],
+                successMetrics: ["Metric 1"],
+            },
+        };
+
+        const expansion = await prisma.decisionDraftExpansion.create({
+            data: {
+                draftId: draft.id,
+                kind: "EXPAND",
+                promptSnapshot: {},
+                responseJson,
+                responseRaw: "raw",
+                model: "mock-model",
+                provider: "mock",
+                tokensIn: 10,
+                tokensOut: 20,
+                latencyMs: 100,
+            },
+        });
+
+        const promoted = await request
+            .post(apiPath(`/decision-drafts/${draft.id}/promote`))
+            .set({ Authorization: `Bearer ${token}` })
+            .send({})
+            .expect(200);
+
+        const decision = await prisma.decision.findUnique({
+            where: { id: promoted.body.decision.id },
+        });
+
+        expect(decision).not.toBeNull();
+        const sources = decision?.sources as
+            | {
+                  draft?: { id?: string };
+                  expansion?: { latestExpansionId?: string };
+              }
+            | undefined;
+        expect(sources?.draft?.id).toBe(draft.id);
+        expect(sources?.expansion?.latestExpansionId).toBe(expansion.id);
+
+        const expansionResponse = await request
+            .get(apiPath(`/decisions/${promoted.body.decision.id}/expansion`))
+            .set({ Authorization: `Bearer ${token}` })
+            .expect(200);
+
+        expect(expansionResponse.body.ok).toBe(true);
+        expect(expansionResponse.body.expansion.id).toBe(expansion.id);
+        expect(expansionResponse.body.expansion.responseJson).toEqual(responseJson);
+    });
+
     it("enforces traceability on promotion", async () => {
         const range = getDecisionDateRange({ now: new Date() });
         expect(range).toBeTruthy();

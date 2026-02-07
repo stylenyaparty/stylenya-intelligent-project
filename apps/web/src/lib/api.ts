@@ -277,3 +277,9 @@ export async function listDraftExpansions(draftId: string) {
     `/decision-drafts/${draftId}/expansions`,
   );
 }
+
+export async function getDecisionExpansion(decisionId: string) {
+  return api<{ ok: boolean; expansion: DecisionDraftExpansion }>(
+    `/decisions/${decisionId}/expansion`,
+  );
+}
