@@ -1,0 +1,16 @@
+# API App
+
+The API app implements clean architecture and exposes business capabilities through HTTP endpoints. It owns deterministic rules and optionally calls LLM services for narrative insights.
+
+## Key areas
+
+- Application use cases: apps/api/src/application
+- Domain rules and entities: apps/api/src/domain
+- Infrastructure adapters: apps/api/src/infrastructure
+- HTTP interface layer: apps/api/src/interfaces
+
+## Contracts
+
+See the API contract for endpoint definitions and conventions:
+
+- docs/api-contract.md

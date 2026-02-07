@@ -1,5 +1,23 @@
 # Stylenya API
 
+Backend API for the Stylenya Intelligent Project. This app implements clean architecture and exposes business use cases via HTTP endpoints.
+
+## Local development
+
+From the repo root:
+
+```bash
+npm install --prefix apps/api
+npm --prefix apps/api run dev
+```
+
+Or run both apps together from the repo root:
+
+```bash
+npm install
+npm run dev
+```
+
 ## Integration tests
 
 These tests use Vitest + Supertest and require a dedicated Postgres database.

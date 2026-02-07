@@ -166,7 +166,7 @@ Rules: `amount >= 0`
 
 - `start`
 - `end`
-Rules: `start <= end`
+Rules: `start &lt;= end`
 
 ### 5.3 KPI Snapshot (read model)
 

@@ -140,7 +140,7 @@ Human-readable analysis outputs derived from deterministic logic (and optionally
 - `message` TEXT NOT NULL
 - `scope` TEXT NOT NULL  -- PRODUCT | CATEGORY | THEME | GLOBAL
 - `target_ref_id` TEXT NULL  -- product_id (UUID as text) or category/theme name
-- `confidence_score` NUMERIC(3,2) NULL CHECK (confidence_score >= 0 AND confidence_score <= 1)
+- `confidence_score` NUMERIC(3,2) NULL CHECK (confidence_score >= 0 AND confidence_score &lt;= 1)
 - `period_start` DATE NOT NULL
 - `period_end` DATE NOT NULL
 - `generated_by` TEXT NOT NULL DEFAULT 'RULES' -- RULES | LLM | HYBRID

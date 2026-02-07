@@ -1,0 +1,53 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "Stylenya Intelligent Project",
+  "description": "Decision-support platform for Stylenya (API + Web).",
+  "theme": "mint",
+  "favicon": "favicon.svg",
+  "colors": {
+    "primary": "#0f3d3e"
+  },
+  "navigation": {
+    "dropdowns": [
+      {
+        "dropdown": "Overview",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "index",
+              "getting-started",
+              "development"
+            ]
+          }
+        ]
+      },
+      {
+        "dropdown": "Architecture",
+        "groups": [
+          {
+            "group": "Architecture",
+            "pages": [
+              "system-architecture",
+              "domain-model",
+              "data-model",
+              "api-contract"
+            ]
+          }
+        ]
+      },
+      {
+        "dropdown": "Apps",
+        "groups": [
+          {
+            "group": "Apps",
+            "pages": [
+              "apps-api",
+              "apps-web"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
