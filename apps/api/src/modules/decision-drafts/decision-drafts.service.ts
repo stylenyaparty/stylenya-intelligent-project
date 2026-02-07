@@ -312,6 +312,33 @@ export async function promoteDecisionDraft(id: string) {
         });
     }
 
+    const existingPromotion = await prisma.decisionDraft.findFirst({
+        where: { promotedDecisionId: decision.id },
+    });
+
+    if (existingPromotion && existingPromotion.id !== draft.id) {
+        const updated = await prisma.decisionDraft.update({
+            where: { id },
+            data: { status: "PROMOTED" },
+        });
+
+        await logDecisionLogEvent({
+            eventType: "DRAFT_PROMOTED",
+            refType: "DecisionDraft",
+            refId: updated.id,
+            meta: {
+                batchId: updated.sourceBatchId ?? null,
+                decisionId: decision.id,
+            },
+        });
+
+        return {
+            draft: updated,
+            decision,
+            message: "That decision was already added or promoted.",
+        };
+    }
+
     const updated = await prisma.decisionDraft.update({
         where: { id },
         data: { status: "PROMOTED", promotedDecisionId: decision.id },
