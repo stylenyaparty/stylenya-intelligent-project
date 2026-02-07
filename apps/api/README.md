@@ -11,6 +11,12 @@ npm install --prefix apps/api
 npm --prefix apps/api run dev
 ```
 
+Create a local environment file before running the API:
+
+```bash
+copy apps/api/.env.example apps/api/.env
+```
+
 Or run both apps together from the repo root:
 
 ```bash
