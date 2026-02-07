@@ -1,6 +1,6 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { Package, Target, ClipboardList, TrendingUp, Calendar } from "lucide-react";
+import { Package, Target, ClipboardList, TrendingUp } from "lucide-react";
 import { KPICard, PageHeader, ActionBadge, StatusBadge, type ActionType, type DecisionStatus } from "@/components/dashboard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/lib/api";
@@ -10,7 +10,6 @@ type DashboardKpis = {
   weeklyFocusItems: number;
   pendingDecisions: number;
   recentDecisions: number;
-  productOfWeek: string | null;
 };
 
 type SeoFocusItem = {
@@ -36,7 +35,6 @@ export default function Dashboard() {
     weeklyFocusItems: 0,
     pendingDecisions: 0,
     recentDecisions: 0,
-    productOfWeek: null,
   });
   const [kpisLoading, setKpisLoading] = useState(false);
   const [kpisError, setKpisError] = useState<string | null>(null);
@@ -57,7 +55,6 @@ export default function Dashboard() {
           weeklyFocusItems: 0,
           pendingDecisions: 0,
           recentDecisions: 0,
-          productOfWeek: null,
         });
       } finally {
         setKpisLoading(false);
@@ -128,9 +125,9 @@ export default function Dashboard() {
       </div>
 
       {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* SEO Focus - Takes 2 columns */}
-        <Card className="lg:col-span-2">
+      <div className="grid grid-cols-1 gap-6">
+        {/* SEO Focus */}
+        <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -171,31 +168,8 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Product of the Week */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-primary" />
-              <CardTitle className="text-lg">Product of the Week</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center py-4">
-              <div className="w-16 h-16 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-3">
-                <Package className="h-8 w-8 text-primary" />
-              </div>
-              <p className="font-medium text-foreground">
-                {kpis.productOfWeek ?? "—"}
-              </p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Not available yet
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Quick Actions */}
-        <Card className="lg:col-span-3">
+        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Quick Navigation</CardTitle>
           </CardHeader>
