@@ -48,7 +48,7 @@ export async function login(email: string, password: string): Promise<LoginUser>
   let res: Response;
 
   try {
-    res = await fetch(`/v1/auth/login`, {
+    res = await fetch(`${API_URL}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -73,7 +73,7 @@ export async function fetchMe(): Promise<MeAuth> {
   const token = getToken();
   if (!token) throw new Error("No token");
 
-  const res = await fetch(`/v1/me`, {
+  const res = await fetch(`${API_URL}/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
@@ -95,7 +95,7 @@ export async function fetchBootstrapStatus(): Promise<BootstrapStatus> {
   let res: Response;
 
   try {
-    res = await fetch(`/v1/bootstrap-status`);
+    res = await fetch(`${API_URL}/bootstrap-status`);
   } catch {
     throw new Error("Backend not reachable");
   }
@@ -118,7 +118,7 @@ export async function createInitialAdmin(payload: InitialAdminPayload): Promise<
   let res: Response;
 
   try {
-    res = await fetch(`/v1/initial-admin`, {
+    res = await fetch(`${API_URL}/initial-admin`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
