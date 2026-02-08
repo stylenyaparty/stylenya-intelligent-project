@@ -31,7 +31,7 @@ export async function importGkpCsv(buffer: Buffer, filename?: string | null): Pr
         throw new AppError(400, "CSV_EMPTY", "No data rows found in CSV.");
     }
 
-    const dedupe = new Map<string, Prisma.KeywordSignalCreateManyInput>();
+    const dedupe = new Map<string, Omit<Prisma.KeywordSignalCreateManyInput, "batchId">>();
     let skippedDuplicatesCount = 0;
 
     parsed.rows.forEach((row) => {
