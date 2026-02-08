@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../infrastructure/db/prisma.js";
 import { AppError } from "../../types/app-error.js";
 
@@ -40,7 +41,7 @@ function generateKey(label: string) {
 }
 
 export async function listProductTypes(status: "active" | "archived" | "all") {
-    const where =
+    const where: Prisma.ProductTypeDefinitionWhereInput =
         status === "all"
             ? {}
             : {

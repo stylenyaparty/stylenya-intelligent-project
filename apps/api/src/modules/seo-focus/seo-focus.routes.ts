@@ -1,3 +1,4 @@
+import type { DecisionStatus } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../infrastructure/db/prisma";
@@ -25,7 +26,9 @@ export async function seoFocusRoutes(app: FastifyInstance) {
         const from = new Date(to);
         from.setDate(from.getDate() - (days - 1));
 
-        const statuses = includeExecuted ? ["PLANNED", "EXECUTED"] : ["PLANNED"];
+        const statuses: DecisionStatus[] = includeExecuted
+            ? ["PLANNED", "EXECUTED"]
+            : ["PLANNED"];
 
         const items = await prisma.decision.findMany({
             where: {

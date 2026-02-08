@@ -65,7 +65,7 @@ export async function importGkpCsv(buffer: Buffer, filename?: string | null): Pr
             currency: row.currency ?? null,
             score,
             scoreReasons: reasons,
-            monthlySearchesJson: row.monthlySearches ?? null,
+            monthlySearchesJson: row.monthlySearches ?? Prisma.DbNull,
             rawRowHash: row.rawRowHash,
             rawRow: row.rawRow,
         });

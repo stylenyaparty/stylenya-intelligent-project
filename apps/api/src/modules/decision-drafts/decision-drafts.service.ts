@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../infrastructure/db/prisma.js";
 import { AppError } from "../../types/app-error.js";
 import { getDecisionDateRange } from "../decisions/decision-date-range.js";
@@ -281,7 +282,7 @@ export async function promoteDecisionDraft(id: string) {
           }
         : null;
 
-    const nextSources = {
+    const nextSources: Prisma.JsonObject = {
         draft: { id: draft.id },
         signals: sources,
         ...(expansionSource ? { expansion: expansionSource } : {}),
@@ -359,18 +360,18 @@ export async function promoteDecisionDraft(id: string) {
 
 function mergeDecisionSources(
     existingSources: unknown,
-    nextSources: Record<string, unknown>
-) {
+    nextSources: Prisma.JsonObject
+): Prisma.InputJsonValue {
     if (!existingSources) {
         return nextSources;
     }
     if (Array.isArray(existingSources)) {
-        return { legacySources: existingSources, ...nextSources };
+        return { legacySources: existingSources, ...nextSources } as Prisma.JsonObject;
     }
     if (typeof existingSources === "object") {
-        return { ...(existingSources as Record<string, unknown>), ...nextSources };
+        return { ...(existingSources as Prisma.JsonObject), ...nextSources };
     }
-    return { legacySources: existingSources, ...nextSources };
+    return { legacySources: existingSources, ...nextSources } as Prisma.JsonObject;
 }
 
 function resolveDraftKeywords(draft: { keywords: unknown }) {
