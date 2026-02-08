@@ -16,7 +16,11 @@ export async function createApp(options: CreateAppOptions = {}) {
         logger: options.logger ?? { level: "info" },
     });
 
-    await app.register(cors, { origin: true, credentials: true });
+    await app.register(cors, {
+        origin: true,
+        credentials: true,
+        methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    });
     await app.register(cookie);
     await app.register(jwt, {
         secret: process.env.JWT_SECRET!,
