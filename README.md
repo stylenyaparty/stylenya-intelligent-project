@@ -1,67 +1,201 @@
-﻿# Stylenya Intelligent Project
+﻿# Stylenya Intelligence Dashboard
 
-Decision-support platform for Stylenya that combines deterministic business rules with optional AI-assisted insights. The system is split into two apps:
+## a. Descripción general del proyecto
 
-- API: exposes use cases and rules via HTTP.
-- Web: dashboard UI for analysis and decision-making.
+**Stylenya Intelligence Dashboard** es un **Sistema de Apoyo a la Toma de Decisiones (Decision Support System – DSS)** diseñado para asistir estratégicamente a negocios de e-commerce creativo mediante el análisis de señales externas de demanda y la generación de propuestas de decisión asistidas por Inteligencia Artificial.
 
-## Repo structure
+El sistema **no automatiza decisiones ni ejecuta acciones**, sino que actúa como una plataforma de **inteligencia asistencial**, donde la IA colabora generando contexto, borradores y explicaciones que posteriormente son evaluadas, validadas y promovidas por un usuario humano.
 
-```
-apps/
-	api/         # Backend API (clean architecture)
-	web/         # Frontend dashboard (Vite + React)
-docs/          # Project documentation (Mintlify)
-```
+El objetivo principal del proyecto es **reducir la carga cognitiva del decisor**, mejorar la trazabilidad de las decisiones estratégicas y transformar datos externos (como keywords de búsqueda con volumen real) en **planes operativos accionables**, manteniendo siempre el control humano sobre el ciclo de vida de cada decisión.
 
-## Documentation
+El sistema ha sido diseñado, implementado y desplegado como una **aplicación real en producción**, no como un prototipo académico, y constituye el **Trabajo Fin de Máster (TFM)** del autor.
 
-Core docs live in the repo and are also rendered by Mintlify:
+---
 
-- [docs/system-architecture.md](docs/system-architecture.md)
-- [docs/domain-model.md](docs/domain-model.md)
-- [docs/data-model.md](docs/data-model.md)
-- [docs/api-contract.md](docs/api-contract.md)
+## b. Stack tecnológico utilizado
 
-Mintlify config:
+El sistema sigue una **arquitectura desacoplada**, separando claramente frontend, backend, dominio, persistencia e infraestructura.
 
-- [docs/docs.json](docs/docs.json)
-- [docs/mint.json](docs/mint.json)
+### Backend
 
-### Run docs locally
+- **Node.js** (runtime)
+- **TypeScript** (tipado estático)
+- **Fastify** (framework HTTP de alto rendimiento)
+- **Prisma ORM** (modelado y migraciones de base de datos)
+- **PostgreSQL** (motor de base de datos)
+- **JWT** (autenticación)
+- **Vitest + Supertest** (tests de integración)
+
+### Frontend
+
+- **React**
+- **Vite**
+- **TypeScript**
+- **Arquitectura desktop-first**
+- **Separación clara UI / servicios / lógica**
+
+### Inteligencia Artificial
+
+- **Capa LLM desacoplada del dominio**
+- **Provider abstraction** (Mock / OpenAI)
+- IA en rol **asistencial**, no decisorio
+- Generación de *Decision Drafts* y explicaciones contextualizadas
+
+### Infraestructura y despliegue
+
+- **Render**
+  - Web Service (Backend)
+  - Static Site (Frontend)
+- **Neon Console**
+  - PostgreSQL serverless
+- **Prisma Migrate** para sincronización de esquema en producción
+
+---
+
+## c. Instalación y ejecución
+
+### Requisitos previos
+
+- Node.js ≥ 18
+- Yarn
+- Docker (opcional para entorno local de base de datos)
+- PostgreSQL (local o remoto)
+
+---
+
+### Instalación del proyecto
+
+#### Clonar el repositorio
 
 ```bash
-cd docs
-npx mintlify dev
+git clone https://github.com/stylenyaparty/stylenya-intelligent-project.git
+cd stylenya-intelligent-project
 ```
 
-## Development
-
-### Prerequisites
-
-- Node.js
-- Docker (for Postgres)
-
-### Install dependencies
+#### Instalar dependencias
 
 ```bash
-npm install --prefix apps/api
-npm install --prefix apps/web
+yarn install
 ```
 
-### Run API + Web together
+### Configuración del backend
+
+#### Crear un archivo `.env` en `apps/api`
+
+```env
+DATABASE_URL=postgresql://user:password@localhost:5432/stylenya
+JWT_SECRET=your_secret_here
+NODE_ENV=development
+```
+
+#### Ejecutar migraciones
 
 ```bash
-npm install
-npm run dev
+cd apps/api
+npx prisma migrate dev
 ```
 
-### Database (local)
+#### Ejecutar backend
 
 ```bash
-docker compose up -d db
+yarn dev
 ```
 
-### API integration tests
+Backend disponible por defecto en:
 
-See [apps/api/README.md](apps/api/README.md) for the dedicated Postgres test database setup and Vitest commands.
+`http://localhost:3001`
+
+### Configuración del frontend
+
+#### Crear un archivo `.env` en `apps/web`
+
+```env
+VITE_API_URL=http://localhost:3001
+```
+
+#### Ejecutar frontend
+
+```bash
+cd apps/web
+yarn dev
+```
+
+Frontend disponible por defecto en:
+
+`http://localhost:5173`
+
+## d. Estructura del proyecto
+
+El proyecto sigue una estructura monorepo, organizada por responsabilidades:
+
+```text
+stylenya-intelligent-project/
+│
+├── apps/
+│   ├── api/                # Backend (Fastify + Prisma)
+│   │   ├── prisma/         # Esquema y migraciones
+│   │   ├── src/
+│   │   │   ├── routes/     # Endpoints HTTP
+│   │   │   ├── domain/     # Modelo de dominio
+│   │   │   ├── services/   # Casos de uso
+│   │   │   ├── llm/        # Capa IA (provider abstraction)
+│   │   │   └── app.ts
+│   │   └── tests/          # Tests de integración
+│   │
+│   └── web/                # Frontend (React + Vite)
+│       ├── src/
+│       │   ├── pages/
+│       │   ├── components/
+│       │   ├── services/   # Cliente API
+│       │   └── App.tsx
+│       └── dist/           # Build de producción
+│
+├── docs/                   # Documentación académica (TFM)
+├── README.md
+└── package.json
+```
+
+## e. Funcionalidades principales
+
+### Autenticación y bootstrap
+
+- Creación de administrador inicial (one-time bootstrap)
+- Diferenciación explícita entre:
+  - inexistencia de usuarios
+  - usuario no autenticado
+- Autenticación basada en JWT
+
+### Ingesta de señales externas
+
+- Carga de keywords vía CSV (Google Keyword Planner)
+- Normalización y deduplicación
+- Persistencia trazable de señales
+
+### Capa de Inteligencia Artificial (LLM)
+
+- Generación de Decision Drafts
+- Análisis contextual de señales externas + contexto interno
+- Redacción de propuestas y justificación
+- La IA no ejecuta acciones ni modifica estados de negocio
+
+### Decision Drafts & Decision Log
+
+- Inbox diario de borradores generados por IA
+- Promoción manual a decisión
+- Registro histórico navegable por fechas
+- Auditoría completa del ciclo de vida
+
+### SEO Focus (plan operativo)
+
+- Cadencia bi-weekly
+- Derivado exclusivamente de decisiones aprobadas
+- Evita duplicados y ruido estratégico
+- Actúa como centro operativo de corto plazo
+
+### Trazabilidad y control
+
+- Todas las decisiones requieren justificación
+- No existen transiciones automáticas
+- Estados controlados manualmente
+- Historial persistente y auditable
+  
