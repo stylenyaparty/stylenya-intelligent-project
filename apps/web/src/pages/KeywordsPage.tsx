@@ -265,13 +265,6 @@ export default function KeywordsPage() {
     void loadProviderSettings();
   }, []);
 
-  if (googleAdsEnabled === false) {
-    return <Navigate to="/dashboard/signals" replace />;
-  }
-  if (googleAdsEnabled === null) {
-    return <LoadingState message="Checking keyword provider settings..." />;
-  }
-
   useEffect(() => {
     void loadJobs();
   }, [jobStatusFilter]);
@@ -534,6 +527,13 @@ export default function KeywordsPage() {
       </span>
     );
   };
+
+  if (googleAdsEnabled === false) {
+    return <Navigate to="/dashboard/signals" replace />;
+  }
+  if (googleAdsEnabled === null) {
+    return <LoadingState message="Checking keyword provider settings..." />;
+  }
 
   return (
     <div className="animate-fade-in space-y-6">
