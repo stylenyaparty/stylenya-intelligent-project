@@ -1,0 +1,5 @@
+{
+  "prisma.pinToPrisma6": true,
+  "prisma.hidePrisma6Prompts": true,
+  "prisma.schemaPath": "apps/api/prisma/schema.prisma"
+}

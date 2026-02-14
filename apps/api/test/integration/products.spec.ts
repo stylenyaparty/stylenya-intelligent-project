@@ -92,12 +92,26 @@ describe("Products API", () => {
         expect(Array.isArray(shopifyResponse.body.products)).toBe(true);
         expect(shopifyResponse.body.products.every((p: { productSource: string; status: string }) => p.productSource === "SHOPIFY" && p.status === "ACTIVE")).toBe(true);
 
+        const reviewCsv = [
+            "Handle,Title,Status,Type",
+            "review-handle,,active,Accessories",
+            "review-handle,,,",
+        ].join("\n");
+
+        await request
+            .post(apiPath("/products/import-csv"))
+            .set(headers)
+            .attach("file", Buffer.from(reviewCsv), "shopify.csv")
+            .expect(200);
+
         const reviewResponse = await request
             .get(apiPath("/products?status=REVIEW&page=1&pageSize=50"))
             .set(headers)
             .expect(200);
 
-        expect(reviewResponse.body.products.some((p: { status: string }) => p.status === "REVIEW")).toBe(true);
+        expect(Array.isArray(reviewResponse.body.products)).toBe(true);
+        expect(reviewResponse.body.products.length).toBeGreaterThan(0);
+        expect(reviewResponse.body.products.every((p: { status: string }) => p.status === "REVIEW")).toBe(true);
     });
 
     it("imports Etsy CSV with SKU/hash handling", async () => {
