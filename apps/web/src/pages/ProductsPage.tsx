@@ -48,7 +48,7 @@ import { toast } from "@/components/ui/use-toast";
 const SOURCE_TABS = [
   { label: "Etsy", value: "ETSY" },
   { label: "Shopify", value: "SHOPIFY" },
-  { label: "For Review", value: "REVIEW" },
+  { label: "For Review", value: "FOR_REVIEW" },
 ] as const;
 
 type ProductStatus = "ACTIVE" | "DRAFT" | "ARCHIVED" | "REVIEW";
@@ -127,20 +127,22 @@ export default function ProductsPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const products = data?.products ?? [];
+  const isForReviewTab = activeTab === "FOR_REVIEW";
+  const showImportSummary = activeTab === "SHOPIFY" && importSummary?.source === "SHOPIFY";
 
   const emptyMessage = useMemo(() => {
-    if (activeTab === "REVIEW") {
+    if (isForReviewTab) {
       return "Products missing required data will appear here for correction.";
     }
     return "No active products yet. Import your catalog to compare decisions.";
-  }, [activeTab]);
+  }, [isForReviewTab]);
 
   const load = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
       const params = new URLSearchParams({ page: "1", pageSize: "50" });
-      if (activeTab === "REVIEW") {
+      if (isForReviewTab) {
         params.set("status", "REVIEW");
       } else {
         params.set("source", activeTab);
@@ -156,7 +158,7 @@ export default function ProductsPage() {
     } finally {
       setBusy(false);
     }
-  }, [activeTab, search]);
+  }, [activeTab, isForReviewTab, search]);
 
   useEffect(() => {
     void load();
@@ -321,20 +323,24 @@ export default function ProductsPage() {
             }
           }}
         />
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={busy}
-        >
-          <Upload className="h-4 w-4" />
-          Import CSV
-        </Button>
-        <Button size="sm" className="gap-2" onClick={openCreateDialog} disabled={busy}>
-          <Package className="h-4 w-4" />
-          Add Product
-        </Button>
+        {!isForReviewTab && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={busy}
+            >
+              <Upload className="h-4 w-4" />
+              Import CSV
+            </Button>
+            <Button size="sm" className="gap-2" onClick={openCreateDialog} disabled={busy}>
+              <Package className="h-4 w-4" />
+              Add Product
+            </Button>
+          </>
+        )}
       </PageHeader>
 
       <div className="flex flex-col gap-4 mb-6">
@@ -377,7 +383,7 @@ export default function ProductsPage() {
         </form>
       </div>
 
-      {importSummary && (
+      {showImportSummary && importSummary && (
         <Card className="mb-6 border border-primary/20">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">
@@ -395,7 +401,7 @@ export default function ProductsPage() {
               </Badge>
             </div>
             {importSummary.forReview > 0 && (
-              <Button variant="outline" size="sm" onClick={() => setActiveTab("REVIEW")}>
+              <Button variant="outline" size="sm" onClick={() => setActiveTab("FOR_REVIEW")}>
                 View for review
               </Button>
             )}
@@ -426,18 +432,20 @@ export default function ProductsPage() {
                   </p>
                   <p className="text-sm text-muted-foreground mt-1">{emptyMessage}</p>
                 </div>
-                <div className="flex flex-wrap justify-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    Import CSV
-                  </Button>
-                  <Button size="sm" onClick={openCreateDialog}>
-                    Add product manually
-                  </Button>
-                </div>
+                {!isForReviewTab && (
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      Import CSV
+                    </Button>
+                    <Button size="sm" onClick={openCreateDialog}>
+                      Add product manually
+                    </Button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto">
