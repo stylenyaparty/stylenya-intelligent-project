@@ -26,6 +26,17 @@ npm install
 npm run dev
 ```
 
+### Environment variables (`apps/web/.env`)
+
+```env
+VITE_API_URL=http://localhost:3001
+VITE_API_PREFIX=/v1
+```
+
+- `VITE_API_PREFIX` controls the backend route prefix (default `/v1`).
+- If `VITE_API_URL` already includes `/v1`, the app avoids duplicating it.
+- In Render (or any setup with rewrite/proxy), you can set `VITE_API_PREFIX=` empty if infra already resolves the prefix.
+
 ## Project structure
 
 - src/pages: routes and page-level views

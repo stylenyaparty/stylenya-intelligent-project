@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL ?? "";
+import { buildApiUrl } from "@/lib/api-url";
 
 export type LoginUser = {
   id: string;
@@ -48,7 +48,7 @@ export async function login(email: string, password: string): Promise<LoginUser>
   let res: Response;
 
   try {
-    res = await fetch(`${API_URL}/auth/login`, {
+    res = await fetch(buildApiUrl("/auth/login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -73,7 +73,7 @@ export async function fetchMe(): Promise<MeAuth> {
   const token = getToken();
   if (!token) throw new Error("No token");
 
-  const res = await fetch(`${API_URL}/me`, {
+  const res = await fetch(buildApiUrl("/me"), {
     headers: { Authorization: `Bearer ${token}` },
   });
 
@@ -95,7 +95,7 @@ export async function fetchBootstrapStatus(): Promise<BootstrapStatus> {
   let res: Response;
 
   try {
-    res = await fetch(`${API_URL}/bootstrap-status`);
+    res = await fetch(buildApiUrl("/bootstrap-status"));
   } catch {
     throw new Error("Backend not reachable");
   }
@@ -118,7 +118,7 @@ export async function createInitialAdmin(payload: InitialAdminPayload): Promise<
   let res: Response;
 
   try {
-    res = await fetch(`${API_URL}/initial-admin`, {
+    res = await fetch(buildApiUrl("/initial-admin"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

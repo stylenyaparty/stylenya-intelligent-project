@@ -111,7 +111,14 @@ Backend disponible por defecto en:
 
 ```env
 VITE_API_URL=http://localhost:3001
+VITE_API_PREFIX=/v1
 ```
+
+Notas:
+
+- `VITE_API_PREFIX` controla el prefijo de rutas del backend (por defecto `/v1`).
+- Si `VITE_API_URL` ya incluye `/v1`, no se duplica automáticamente.
+- En Render (u otros entornos con rewrite/proxy), puedes dejar `VITE_API_PREFIX=` vacío si el prefijo ya se resuelve en infraestructura.
 
 #### Ejecutar frontend
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { Package, Search, Upload, Pencil, Archive, RotateCcw, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
+import { buildApiUrl } from "@/lib/api-url";
 import { getToken } from "@/api/auth";
 import { PageHeader, LoadingState, ErrorState } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
@@ -258,7 +259,6 @@ export default function ProductsPage() {
 
   async function handleImport(file: File) {
     const token = getToken();
-    const API_URL = import.meta.env.VITE_API_URL ?? "";
     const formData = new FormData();
     formData.append("file", file);
 
@@ -266,7 +266,7 @@ export default function ProductsPage() {
     setError(null);
 
     try {
-      const res = await fetch(`${API_URL}/products/import-csv`, {
+      const res = await fetch(buildApiUrl("/products/import-csv"), {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         body: formData,

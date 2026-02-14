@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { buildApiUrl } from "@/lib/api-url";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -171,11 +172,10 @@ export default function SignalsPage() {
 
     try {
       const token = localStorage.getItem("token");
-      const API_URL = import.meta.env.VITE_API_URL ?? "";
       const formData = new FormData();
       formData.append("file", uploadFile);
 
-      const response = await fetch(`${API_URL}/signals/upload`, {
+      const response = await fetch(buildApiUrl("/signals/upload"), {
         method: "POST",
         body: formData,
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,

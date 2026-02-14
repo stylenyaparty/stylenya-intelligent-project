@@ -1,3 +1,5 @@
+import { buildApiUrl } from "@/lib/api-url";
+
 type ApiErrorBody = { error?: string; message?: string; code?: string };
 
 export class ApiError extends Error {
@@ -17,9 +19,8 @@ function getToken(): string | null {
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
-  const API_URL = import.meta.env.VITE_API_URL ?? "";
 
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(buildApiUrl(path), {
     ...options,
     headers: {
       "Content-Type": "application/json",
