@@ -33,13 +33,13 @@ describe("Products API", () => {
         return cachedHeaders;
     }
 
-    it("imports Shopify CSV with dedupe and upsert", async () => {
+    it("imports Shopify CSV grouped by handle", async () => {
         const headers = await authHeader();
         const csv = [
             "Handle,Title,Status,Type",
             "hat-1,Red Hat,active,Accessories",
             "hat-1,,active,Accessories",
-            "bag-1,Everyday Bag,draft,",
+            "hat-1,,,",
         ].join("\n");
 
         const response = await request
@@ -49,29 +49,55 @@ describe("Products API", () => {
             .expect(200);
 
         expect(response.body.source).toBe("SHOPIFY");
-        expect(response.body.createdCount).toBe(2);
-        expect(response.body.updatedCount).toBe(0);
-        expect(response.body.skippedCount).toBe(1);
-        expect(response.body.errors).toHaveLength(1);
+        expect(response.body.created).toBe(1);
+        expect(response.body.updated).toBe(0);
+        expect(response.body.skippedVariants).toBe(2);
+        expect(response.body.forReview).toBe(0);
+    });
 
-        const updatedCsv = [
+    it("sends missing title handles to review", async () => {
+        const headers = await authHeader();
+        const csv = [
             "Handle,Title,Status,Type",
-            "hat-1,Red Hat Updated,active,Accessories",
-            "bag-1,Everyday Bag,draft,Bags",
+            "bad-handle,,active,Accessories",
+            "bad-handle,,,",
         ].join("\n");
 
-        const updateResponse = await request
+        const response = await request
             .post(apiPath("/products/import-csv"))
             .set(headers)
-            .attach("file", Buffer.from(updatedCsv), "shopify.csv")
+            .attach("file", Buffer.from(csv), "shopify.csv")
             .expect(200);
 
-        expect(updateResponse.body.updatedCount).toBe(2);
+        expect(response.body.created).toBe(0);
+        expect(response.body.forReview).toBe(1);
+        expect(response.body.status).toBe("FAILED");
 
-        const bag = await prisma.product.findFirst({
-            where: { productSource: "SHOPIFY", shopifyProductId: "bag-1" },
+        const reviewProduct = await prisma.product.findFirst({
+            where: { productSource: "SHOPIFY", shopifyHandle: "bad-handle" },
         });
-        expect(bag?.productType).toBe("Bags");
+
+        expect(reviewProduct?.status).toBe("REVIEW");
+        expect(reviewProduct?.importNotes).toContain("Title");
+    });
+
+    it("filters products by source and review status", async () => {
+        const headers = await authHeader();
+
+        const shopifyResponse = await request
+            .get(apiPath("/products?source=SHOPIFY&status=ACTIVE&page=1&pageSize=50"))
+            .set(headers)
+            .expect(200);
+
+        expect(Array.isArray(shopifyResponse.body.products)).toBe(true);
+        expect(shopifyResponse.body.products.every((p: { productSource: string; status: string }) => p.productSource === "SHOPIFY" && p.status === "ACTIVE")).toBe(true);
+
+        const reviewResponse = await request
+            .get(apiPath("/products?status=REVIEW&page=1&pageSize=50"))
+            .set(headers)
+            .expect(200);
+
+        expect(reviewResponse.body.products.some((p: { status: string }) => p.status === "REVIEW")).toBe(true);
     });
 
     it("imports Etsy CSV with SKU/hash handling", async () => {
@@ -90,8 +116,8 @@ describe("Products API", () => {
             .expect(200);
 
         expect(response.body.source).toBe("ETSY");
-        expect(response.body.createdCount).toBe(2);
-        expect(response.body.skippedCount).toBe(1);
+        expect(response.body.created).toBe(2);
+        expect(response.body.skipped).toBe(1);
 
         const noStock = await prisma.product.findFirst({
             where: { productSource: "ETSY", name: "No Stock" },
@@ -107,7 +133,7 @@ describe("Products API", () => {
             .set(headers)
             .send({
                 name: "Manual Product",
-                productSource: "SHOPIFY",
+                productSource: "MANUAL",
                 productType: "manual",
                 status: "DRAFT",
                 seasonality: "NONE",

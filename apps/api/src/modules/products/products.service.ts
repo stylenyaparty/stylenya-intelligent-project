@@ -6,10 +6,13 @@ export type ProductStatusScope = "active" | "draft" | "archived" | "all";
 
 export type CsvImportResult = {
     source: "SHOPIFY" | "ETSY";
-    createdCount: number;
-    updatedCount: number;
-    skippedCount: number;
-    errors: Array<{ rowNumber: number; message: string }>;
+    status: "SUCCESS" | "PARTIAL" | "FAILED";
+    created: number;
+    updated: number;
+    skipped: number;
+    skippedVariants: number;
+    forReview: number;
+    message: string;
 };
 
 type ShopifyRow = {
@@ -23,12 +26,19 @@ const SHOPIFY_HEADERS = ["Handle", "Title", "Status"] as const;
 const ETSY_HEADERS = ["TITLE", "QUANTITY"] as const;
 
 export async function listProducts(params: {
-    statusScope: ProductStatusScope;
+    statusScope?: ProductStatusScope;
     search?: string;
+    source?: "SHOPIFY" | "ETSY" | "MANUAL";
+    status?: "ACTIVE" | "DRAFT" | "ARCHIVED" | "REVIEW";
+    q?: string;
+    page: number;
+    pageSize: number;
 }) {
     const filters: Prisma.ProductWhereInput[] = [];
 
-    if (params.statusScope === "active") {
+    if (params.status) {
+        filters.push({ status: params.status });
+    } else if (params.statusScope === "active") {
         filters.push({ status: "ACTIVE", archivedAt: null });
     } else if (params.statusScope === "draft") {
         filters.push({ status: "DRAFT", archivedAt: null });
@@ -36,28 +46,80 @@ export async function listProducts(params: {
         filters.push({ OR: [{ archivedAt: { not: null } }, { status: "ARCHIVED" }] });
     }
 
-    if (params.search) {
+    if (params.source) {
+        filters.push({ productSource: params.source });
+    }
+
+    const queryText = params.q ?? params.search;
+    if (queryText) {
         filters.push({
             OR: [
-                { name: { contains: params.search, mode: "insensitive" } },
-                { productType: { contains: params.search, mode: "insensitive" } },
+                { name: { contains: queryText, mode: "insensitive" } },
+                { productType: { contains: queryText, mode: "insensitive" } },
             ],
         });
     }
 
     const where = filters.length > 0 ? { AND: filters } : undefined;
 
-    return prisma.product.findMany({
-        where,
-        orderBy: { updatedAt: "desc" },
+    const [products, total] = await Promise.all([
+        prisma.product.findMany({
+            where,
+            orderBy: { updatedAt: "desc" },
+            skip: (params.page - 1) * params.pageSize,
+            take: params.pageSize,
+        }),
+        prisma.product.count({ where }),
+    ]);
+
+    return {
+        products,
+        pagination: {
+            page: params.page,
+            pageSize: params.pageSize,
+            total,
+            totalPages: Math.max(1, Math.ceil(total / params.pageSize)),
+        },
+    };
+}
+
+async function upsertShopifyProduct(product: ShopifyRow) {
+    const existing = await prisma.product.findFirst({
+        where: {
+            productSource: "SHOPIFY",
+            shopifyHandle: product.handle,
+        },
     });
+
+    const data = {
+        name: product.title,
+        productType: product.type || "unknown",
+        status: product.status,
+        archivedAt: product.status === "ARCHIVED" ? new Date() : null,
+        shopifyHandle: product.handle,
+        shopifyProductId: product.handle,
+    } as const;
+
+    if (existing) {
+        await prisma.product.update({ where: { id: existing.id }, data });
+        return "updated" as const;
+    }
+
+    await prisma.product.create({
+        data: {
+            ...data,
+            productSource: "SHOPIFY",
+            seasonality: "NONE",
+        },
+    });
+    return "created" as const;
 }
 
 export async function createProduct(data: {
     name: string;
-    productSource: "SHOPIFY" | "ETSY";
+    productSource: "SHOPIFY" | "ETSY" | "MANUAL";
     productType: string;
-    status: "ACTIVE" | "DRAFT" | "ARCHIVED";
+    status: "ACTIVE" | "DRAFT" | "ARCHIVED" | "REVIEW";
     seasonality: string;
 }) {
     return prisma.product.create({
@@ -76,7 +138,7 @@ export async function updateProduct(
     data: {
         name?: string;
         productType?: string;
-        status?: "ACTIVE" | "DRAFT" | "ARCHIVED";
+        status?: "ACTIVE" | "DRAFT" | "ARCHIVED" | "REVIEW";
         seasonality?: string;
     }
 ) {
@@ -199,89 +261,92 @@ export async function importShopify(rows: string[][], headers: string[]): Promis
     const statusIndex = headers.indexOf("Status");
     const typeIndex = headers.indexOf("Type");
 
-    const errors: CsvImportResult["errors"] = [];
-    const productsByHandle = new Map<string, ShopifyRow>();
+    const productsByHandle = new Map<string, string[][]>();
+    let skipped = 0;
 
-    rows.forEach((row, idx) => {
-        const rowNumber = idx + 2;
+    for (const row of rows) {
         const handle = row[handleIndex]?.trim();
-        const title = row[titleIndex]?.trim();
-
-        if (!handle || !title) {
-            errors.push({
-                rowNumber,
-                message: !handle
-                    ? "Missing Handle"
-                    : "Missing Title",
-            });
-            return;
+        if (!handle) {
+            skipped += 1;
+            continue;
         }
-
-        const typeValue = row[typeIndex]?.trim();
-        const statusValue = row[statusIndex]?.trim();
-        const mappedStatus = mapShopifyStatus(statusValue);
-
-        const existing = productsByHandle.get(handle);
-        if (!existing) {
-            productsByHandle.set(handle, {
-                handle,
-                title,
-                type: typeValue || "unknown",
-                status: mappedStatus,
-            });
-        } else {
-            if (!existing.title && title) {
-                existing.title = title;
-            }
-            if (existing.type === "unknown" && typeValue) {
-                existing.type = typeValue;
-            }
-        }
-    });
+        const existing = productsByHandle.get(handle) ?? [];
+        existing.push(row);
+        productsByHandle.set(handle, existing);
+    }
 
     let createdCount = 0;
     let updatedCount = 0;
+    let forReview = 0;
 
-    for (const product of productsByHandle.values()) {
-        const existing = await prisma.product.findFirst({
-            where: {
-                productSource: "SHOPIFY",
-                shopifyProductId: product.handle,
-            },
-        });
+    for (const [handle, groupedRows] of productsByHandle.entries()) {
+        const title = firstNonEmpty(groupedRows, titleIndex);
 
-        if (existing) {
-            await prisma.product.update({
-                where: { id: existing.id },
-                data: {
-                    name: product.title,
-                    productType: product.type || "unknown",
-                    status: product.status,
+        if (!title) {
+            forReview += 1;
+            await prisma.product.upsert({
+                where: {
+                    productSource_shopifyHandle: {
+                        productSource: "SHOPIFY",
+                        shopifyHandle: handle,
+                    },
                 },
-            });
-            updatedCount += 1;
-        } else {
-            await prisma.product.create({
-                data: {
-                    name: product.title,
+                create: {
+                    name: `Review: ${handle}`,
                     productSource: "SHOPIFY",
-                    productType: product.type || "unknown",
-                    status: product.status,
+                    productType: "unknown",
+                    status: "REVIEW",
                     seasonality: "NONE",
-                    shopifyProductId: product.handle,
-                    archivedAt: product.status === "ARCHIVED" ? new Date() : null,
+                    shopifyHandle: handle,
+                    shopifyProductId: handle,
+                    importNotes: JSON.stringify({
+                        missingFields: ["Title"],
+                        handle,
+                    }),
+                },
+                update: {
+                    status: "REVIEW",
+                    importNotes: JSON.stringify({
+                        missingFields: ["Title"],
+                        handle,
+                    }),
                 },
             });
+            continue;
+        }
+
+        const product: ShopifyRow = {
+            handle,
+            title,
+            type: firstNonEmpty(groupedRows, typeIndex) || "unknown",
+            status: mapShopifyStatus(firstNonEmpty(groupedRows, statusIndex)),
+        };
+
+        const result = await upsertShopifyProduct(product);
+        if (result === "created") {
             createdCount += 1;
+        } else {
+            updatedCount += 1;
         }
     }
 
+    const skippedVariants = Math.max(0, rows.length - productsByHandle.size);
+    const status =
+        forReview === 0
+            ? "SUCCESS"
+            : createdCount + updatedCount > 0
+                ? "PARTIAL"
+                : "FAILED";
+
     return {
         source: "SHOPIFY",
-        createdCount,
-        updatedCount,
-        skippedCount: errors.length,
-        errors,
+        status,
+        created: createdCount,
+        updated: updatedCount,
+        skipped,
+        skippedVariants,
+        forReview,
+        message: `Imported ${createdCount + updatedCount} Shopify products from ${productsByHandle.size} handles`,
     };
 }
 
@@ -290,7 +355,7 @@ export async function importEtsy(rows: string[][], headers: string[]): Promise<C
     const quantityIndex = headers.indexOf("QUANTITY");
     const skuIndex = headers.indexOf("SKU");
 
-    const errors: CsvImportResult["errors"] = [];
+    let skipped = 0;
     let createdCount = 0;
     let updatedCount = 0;
 
@@ -300,7 +365,7 @@ export async function importEtsy(rows: string[][], headers: string[]): Promise<C
         const title = row[titleIndex]?.trim();
 
         if (!title) {
-            errors.push({ rowNumber, message: "Missing TITLE" });
+            skipped += 1;
             continue;
         }
 
@@ -322,38 +387,54 @@ export async function importEtsy(rows: string[][], headers: string[]): Promise<C
             },
         });
 
-        if (existing) {
-            await prisma.product.update({
-                where: { id: existing.id },
-                data: {
-                    name: title,
-                    productType: "unknown",
-                    status,
-                },
-            });
-            updatedCount += 1;
-        } else {
-            await prisma.product.create({
-                data: {
-                    name: title,
+        await prisma.product.upsert({
+            where: {
+                productSource_etsyListingId: {
                     productSource: "ETSY",
-                    productType: "unknown",
-                    status,
-                    seasonality: "NONE",
                     etsyListingId: listingId,
                 },
-            });
+            },
+            update: {
+                name: title,
+                productType: "unknown",
+                status,
+            },
+            create: {
+                name: title,
+                productSource: "ETSY",
+                productType: "unknown",
+                status,
+                seasonality: "NONE",
+                etsyListingId: listingId,
+            },
+        });
+
+        if (existing) {
+            updatedCount += 1;
+        } else {
             createdCount += 1;
         }
     }
 
     return {
         source: "ETSY",
-        createdCount,
-        updatedCount,
-        skippedCount: errors.length,
-        errors,
+        status: "SUCCESS",
+        created: createdCount,
+        updated: updatedCount,
+        skipped,
+        skippedVariants: 0,
+        forReview: 0,
+        message: `Imported ${createdCount + updatedCount} Etsy products`,
     };
+}
+
+function firstNonEmpty(rows: string[][], index: number) {
+    if (index < 0) return "";
+    for (const row of rows) {
+        const value = row[index]?.trim();
+        if (value) return value;
+    }
+    return "";
 }
 
 function mapShopifyStatus(value?: string) {

@@ -44,19 +44,18 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/components/ui/use-toast";
 
-const STATUS_TABS = [
-  { label: "Active", value: "active" },
-  { label: "Draft", value: "draft" },
-  { label: "Archived", value: "archived" },
-  { label: "All", value: "all" },
+const SOURCE_TABS = [
+  { label: "Etsy", value: "ETSY" },
+  { label: "Shopify", value: "SHOPIFY" },
+  { label: "For Review", value: "REVIEW" },
 ] as const;
 
-type ProductStatus = "ACTIVE" | "DRAFT" | "ARCHIVED";
+type ProductStatus = "ACTIVE" | "DRAFT" | "ARCHIVED" | "REVIEW";
 
 type Product = {
   id: string;
   name: string;
-  productSource: "SHOPIFY" | "ETSY" | "BOTH";
+  productSource: "SHOPIFY" | "ETSY" | "MANUAL";
   productType: string;
   status: ProductStatus;
   seasonality: string;
@@ -67,19 +66,28 @@ type Product = {
 type ProductsResponse = {
   ok: boolean;
   products: Product[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
 };
 
 type ImportSummary = {
   source: "SHOPIFY" | "ETSY";
-  createdCount: number;
-  updatedCount: number;
-  skippedCount: number;
-  errors: Array<{ rowNumber: number; message: string }>;
+  status: "SUCCESS" | "PARTIAL" | "FAILED";
+  created: number;
+  updated: number;
+  skipped: number;
+  skippedVariants: number;
+  forReview: number;
+  message: string;
 };
 
 type ProductFormState = {
   name: string;
-  productSource: "SHOPIFY" | "ETSY";
+  productSource: "SHOPIFY" | "ETSY" | "MANUAL";
   productType: string;
   status: ProductStatus;
   seasonality: string;
@@ -93,7 +101,7 @@ const DEFAULT_FORM: ProductFormState = {
   seasonality: "NONE",
 };
 
-const STATUS_OPTIONS: ProductStatus[] = ["ACTIVE", "DRAFT", "ARCHIVED"];
+const STATUS_OPTIONS: ProductStatus[] = ["ACTIVE", "DRAFT", "ARCHIVED", "REVIEW"];
 const SEASONALITY_OPTIONS = [
   "NONE",
   "VALENTINES",
@@ -105,9 +113,7 @@ const SEASONALITY_OPTIONS = [
 ];
 
 export default function ProductsPage() {
-  const [statusScope, setStatusScope] = useState<typeof STATUS_TABS[number]["value"]>(
-    "active"
-  );
+  const [activeTab, setActiveTab] = useState<typeof SOURCE_TABS[number]["value"]>("SHOPIFY");
   const [search, setSearch] = useState("");
   const [data, setData] = useState<ProductsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -122,25 +128,25 @@ export default function ProductsPage() {
   const products = data?.products ?? [];
 
   const emptyMessage = useMemo(() => {
-    if (statusScope === "archived") {
-      return "Archived products will appear here once you archive them.";
-    }
-    if (statusScope === "draft") {
-      return "Draft products help you prep decisions before going live.";
-    }
-    if (statusScope === "all") {
-      return "Import or add products to start comparing decisions.";
+    if (activeTab === "REVIEW") {
+      return "Products missing required data will appear here for correction.";
     }
     return "No active products yet. Import your catalog to compare decisions.";
-  }, [statusScope]);
+  }, [activeTab]);
 
   const load = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ statusScope });
+      const params = new URLSearchParams({ page: "1", pageSize: "50" });
+      if (activeTab === "REVIEW") {
+        params.set("status", "REVIEW");
+      } else {
+        params.set("source", activeTab);
+        params.set("status", "ACTIVE");
+      }
       if (search.trim()) {
-        params.set("search", search.trim());
+        params.set("q", search.trim());
       }
       const res = await api<ProductsResponse>(`/products?${params.toString()}`);
       setData(res);
@@ -149,7 +155,7 @@ export default function ProductsPage() {
     } finally {
       setBusy(false);
     }
-  }, [search, statusScope]);
+  }, [activeTab, search]);
 
   useEffect(() => {
     void load();
@@ -170,7 +176,7 @@ export default function ProductsPage() {
     setEditingProduct(product);
     setFormState({
       name: product.name,
-      productSource: product.productSource === "ETSY" ? "ETSY" : "SHOPIFY",
+      productSource: product.productSource,
       productType: product.productType || "unknown",
       status: product.status,
       seasonality: product.seasonality || "NONE",
@@ -274,9 +280,12 @@ export default function ProductsPage() {
 
       const summary = (await res.json()) as ImportSummary;
       setImportSummary(summary);
+      if (summary.source === "SHOPIFY") {
+        setActiveTab("SHOPIFY");
+      }
       toast({
         title: "Import complete",
-        description: `${summary.createdCount} created, ${summary.updatedCount} updated, ${summary.skippedCount} skipped`,
+        description: `${summary.created} created, ${summary.updated} updated, ${summary.skippedVariants} variant rows skipped`,
       });
       await load();
     } catch (e: unknown) {
@@ -329,14 +338,9 @@ export default function ProductsPage() {
       </PageHeader>
 
       <div className="flex flex-col gap-4 mb-6">
-        <Tabs
-          value={statusScope}
-          onValueChange={(value) =>
-            setStatusScope(value as typeof STATUS_TABS[number]["value"])
-          }
-        >
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof SOURCE_TABS[number]["value"])}>
           <TabsList>
-            {STATUS_TABS.map((tab) => (
+            {SOURCE_TABS.map((tab) => (
               <TabsTrigger key={tab.value} value={tab.value}>
                 {tab.label}
               </TabsTrigger>
@@ -382,27 +386,24 @@ export default function ProductsPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-wrap gap-3 text-sm">
-              <Badge variant="secondary">Created: {importSummary.createdCount}</Badge>
-              <Badge variant="secondary">Updated: {importSummary.updatedCount}</Badge>
-              <Badge variant="secondary">Skipped: {importSummary.skippedCount}</Badge>
+              <Badge variant="secondary">Created: {importSummary.created}</Badge>
+              <Badge variant="secondary">Updated: {importSummary.updated}</Badge>
+              <Badge variant="secondary">Skipped: {importSummary.skipped}</Badge>
+              <Badge variant="secondary">Skipped variants: {importSummary.skippedVariants}</Badge>
+              <Badge variant={importSummary.forReview > 0 ? "default" : "secondary"}>
+                For review: {importSummary.forReview}
+              </Badge>
             </div>
-            {importSummary.errors.length > 0 && (
-              <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
-                <p className="font-medium text-foreground mb-2">Row errors</p>
-                <ul className="space-y-1 text-muted-foreground">
-                  {importSummary.errors.map((errorItem) => (
-                    <li key={`${errorItem.rowNumber}-${errorItem.message}`}>
-                      Row {errorItem.rowNumber}: {errorItem.message}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            {importSummary.forReview > 0 && (
+              <Button variant="outline" size="sm" onClick={() => setActiveTab("REVIEW")}>
+                View for review
+              </Button>
             )}
           </CardContent>
         </Card>
       )}
 
-      {error && <ErrorState message={error} onRetry={load} />}
+            {error && <ErrorState message={error} onRetry={load} />}
       {busy && !data && <LoadingState message="Loading products..." />}
 
       {!busy && !error && (
@@ -556,6 +557,7 @@ export default function ProductsPage() {
                   <SelectContent>
                     <SelectItem value="SHOPIFY">SHOPIFY</SelectItem>
                     <SelectItem value="ETSY">ETSY</SelectItem>
+                    <SelectItem value="MANUAL">MANUAL</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
