@@ -164,21 +164,34 @@ Supports filtering by:
 
 Purpose: list canonical products.
 
-Supports filtering by:
+Supports filtering by query params:
 
-- category
-- status (ACTIVE / DISCONTINUED)
-- pagination
+- source (ETSY | SHOPIFY | MANUAL)
+- status (ACTIVE | DRAFT | ARCHIVED | REVIEW)
+- q (text search on name/product type)
+- page (default 1)
+- pageSize (default 20, max 100)
 
 Returns:
 
-- product identifiers
-- name
-- category
-- type
-- customization flag
-- status
-- timestamps
+- products[]
+- pagination { page, pageSize, total, totalPages }
+
+
+#### POST /api/products/import-csv
+
+Purpose: import marketplace catalogs (Shopify/Etsy) and return a compact summary.
+
+Response schema:
+
+- source (SHOPIFY | ETSY)
+- status (SUCCESS | PARTIAL | FAILED)
+- created
+- updated
+- skipped
+- skippedVariants
+- forReview
+- message
 
 ---
 

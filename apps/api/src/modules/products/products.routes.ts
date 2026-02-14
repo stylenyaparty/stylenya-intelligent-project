@@ -26,8 +26,11 @@ export async function productsRoutes(app: FastifyInstance) {
         if (!query.success) {
             return reply.code(400).send({ error: "Invalid product query" });
         }
-        const products = await listProducts(query.data);
-        return reply.send({ ok: true, products });
+        const products = await listProducts({
+            ...query.data,
+            statusScope: query.data.statusScope ?? "active",
+        });
+        return reply.send({ ok: true, ...products });
     });
 
     app.post("/products", { preHandler: requireAuth }, async (request, reply) => {

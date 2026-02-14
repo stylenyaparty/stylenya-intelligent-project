@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const productStatusSchema = z.enum(["ACTIVE", "DRAFT", "ARCHIVED"]);
+export const productStatusSchema = z.enum(["ACTIVE", "DRAFT", "ARCHIVED", "REVIEW"]);
 export const seasonalitySchema = z.enum([
     "NONE",
     "VALENTINES",
@@ -11,11 +11,16 @@ export const seasonalitySchema = z.enum([
     "CUSTOM",
 ]);
 
-export const productSourceSchema = z.enum(["SHOPIFY", "ETSY"]);
+export const productSourceSchema = z.enum(["SHOPIFY", "ETSY", "MANUAL"]);
 
 export const productListQuerySchema = z.object({
-    statusScope: z.enum(["active", "draft", "archived", "all"]).default("active"),
+    statusScope: z.enum(["active", "draft", "archived", "all"]).optional(),
     search: z.string().trim().min(1).optional(),
+    source: z.enum(["SHOPIFY", "ETSY", "MANUAL"]).optional(),
+    status: productStatusSchema.optional(),
+    q: z.string().trim().min(1).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 export const productCreateSchema = z.object({
