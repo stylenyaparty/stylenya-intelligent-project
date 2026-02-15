@@ -5,6 +5,7 @@ export type AuthUser = {
   sub: string;
   email: string;
   role: "ADMIN" | "USER";
+  isReviewer?: boolean;
 };
 
 export type AuthContextType = {

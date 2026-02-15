@@ -7,6 +7,7 @@ const PUBLIC_ROUTES = new Set<string>([
     `GET ${API_PREFIX}/bootstrap-status`,
     `POST ${API_PREFIX}/initial-admin`,
     `POST ${API_PREFIX}/auth/login`,
+    `POST ${API_PREFIX}/auth/reviewer/signup`,
 ]);
 
 const authGuardPlugin: FastifyPluginAsync = async (app) => {

@@ -10,6 +10,14 @@ export type MeAuth = {
   sub: string;
   email: string;
   role: "ADMIN" | "USER";
+  isReviewer?: boolean;
+};
+
+export type ReviewerSignupPayload = {
+  code: string;
+  name?: string;
+  email: string;
+  password: string;
 };
 
 export type BootstrapStatus = {
@@ -89,6 +97,37 @@ export async function fetchMe(): Promise<MeAuth> {
 
   const data = await res.json();
   return data.auth as MeAuth;
+}
+
+export async function reviewerSignup(payload: ReviewerSignupPayload): Promise<{ id: string; email: string; name: string | null }> {
+  const res = await fetch(buildApiUrl("/auth/reviewer/signup"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new ApiError(txt || "Reviewer signup failed", res.status);
+  }
+
+  const data = await res.json();
+  return data.user as { id: string; email: string; name: string | null };
+}
+
+export async function endReviewerAccess(): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error("No token");
+
+  const res = await fetch(buildApiUrl("/auth/reviewer/end"), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new ApiError(txt || "End review failed", res.status);
+  }
 }
 
 export async function fetchBootstrapStatus(): Promise<BootstrapStatus> {

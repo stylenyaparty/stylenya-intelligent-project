@@ -9,6 +9,8 @@ type SeedUserInput = {
     password: string;
     name?: string | null;
     role?: "ADMIN" | "USER";
+    isReviewer?: boolean;
+    archivedAt?: Date | null;
 };
 
 export const API_PREFIX = "/v1";
@@ -56,6 +58,8 @@ export async function createUser(input: SeedUserInput) {
             email: input.email,
             name: input.name ?? null,
             role: input.role ?? "USER",
+            isReviewer: input.isReviewer ?? false,
+            archivedAt: input.archivedAt ?? null,
             passwordHash,
         },
     });

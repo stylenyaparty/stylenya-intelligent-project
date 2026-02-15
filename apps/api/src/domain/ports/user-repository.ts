@@ -6,6 +6,8 @@ export type User = {
     email: string;
     name: string | null;
     role: UserRole;
+    isReviewer: boolean;
+    archivedAt: Date | null;
     passwordHash: string;
     createdAt: Date;
     updatedAt: Date;
@@ -15,6 +17,8 @@ export type CreateUserInput = {
     email: string;
     name: string | null;
     role: UserRole;
+    isReviewer?: boolean;
+    archivedAt?: Date | null;
     passwordHash: string;
 };
 
