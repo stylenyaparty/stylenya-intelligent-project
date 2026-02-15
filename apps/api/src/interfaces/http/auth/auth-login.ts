@@ -2,7 +2,6 @@ import bcrypt from "bcryptjs";
 import type { FastifyRequest, FastifyReply } from "fastify";
 import jwt from "jsonwebtoken";
 import { prisma } from "../../../infrastructure/db/prisma.js";
-// Si ya tienes zod en el proyecto, úsalo. Si no, valida "a mano".
 import { z } from "zod";
 
 const LoginSchema = z.object({
