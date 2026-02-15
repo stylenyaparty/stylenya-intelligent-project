@@ -1,6 +1,10 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { PrismaUserRepository } from "../../../infrastructure/repositories/prisma-user-repository.js";
-import { LoginUserUseCase, InvalidCredentialsError } from "../../../application/use-cases/login-user.js";
+import {
+    LoginUserUseCase,
+    InvalidCredentialsError,
+    AccountDisabledError,
+} from "../../../application/use-cases/login-user.js";
 
 type LoginBody = { email: string; password: string };
 
@@ -20,6 +24,9 @@ export const AuthController = {
             const result = await useCase.execute({ email, password });
             return reply.code(200).send(result);
         } catch (err) {
+            if (err instanceof AccountDisabledError) {
+                return reply.code(403).send({ error: "Account disabled" });
+            }
             if (err instanceof InvalidCredentialsError) {
                 return reply.code(401).send({ error: "Invalid credentials" });
             }

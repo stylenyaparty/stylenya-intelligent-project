@@ -9,6 +9,12 @@ export class InvalidCredentialsError extends Error {
     }
 }
 
+export class AccountDisabledError extends Error {
+    constructor() {
+        super("Account disabled");
+    }
+}
+
 export class LoginUserUseCase {
     constructor(private readonly users: UserRepository) { }
 
@@ -19,6 +25,7 @@ export class LoginUserUseCase {
 
         const ok = await verifyPassword(input.password, user?.passwordHash ?? null);
         if (!user || !ok) throw new InvalidCredentialsError();
+        if (user.archivedAt) throw new AccountDisabledError();
 
         const token = signAccessToken({
             sub: user.id,

@@ -32,7 +32,7 @@ export async function postAuthLogin(req: FastifyRequest, reply: FastifyReply) {
     // 2) Find user by email (normalize to avoid casing issues)
     const user = await prisma.user.findUnique({
         where: { email: email.toLowerCase() },
-        select: { id: true, email: true, role: true, passwordHash: true },
+        select: { id: true, email: true, role: true, passwordHash: true, archivedAt: true },
     });
 
     // 3) Constant-time-ish response for invalid credentials
@@ -45,6 +45,10 @@ export async function postAuthLogin(req: FastifyRequest, reply: FastifyReply) {
 
     if (!user || !ok) {
         return reply.status(401).send({ error: "Invalid credentials" });
+    }
+
+    if (user.archivedAt) {
+        return reply.status(403).send({ error: "Account disabled" });
     }
 
     // 4) Build JWT payload (standard)

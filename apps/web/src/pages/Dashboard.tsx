@@ -1,9 +1,12 @@
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/auth/useAuth";
 import { Package, Target, ClipboardList, TrendingUp } from "lucide-react";
 import { KPICard, PageHeader, ActionBadge, StatusBadge, type ActionType, type DecisionStatus } from "@/components/dashboard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { endReviewerAccess } from "@/api/auth";
 
 type DashboardKpis = {
   activeProducts: number;
@@ -25,6 +28,8 @@ type SeoFocusResponse = {
 };
 
 export default function Dashboard() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const location = useLocation();
   const isRootDashboard = location.pathname === "/dashboard" || location.pathname === "/dashboard/";
   const [seoFocus, setSeoFocus] = useState<SeoFocusItem[]>([]);
@@ -83,12 +88,29 @@ export default function Dashboard() {
     return <Outlet />;
   }
 
+  async function onEndReview() {
+    const confirmed = window.confirm("End this review session? Your reviewer account will be disabled.");
+    if (!confirmed) return;
+
+    await endReviewerAccess();
+    logout();
+    navigate("/login", { replace: true });
+  }
+
   return (
     <div className="animate-fade-in">
       <PageHeader
         title="Dashboard"
         description="Overview of your product intelligence and recommendations"
       />
+
+      {user?.isReviewer && (
+        <div className="mb-4 flex justify-end">
+          <Button variant="destructive" onClick={() => void onEndReview()}>
+            End Review
+          </Button>
+        </div>
+      )}
 
       {/* KPI Grid */}
       {kpisError && (

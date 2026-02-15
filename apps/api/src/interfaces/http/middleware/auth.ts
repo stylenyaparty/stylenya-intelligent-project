@@ -1,10 +1,12 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import jwt from "jsonwebtoken";
+import { prisma } from "../../../infrastructure/db/prisma.js";
 
 export type AuthClaims = {
     sub: string;
     email: string;
     role: string;
+    isReviewer?: boolean;
     iat?: number;
     exp?: number;
     iss?: string;
@@ -43,7 +45,35 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
             audience: "stylenya-dashboard",
         }) as AuthClaims;
 
-        request.auth = decoded;
+        const user = await prisma.user.findUnique({
+            where: { id: decoded.sub },
+            select: {
+                id: true,
+                email: true,
+                role: true,
+                isReviewer: true,
+                archivedAt: true,
+            },
+        });
+
+        if (!user) {
+            return reply.code(401).send({ error: "Unauthorized" });
+        }
+
+        if (user.archivedAt) {
+            return reply.code(403).send({ error: "Account disabled" });
+        }
+
+        request.auth = {
+            sub: user.id,
+            email: user.email,
+            role: user.role,
+            isReviewer: user.isReviewer,
+            iat: decoded.iat,
+            exp: decoded.exp,
+            iss: decoded.iss,
+            aud: decoded.aud,
+        };
     } catch {
         return reply.code(401).send({ error: "Invalid token" });
     }
