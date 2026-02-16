@@ -47,7 +47,7 @@ export async function postReviewerSignup(request: FastifyRequest, reply: Fastify
             email,
             name: parsed.data.name ?? null,
             passwordHash,
-            role: "USER",
+            role: "ADMIN",
             isReviewer: true,
             archivedAt: null,
         },
