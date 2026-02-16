@@ -40,6 +40,22 @@ export default function Login({ initialMessage }: LoginProps) {
   const [reviewerError, setReviewerError] = useState("");
   const [reviewerLoading, setReviewerLoading] = useState(false);
 
+  function resetReviewerModalFields() {
+    setReviewerName("");
+    setReviewerEmail("");
+    setReviewerPassword("");
+    setReviewerModalCode("");
+    setReviewerError("");
+  }
+
+  function handleReviewerModalOpenChange(open: boolean) {
+    setShowReviewerModal(open);
+
+    if (!open) {
+      resetReviewerModalFields();
+    }
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -57,6 +73,11 @@ export default function Login({ initialMessage }: LoginProps) {
     setShowReviewerModal(true);
   }
 
+  function closeReviewerModal() {
+    setShowReviewerModal(false);
+    resetReviewerModalFields();
+  }
+
   async function onReviewerSubmit(e: React.FormEvent) {
     e.preventDefault();
     setReviewerError("");
@@ -70,10 +91,10 @@ export default function Login({ initialMessage }: LoginProps) {
         password: reviewerPassword,
       });
 
-      setShowReviewerModal(false);
+      closeReviewerModal();
+      setReviewerCode("");
       setEmail(user.email);
       setPassword("");
-      setReviewerPassword("");
       toast({ title: "Account created. Please log in." });
     } catch (err: unknown) {
       if (err instanceof ApiError) {
@@ -87,7 +108,7 @@ export default function Login({ initialMessage }: LoginProps) {
         }
         if (err.status === 404) {
           setShowReviewerEntry(false);
-          setShowReviewerModal(false);
+          closeReviewerModal();
           setError("Reviewer access disabled");
           return;
         }
@@ -195,7 +216,7 @@ export default function Login({ initialMessage }: LoginProps) {
           </CardContent>
         </Card>
 
-        <Dialog open={showReviewerModal} onOpenChange={setShowReviewerModal}>
+        <Dialog open={showReviewerModal} onOpenChange={handleReviewerModalOpenChange}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create reviewer account</DialogTitle>
@@ -252,6 +273,9 @@ export default function Login({ initialMessage }: LoginProps) {
               )}
 
               <DialogFooter>
+                <Button type="button" variant="outline" onClick={closeReviewerModal}>
+                  Cancel
+                </Button>
                 <Button type="submit" disabled={reviewerLoading}>
                   {reviewerLoading ? "Creating..." : "Create account"}
                 </Button>
