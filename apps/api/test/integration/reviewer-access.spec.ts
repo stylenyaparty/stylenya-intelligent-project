@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
 import { createTestServer, apiPath } from "../helpers.js";
+import { prisma } from "../../src/infrastructure/db/prisma.js";
 
 describe("reviewer access", () => {
     let app: FastifyInstance;
@@ -31,6 +32,13 @@ describe("reviewer access", () => {
             email: "reviewer@example.com",
             name: "Reviewer",
         });
+
+        const createdUser = await prisma.user.findUnique({
+            where: { email: "reviewer@example.com" },
+            select: { role: true },
+        });
+
+        expect(createdUser?.role).toBe("ADMIN");
     });
 
     it("rejects signup with wrong reviewer code", async () => {
