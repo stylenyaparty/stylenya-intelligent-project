@@ -18,15 +18,8 @@ describe("Decision Drafts API", () => {
     let token: string;
 
     beforeAll(async () => {
-        await resetDatabase();
         app = await createTestServer();
         request = supertest(app.server);
-
-        const admin = await seedAdmin(app, {
-            email: "stylenya.party@gmail.com",
-            password: "D3s4rr0ll0",
-        });
-        token = await getAuthToken(app, admin.email, admin.password);
     });
 
     beforeEach(async () => {
@@ -34,6 +27,13 @@ describe("Decision Drafts API", () => {
         resetLLMProviderCache();
         delete process.env.OPENAI_API_KEY;
         process.env.LLM_ENABLED = "false";
+
+        const admin = await seedAdmin(app, {
+            email: "stylenya.party@gmail.com",
+            password: "D3s4rr0ll0",
+        });
+        token = await getAuthToken(app, admin.email, admin.password);
+
         await prisma.productTypeDefinition.createMany({
             data: [
                 {

@@ -1,7 +1,7 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
-import { createTestServer, getAuthToken, seedAdmin, resetDatabase, apiPath } from "../helpers.js";
+import { createTestServer, getAuthToken, seedAdmin, apiPath } from "../helpers.js";
 
 const adminUser = {
     email: "seo.context@stylenya.com",
@@ -14,10 +14,11 @@ describe("SEO Context Settings API", () => {
     let headers: { Authorization: string };
 
     beforeAll(async () => {
-        await resetDatabase();
         app = await createTestServer();
         request = supertest(app.server);
+    });
 
+    beforeEach(async () => {
         const admin = await seedAdmin(app, adminUser);
         const token = await getAuthToken(app, admin.email, admin.password);
         headers = { Authorization: `Bearer ${token}` };

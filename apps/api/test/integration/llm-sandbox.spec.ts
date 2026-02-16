@@ -1,7 +1,7 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
-import { createTestServer, getAuthToken, resetDatabase, seedAdmin, apiPath } from "../helpers.js";
+import { createTestServer, getAuthToken, seedAdmin, apiPath } from "../helpers.js";
 import * as llmService from "../../src/modules/llm/llm.service.js";
 
 describe("LLM Sandbox API", () => {
@@ -10,10 +10,11 @@ describe("LLM Sandbox API", () => {
     let token: string;
 
     beforeAll(async () => {
-        await resetDatabase();
         app = await createTestServer();
         request = supertest(app.server);
+    });
 
+    beforeEach(async () => {
         const admin = await seedAdmin(app, {
             email: "stylenya.party@gmail.com",
             password: "D3s4rr0ll0",

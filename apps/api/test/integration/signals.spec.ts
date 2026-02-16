@@ -12,8 +12,6 @@ describe("Signals API", () => {
     const __dirname = path.dirname(__filename);
     let app: FastifyInstance;
     let request: ReturnType<typeof supertest>;
-    let cachedHeaders: { Authorization: string } | null = null;
-
     beforeAll(async () => {
         await resetDatabase();
         app = await createTestServer();
@@ -25,16 +23,13 @@ describe("Signals API", () => {
     });
 
     async function authHeader() {
-        if (cachedHeaders) return cachedHeaders;
-
         const admin = await seedAdmin(app, {
             email: "signals@example.com",
             password: "SignalsPass123!",
         });
 
         const token = await getAuthToken(app, admin.email, admin.password);
-        cachedHeaders = { Authorization: `Bearer ${token}` };
-        return cachedHeaders;
+        return { Authorization: `Bearer ${token}` };
     }
 
     it("imports GKP CSV successfully", async () => {

@@ -7,8 +7,6 @@ import { createTestServer, getAuthToken, seedAdmin, apiPath } from "../helpers.j
 describe("Weekly Focus API", () => {
     let app: FastifyInstance;
     let request: ReturnType<typeof supertest>;
-    let cachedHeaders: { Authorization: string } | null = null;
-
     beforeAll(async () => {
         app = await createTestServer();
         request = supertest(app.server);
@@ -19,16 +17,13 @@ describe("Weekly Focus API", () => {
     });
 
     async function authHeader() {
-        if (cachedHeaders) return cachedHeaders;
-
         const admin = await seedAdmin(app, {
             email: "stylenya.party@gmail.com",
             password: "D3s4rr0ll0",
         });
 
         const token = await getAuthToken(app, admin.email, admin.password);
-        cachedHeaders = { Authorization: `Bearer ${token}` };
-        return cachedHeaders;
+        return { Authorization: `Bearer ${token}` };
     }
 
     it("returns empty list when no promoted signals exist", async () => {

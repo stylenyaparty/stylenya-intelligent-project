@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import supertest from "supertest";
 import type { FastifyInstance } from "fastify";
-import { createTestServer, getAuthToken, resetDatabase, seedAdmin, apiPath } from "../helpers.js";
+import { createTestServer, getAuthToken, seedAdmin, apiPath } from "../helpers.js";
 import { resetLLMProviderCache } from "../../src/modules/llm/get-llm-provider.js";
 
 describe("LLM Status API", () => {
@@ -10,21 +10,20 @@ describe("LLM Status API", () => {
     let token: string;
 
     beforeAll(async () => {
-        await resetDatabase();
         app = await createTestServer();
         request = supertest(app.server);
+    });
+
+    beforeEach(async () => {
+        resetLLMProviderCache();
+        delete process.env.OPENAI_API_KEY;
+        delete process.env.LLM_ENABLED;
 
         const admin = await seedAdmin(app, {
             email: "stylenya.party@gmail.com",
             password: "D3s4rr0ll0",
         });
         token = await getAuthToken(app, admin.email, admin.password);
-    });
-
-    beforeEach(() => {
-        resetLLMProviderCache();
-        delete process.env.OPENAI_API_KEY;
-        delete process.env.LLM_ENABLED;
     });
 
     afterAll(async () => {
