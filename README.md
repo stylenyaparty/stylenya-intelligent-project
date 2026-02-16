@@ -86,6 +86,10 @@ yarn install
 DATABASE_URL=postgresql://user:password@localhost:5432/stylenya
 JWT_SECRET=your_secret_here
 NODE_ENV=development
+
+# Reviewer Access (opcional para evaluación)
+ENABLE_REVIEWER_ACCESS=false
+EVAL_ACCESS_CODE=YOUR_SECURE_CODE
 ```
 
 #### Ejecutar migraciones
@@ -166,43 +170,83 @@ stylenya-intelligent-project/
 
 ### Autenticación y bootstrap
 
-- Creación de administrador inicial (one-time bootstrap)
+- Creación de administrador inicial (one-time bootstrap).
 - Diferenciación explícita entre:
-  - inexistencia de usuarios
-  - usuario no autenticado
-- Autenticación basada en JWT
+  - inexistencia de usuarios.
+  - usuario no autenticado.
+- Autenticación basada en JWT.
+
+### Reviewer Access Mode (Evaluación Académica)
+
+Para permitir la evaluación externa del sistema sin alterar el modelo de bootstrap ni introducir un sistema completo de administración de usuarios, se implementó un modo especial de acceso controlado por código.
+
+- Activación:
+
+Se controla exclusivamente mediante variables de entorno:
+
+ENABLE_REVIEWER_ACCESS=true
+EVAL_ACCESS_CODE=SECURE_RANDOM_CODE
+
+- Flujo:
+
+En la pantalla de login se muestra un campo opcional Reviewer Code. Si el código es válido, se habilita un formulario para ingresar:
+
+- Name
+- Email
+- Password
+
+Se crea un usuario temporal con:
+
+- role = ADMIN
+- isReviewer = true
+- El usuario inicia sesión normalmente.
+- Tiene acceso completo al flujo DSS.
+- Desde el Dashboard puede ejecutar End Review.
+- El sistema deshabilita el usuario (archivedAt).
+- Se fuerza logout y regreso al login.
+
+Consideraciones:
+
+- No existe CRUD de usuarios.
+- No existe panel administrativo.
+- No se exponen configuraciones internas.
+- El endpoint puede desactivarse completamente vía entorno.
+- No se altera el modelo de dominio.
 
 ### Ingesta de señales externas
 
-- Carga de keywords vía CSV (Google Keyword Planner)
-- Normalización y deduplicación
-- Persistencia trazable de señales
+- Carga de keywords vía CSV (Google Keyword Planner).
+- Normalización y deduplicación.
+- Persistencia trazable de señales.
+- Registro de runs e histórico de ingesta.
 
 ### Capa de Inteligencia Artificial (LLM)
 
-- Generación de Decision Drafts
-- Análisis contextual de señales externas + contexto interno
-- Redacción de propuestas y justificación
-- La IA no ejecuta acciones ni modifica estados de negocio
+- Generación de Decision Drafts.
+- Análisis contextual de señales externas + contexto interno.
+- Redacción de propuestas y justificación.
+- La IA no ejecuta acciones ni modifica estados de negocio.
+- Human-in-the-loop obligatorio para promoción.
 
 ### Decision Drafts & Decision Log
 
-- Inbox diario de borradores generados por IA
-- Promoción manual a decisión
-- Registro histórico navegable por fechas
-- Auditoría completa del ciclo de vida
+- Inbox diario de borradores generados por IA.
+- Promoción manual a decisión.
+- Registro histórico navegable por fechas.
+- Estados controlados manualmente.
+- Auditoría completa del ciclo de vida.
 
 ### SEO Focus (plan operativo)
 
-- Cadencia bi-weekly
-- Derivado exclusivamente de decisiones aprobadas
-- Evita duplicados y ruido estratégico
-- Actúa como centro operativo de corto plazo
+- Cadencia bi-weekly.
+- Derivado exclusivamente de decisiones aprobadas.
+- Evita duplicados y ruido estratégico.
+- Actúa como centro operativo de corto plazo.
 
 ### Trazabilidad y control
 
-- Todas las decisiones requieren justificación
-- No existen transiciones automáticas
-- Estados controlados manualmente
-- Historial persistente y auditable
-  
+- Todas las decisiones requieren justificación.
+- No existen transiciones automáticas.
+- Estados controlados manualmente.
+- Historial persistente y auditable.
+- Soft-disable de usuarios reviewer sin eliminar datos históricos.
