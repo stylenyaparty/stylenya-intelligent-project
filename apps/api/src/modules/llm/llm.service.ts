@@ -52,7 +52,16 @@ export async function generateDecisionDrafts(input: {
         seasonalitySummary?: string;
     }>;
     maxDrafts: number;
-}): Promise<{ drafts: DecisionDraftsResponse["drafts"]; meta: { model?: string } }> {
+}): Promise<{
+    drafts: DecisionDraftsResponse["drafts"];
+    meta: {
+        model?: string;
+        temperature?: number;
+        topP?: number;
+        nonceEnabled?: boolean;
+        promptHash?: string;
+    };
+}> {
     try {
         const provider = getLLMProvider();
         const response = await provider.generateDecisionDrafts({
@@ -70,6 +79,10 @@ export async function generateDecisionDrafts(input: {
             drafts: limitedDrafts,
             meta: {
                 model: response.meta?.model,
+                temperature: response.meta?.temperature,
+                topP: response.meta?.topP,
+                nonceEnabled: response.meta?.nonceEnabled,
+                promptHash: response.meta?.promptHash,
             },
         };
     } catch (error) {

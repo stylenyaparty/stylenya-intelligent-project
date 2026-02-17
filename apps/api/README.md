@@ -54,3 +54,19 @@ These tests use Vitest + Supertest and require a dedicated Postgres database.
    ```
 
 The test setup runs Prisma migrations once and truncates all tables between tests to keep them isolated and repeatable.
+
+## LLM draft variability tuning
+
+Set these environment variables to tune creativity and repeatability for decision-draft generation:
+
+- `LLM_TEMPERATURE_GENERATE` (default `0.9`)
+- `LLM_TEMPERATURE_EXPAND` (default `0.3`)
+- `LLM_TOP_P_GENERATE` (default `1.0`)
+- `LLM_TOP_P_EXPAND` (default `1.0`)
+- `LLM_USE_NONCE` (default `false`, set `true` to add a per-run nonce for extra diversity)
+
+Suggested Render values after deploy:
+
+- `LLM_TEMPERATURE_GENERATE=0.9`
+- `LLM_TEMPERATURE_EXPAND=0.3`
+- `LLM_USE_NONCE=true` (optional)

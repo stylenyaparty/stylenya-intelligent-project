@@ -8,6 +8,30 @@ import type {
     LLMProvider,
 } from "./llm.provider";
 import { buildDecisionDraftPrompt } from "./decision-drafts.prompt.js";
+import { sha256Hex } from "../../utils/hash.js";
+
+function parseFiniteNumberInRange(
+    value: string | undefined,
+    min: number,
+    max: number
+): number | undefined {
+    if (!value) return undefined;
+    const parsed = Number.parseFloat(value);
+    if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+        return undefined;
+    }
+    return parsed;
+}
+
+function resolveEnvNumber(
+    envValue: string | undefined,
+    fallback: number,
+    min: number,
+    max: number
+): number {
+    const parsed = parseFiniteNumberInRange(envValue, min, max);
+    return parsed ?? fallback;
+}
 
 function extractOutputText(data: any): string | null {
     const msg = data?.output?.find((o: any) => o.type === "message");
@@ -32,8 +56,12 @@ async function callResponsesApi(params: {
     model: string;
     input: Array<{ role: string; content: Array<{ type: string; text: string }> }>;
     maxOutputTokens: number;
+    temperature?: number;
+    topP?: number;
 }) {
     const supportsTemperature = !params.model.startsWith("gpt-5");
+    const temperature = Number.isFinite(params.temperature) ? params.temperature : 0.2;
+    const topP = Number.isFinite(params.topP) ? params.topP : undefined;
     const res = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: {
@@ -43,8 +71,8 @@ async function callResponsesApi(params: {
         body: JSON.stringify({
             model: params.model,
             input: params.input,
-            // opcional: baja variabilidad
-            ...(supportsTemperature ? { temperature: 0.2 } : {}),
+            ...(supportsTemperature ? { temperature } : {}),
+            ...(Number.isFinite(topP) ? { top_p: topP } : {}),
             // opcional: top cap, equivalente a max_tokens
             max_output_tokens: Number.isFinite(params.maxOutputTokens)
                 ? params.maxOutputTokens
@@ -89,10 +117,27 @@ export class OpenAIProvider implements LLMProvider {
             process.env.MAX_OUTPUT_TOKENS_GENERATE ?? "900",
             10
         );
-        const { system, user } = buildDecisionDraftPrompt(payload);
+        const temperatureGenerate = resolveEnvNumber(
+            process.env.LLM_TEMPERATURE_GENERATE,
+            0.9,
+            0,
+            2
+        );
+        const topPGenerate = resolveEnvNumber(process.env.LLM_TOP_P_GENERATE, 1, 0, 1);
+        const nonceEnabled = process.env.LLM_USE_NONCE === "true";
+        const runNonce = nonceEnabled ? `${Date.now()}-${Math.random()}` : undefined;
+        const { system, user } = buildDecisionDraftPrompt({ ...payload, runNonce });
         const input = buildInputMessages(system, user);
+        const promptHash = sha256Hex(`${system}\n\n${user}`);
         let usedModel = model;
-        let data = await callResponsesApi({ apiKey, model, input, maxOutputTokens });
+        let data = await callResponsesApi({
+            apiKey,
+            model,
+            input,
+            maxOutputTokens,
+            temperature: temperatureGenerate,
+            topP: topPGenerate,
+        });
         const text = extractOutputText(data);
         if (!text) {
             const outputTypes = Array.isArray(data?.output)
@@ -108,10 +153,17 @@ export class OpenAIProvider implements LLMProvider {
                     model: fallbackModel,
                     input,
                     maxOutputTokens,
+                    temperature: temperatureGenerate,
+                    topP: topPGenerate,
                 });
                 const retryText = extractOutputText(data);
                 if (retryText) {
-                    return this.parseDecisionDrafts(retryText, data, usedModel);
+                    return this.parseDecisionDrafts(retryText, data, usedModel, {
+                        temperature: temperatureGenerate,
+                        topP: topPGenerate,
+                        nonceEnabled,
+                        promptHash,
+                    });
                 }
             }
             throw new AppError(502, "LLM_BAD_OUTPUT", "LLM returned an empty response.", {
@@ -123,10 +175,25 @@ export class OpenAIProvider implements LLMProvider {
                 fallbackModel: fallbackModel ?? null,
             });
         }
-        return this.parseDecisionDrafts(text, data, usedModel);
+        return this.parseDecisionDrafts(text, data, usedModel, {
+            temperature: temperatureGenerate,
+            topP: topPGenerate,
+            nonceEnabled,
+            promptHash,
+        });
     }
 
-    private parseDecisionDrafts(text: string, data: any, model: string): DecisionDraftResult {
+    private parseDecisionDrafts(
+        text: string,
+        data: any,
+        model: string,
+        debugMeta?: {
+            temperature: number;
+            topP: number;
+            nonceEnabled: boolean;
+            promptHash: string;
+        }
+    ): DecisionDraftResult {
         let parsed: unknown;
         try {
             function extractLikelyJson(raw: string): string {
@@ -166,7 +233,13 @@ export class OpenAIProvider implements LLMProvider {
 
         return {
             drafts: validated.data.drafts,
-            meta: { model: data?.model ?? model },
+            meta: {
+                model: data?.model ?? model,
+                temperature: debugMeta?.temperature,
+                topP: debugMeta?.topP,
+                nonceEnabled: debugMeta?.nonceEnabled,
+                promptHash: debugMeta?.promptHash,
+            },
         };
     }
 
@@ -182,10 +255,19 @@ export class OpenAIProvider implements LLMProvider {
             process.env.MAX_OUTPUT_TOKENS_EXPAND ?? "900",
             10
         );
+        const temperatureExpand = resolveEnvNumber(process.env.LLM_TEMPERATURE_EXPAND, 0.3, 0, 2);
+        const topPExpand = resolveEnvNumber(process.env.LLM_TOP_P_EXPAND, 1, 0, 1);
         const input = buildInputMessages(payload.prompt.system, payload.prompt.user);
 
         let usedModel = model;
-        let data = await callResponsesApi({ apiKey, model, input, maxOutputTokens });
+        let data = await callResponsesApi({
+            apiKey,
+            model,
+            input,
+            maxOutputTokens,
+            temperature: temperatureExpand,
+            topP: topPExpand,
+        });
         let text = extractOutputText(data);
         if (!text && fallbackModel) {
             usedModel = fallbackModel;
@@ -194,6 +276,8 @@ export class OpenAIProvider implements LLMProvider {
                 model: fallbackModel,
                 input,
                 maxOutputTokens,
+                temperature: temperatureExpand,
+                topP: topPExpand,
             });
             text = extractOutputText(data);
         }

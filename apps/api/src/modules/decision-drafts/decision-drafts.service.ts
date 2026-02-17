@@ -150,6 +150,13 @@ export async function createDecisionDrafts(input: { batchId?: string }) {
                 model: output.meta.model,
                 payloadSnapshot: {
                     sourceBatchId: batchId,
+                    llm: {
+                        model: output.meta.model,
+                        temperature: output.meta.temperature ?? null,
+                        top_p: output.meta.topP ?? null,
+                        nonceEnabled: output.meta.nonceEnabled ?? false,
+                    },
+                    promptHash: output.meta.promptHash ?? null,
                     relevanceMode,
                     productTypesActiveCount: productTypes.length,
                     productTypesMatched: Array.from(matchedProductTypeKeys),
