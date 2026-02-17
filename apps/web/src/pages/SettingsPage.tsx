@@ -17,10 +17,17 @@ import {
 import { PageHeader, LoadingState } from "@/components/dashboard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/sonner";
 
 const emptySettings: KeywordProviderSettings = {
@@ -33,6 +40,10 @@ const emptySeoContext: SeoContextResponse = {
 };
 
 export default function SettingsPage() {
+  const [temperature, setTemperature] = useState(() => {
+    if (typeof window === "undefined") return "0.9";
+    return window.localStorage.getItem("sid.llm.temperature") ?? "0.9";
+  });
   const [settings, setSettings] = useState<KeywordProviderSettings>(emptySettings);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -168,6 +179,10 @@ export default function SettingsPage() {
   const isSaveDisabled = saving || (formState.enabled && missingFields.length > 0);
 
   const googleAdsConfigured = settings.googleAds.configured;
+
+  useEffect(() => {
+    window.localStorage.setItem("sid.llm.temperature", temperature);
+  }, [temperature]);
 
   async function handleSave() {
     setSaving(true);
@@ -360,401 +375,473 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col ui-section">
       <PageHeader
         title="Settings"
-        subtitle="Manage keyword provider preferences and integrations."
+        subtitle="Configure system inputs, providers, and AI assistant behavior."
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Stylenya Product Types</CardTitle>
-          <CardDescription>
-            Define the core product taxonomy that gates relevance for signals and drafts.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {productTypesLoading ? (
-            <LoadingState message="Loading product types..." />
-          ) : (
-            <div className="space-y-4">
-              <div className="grid gap-2 md:grid-cols-[2fr_3fr_auto] md:items-end">
-                <div className="space-y-1">
-                  <Label>Label</Label>
-                  <Input
-                    placeholder="Custom Cake Toppers"
-                    value={newProductTypeLabel}
-                    onChange={(event) => setNewProductTypeLabel(event.target.value)}
-                  />
+      <Tabs defaultValue="product-types" className="ui-section">
+        <TabsList className="w-fit">
+          <TabsTrigger value="product-types">Stylenya Product Types</TabsTrigger>
+          <TabsTrigger value="seo-context">SEO Context</TabsTrigger>
+          <TabsTrigger value="keyword-providers">Keyword Providers</TabsTrigger>
+          <TabsTrigger value="llm-ai">LLM / AI</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="product-types" className="mt-4">
+          <div className="ui-card ui-card-hover p-6 animate-fade-in ui-section">
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">Stylenya Product Types</h2>
+              <p className="text-sm text-muted-foreground">
+                Define the core product taxonomy that gates relevance for signals and drafts.
+              </p>
+            </div>
+            {productTypesLoading ? (
+              <LoadingState message="Loading product types..." />
+            ) : (
+              <div className="ui-section">
+                <div className="grid gap-2 md:grid-cols-[2fr_3fr_auto] md:items-end">
+                  <div className="space-y-1">
+                    <Label>Label</Label>
+                    <Input
+                      placeholder="Custom Cake Toppers"
+                      value={newProductTypeLabel}
+                      onChange={(event) => setNewProductTypeLabel(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Synonyms (comma separated)</Label>
+                    <Input
+                      placeholder="cake topper, personalized cake topper"
+                      value={newProductTypeSynonyms}
+                      onChange={(event) => setNewProductTypeSynonyms(event.target.value)}
+                    />
+                  </div>
+                  <Button
+                    onClick={handleAddProductType}
+                    disabled={productTypesSaving || !newProductTypeLabel.trim()}
+                  >
+                    Add
+                  </Button>
                 </div>
-                <div className="space-y-1">
-                  <Label>Synonyms (comma separated)</Label>
-                  <Input
-                    placeholder="cake topper, personalized cake topper"
-                    value={newProductTypeSynonyms}
-                    onChange={(event) => setNewProductTypeSynonyms(event.target.value)}
-                  />
-                </div>
-                <Button
-                  onClick={handleAddProductType}
-                  disabled={productTypesSaving || !newProductTypeLabel.trim()}
-                >
-                  Add
-                </Button>
-              </div>
-              {productTypes.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No product types yet.</p>
-              ) : (
-                <div className="space-y-3">
-                  {productTypes.map((productType) => {
-                    const edits = productTypeEdits[productType.id];
-                    return (
-                      <div
-                        key={productType.id}
-                        className="rounded-lg border border-border p-4 space-y-3"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <h4 className="text-sm font-semibold text-foreground">
-                              {productType.label}
-                            </h4>
-                            <p className="text-xs text-muted-foreground">
-                              Key: {productType.key}
-                            </p>
+                {productTypes.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No product types yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {productTypes.map((productType) => {
+                      const edits = productTypeEdits[productType.id];
+                      return (
+                        <div
+                          key={productType.id}
+                          className="rounded-lg border border-border p-4 space-y-3"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <h4 className="text-sm font-semibold text-foreground">
+                                {productType.label}
+                              </h4>
+                              <p className="text-xs text-muted-foreground">
+                                Key: {productType.key}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge
+                                variant={
+                                  productType.status === "ACTIVE" ? "default" : "outline"
+                                }
+                              >
+                                {productType.status}
+                              </Badge>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleToggleProductTypeStatus(productType)}
+                                disabled={productTypesSaving}
+                              >
+                                {productType.status === "ARCHIVED" ? "Restore" : "Archive"}
+                              </Button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            {productType.status === "ARCHIVED" && (
-                              <Badge variant="outline">Archived</Badge>
-                            )}
+
+                          <div className="grid gap-2 md:grid-cols-[2fr_3fr_auto] md:items-end">
+                            <div className="space-y-1">
+                              <Label>Label</Label>
+                              <Input
+                                value={edits?.label ?? ""}
+                                onChange={(event) =>
+                                  setProductTypeEdits((prev) => ({
+                                    ...prev,
+                                    [productType.id]: {
+                                      label: event.target.value,
+                                      synonyms: prev[productType.id]?.synonyms ?? "",
+                                    },
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label>Synonyms (comma separated)</Label>
+                              <Input
+                                value={edits?.synonyms ?? ""}
+                                onChange={(event) =>
+                                  setProductTypeEdits((prev) => ({
+                                    ...prev,
+                                    [productType.id]: {
+                                      label: prev[productType.id]?.label ?? "",
+                                      synonyms: event.target.value,
+                                    },
+                                  }))
+                                }
+                              />
+                            </div>
                             <Button
                               size="sm"
-                              variant="ghost"
-                              onClick={() => handleToggleProductTypeStatus(productType)}
+                              onClick={() => handleUpdateProductType(productType.id)}
                               disabled={productTypesSaving}
                             >
-                              {productType.status === "ARCHIVED" ? "Restore" : "Archive"}
+                              Save
                             </Button>
                           </div>
                         </div>
-                        <div className="grid gap-3 md:grid-cols-[2fr_3fr_auto] md:items-end">
-                          <div className="space-y-1">
-                            <Label>Label</Label>
-                            <Input
-                              value={edits?.label ?? productType.label}
-                              onChange={(event) =>
-                                setProductTypeEdits((prev) => ({
-                                  ...prev,
-                                  [productType.id]: {
-                                    label: event.target.value,
-                                    synonyms:
-                                      prev[productType.id]?.synonyms ??
-                                      (Array.isArray(productType.synonymsJson)
-                                        ? productType.synonymsJson.join(", ")
-                                        : ""),
-                                  },
-                                }))
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label>Synonyms</Label>
-                            <Input
-                              value={edits?.synonyms ?? ""}
-                              onChange={(event) =>
-                                setProductTypeEdits((prev) => ({
-                                  ...prev,
-                                  [productType.id]: {
-                                    label: prev[productType.id]?.label ?? productType.label,
-                                    synonyms: event.target.value,
-                                  },
-                                }))
-                              }
-                            />
-                          </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="seo-context" className="mt-4">
+          <div className="ui-card ui-card-hover p-6 animate-fade-in ui-section">
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">SEO Context</h2>
+              <p className="text-sm text-muted-foreground">
+                Expand and protect relevance with occasion intent terms and exclusions.
+              </p>
+            </div>
+            {seoLoading ? (
+              <LoadingState message="Loading SEO context..." />
+            ) : (
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Occasion &amp; Intent Terms
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Signals that match these terms expand beyond product-type matches.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Add occasion or intent term"
+                      value={occasionTerm}
+                      onChange={(event) => setOccasionTerm(event.target.value)}
+                    />
+                    <Button
+                      onClick={() => handleAddSeed("INCLUDE")}
+                      disabled={seoSaving || !occasionTerm.trim()}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {seoContext.includeSeeds.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        No occasion or intent terms yet.
+                      </p>
+                    ) : (
+                      seoContext.includeSeeds.map((seed) => (
+                        <div
+                          key={seed.id}
+                          className="flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs"
+                        >
+                          <span
+                            className={
+                              seed.status === "ARCHIVED"
+                                ? "text-muted-foreground line-through"
+                                : "text-foreground"
+                            }
+                          >
+                            {seed.term}
+                          </span>
+                          {seed.status === "ARCHIVED" && <Badge variant="outline">Archived</Badge>}
                           <Button
                             size="sm"
-                            onClick={() => handleUpdateProductType(productType.id)}
-                            disabled={productTypesSaving}
+                            variant="ghost"
+                            onClick={() =>
+                              handleUpdateSeed(seed, {
+                                status: seed.status === "ARCHIVED" ? "ACTIVE" : "ARCHIVED",
+                              })
+                            }
+                            disabled={seoSaving}
                           >
-                            Save
+                            {seed.status === "ARCHIVED" ? "Restore" : "Archive"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleUpdateSeed(seed, { kind: "EXCLUDE" })}
+                            disabled={seoSaving}
+                          >
+                            Move to exclude
                           </Button>
                         </div>
-                      </div>
-                    );
-                  })}
+                      ))
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>SEO Context</CardTitle>
-          <CardDescription>
-            Expand and protect relevance with occasion intent terms and exclusions.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {seoLoading ? (
-            <LoadingState message="Loading SEO context..." />
-          ) : (
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Occasion &amp; Intent Terms
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    Signals that match these terms expand beyond product-type matches.
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Add occasion or intent term"
-                    value={occasionTerm}
-                    onChange={(event) => setOccasionTerm(event.target.value)}
-                  />
-                  <Button
-                    onClick={() => handleAddSeed("INCLUDE")}
-                    disabled={seoSaving || !occasionTerm.trim()}
-                  >
-                    Add
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {seoContext.includeSeeds.length === 0 ? (
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">Exclude Terms</h3>
                     <p className="text-xs text-muted-foreground">
-                      No occasion or intent terms yet.
+                      Signals that match exclude terms are filtered out.
                     </p>
-                  ) : (
-                    seoContext.includeSeeds.map((seed) => (
-                      <div
-                        key={seed.id}
-                        className="flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs"
-                      >
-                        <span
-                          className={
-                            seed.status === "ARCHIVED"
-                              ? "text-muted-foreground line-through"
-                              : "text-foreground"
-                          }
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Add exclude term"
+                      value={excludeTerm}
+                      onChange={(event) => setExcludeTerm(event.target.value)}
+                    />
+                    <Button
+                      onClick={() => handleAddSeed("EXCLUDE")}
+                      disabled={seoSaving || !excludeTerm.trim()}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {seoContext.excludeSeeds.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No exclude terms yet.</p>
+                    ) : (
+                      seoContext.excludeSeeds.map((seed) => (
+                        <div
+                          key={seed.id}
+                          className="flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs"
                         >
-                          {seed.term}
-                        </span>
-                        {seed.status === "ARCHIVED" && (
-                          <Badge variant="outline">Archived</Badge>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            handleUpdateSeed(seed, {
-                              status: seed.status === "ARCHIVED" ? "ACTIVE" : "ARCHIVED",
-                            })
-                          }
-                          disabled={seoSaving}
-                        >
-                          {seed.status === "ARCHIVED" ? "Restore" : "Archive"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleUpdateSeed(seed, { kind: "EXCLUDE" })}
-                          disabled={seoSaving}
-                        >
-                          Move to exclude
-                        </Button>
-                      </div>
-                    ))
-                  )}
+                          <span
+                            className={
+                              seed.status === "ARCHIVED"
+                                ? "text-muted-foreground line-through"
+                                : "text-foreground"
+                            }
+                          >
+                            {seed.term}
+                          </span>
+                          {seed.status === "ARCHIVED" && <Badge variant="outline">Archived</Badge>}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              handleUpdateSeed(seed, {
+                                status: seed.status === "ARCHIVED" ? "ACTIVE" : "ARCHIVED",
+                              })
+                            }
+                            disabled={seoSaving}
+                          >
+                            {seed.status === "ARCHIVED" ? "Restore" : "Archive"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleUpdateSeed(seed, { kind: "INCLUDE" })}
+                            disabled={seoSaving}
+                          >
+                            Move to occasion
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
+            )}
+          </div>
+        </TabsContent>
 
-              <div className="space-y-4">
+        <TabsContent value="keyword-providers" className="mt-4">
+          <div className="ui-card ui-card-hover p-6 animate-fade-in ui-section">
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">Keyword Providers</h2>
+              <p className="text-sm text-muted-foreground">
+                Choose how keyword research providers are configured.
+              </p>
+            </div>
+
+            <div className="rounded-lg border p-4 space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground">Exclude Terms</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Signals that match exclude terms are filtered out.
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-sm font-semibold text-foreground">Google Ads</h3>
+                    <Badge variant={googleAdsConfigured ? "default" : "outline"}>
+                      {googleAdsConfigured ? "Configured" : "Not configured"}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Optional integration for keyword research. Enable only when you have credentials ready.
+                    {!googleAdsConfigured &&
+                      " Not configured yet—add credentials when you’re ready."}
                   </p>
                 </div>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Add exclude term"
-                    value={excludeTerm}
-                    onChange={(event) => setExcludeTerm(event.target.value)}
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-muted-foreground">Enable Google Ads</span>
+                  <Switch
+                    checked={formState.enabled}
+                    onCheckedChange={(checked) =>
+                      setFormState((prev) => ({ ...prev, enabled: checked }))
+                    }
+                    aria-label="Enable Google Ads"
                   />
-                  <Button
-                    onClick={() => handleAddSeed("EXCLUDE")}
-                    disabled={seoSaving || !excludeTerm.trim()}
-                  >
-                    Add
-                  </Button>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {seoContext.excludeSeeds.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No exclude terms yet.</p>
-                  ) : (
-                    seoContext.excludeSeeds.map((seed) => (
-                      <div
-                        key={seed.id}
-                        className="flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs"
-                      >
-                        <span
-                          className={
-                            seed.status === "ARCHIVED"
-                              ? "text-muted-foreground line-through"
-                              : "text-foreground"
-                          }
-                        >
-                          {seed.term}
-                        </span>
-                        {seed.status === "ARCHIVED" && (
-                          <Badge variant="outline">Archived</Badge>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            handleUpdateSeed(seed, {
-                              status: seed.status === "ARCHIVED" ? "ACTIVE" : "ARCHIVED",
-                            })
-                          }
-                          disabled={seoSaving}
-                        >
-                          {seed.status === "ARCHIVED" ? "Restore" : "Archive"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleUpdateSeed(seed, { kind: "INCLUDE" })}
-                          disabled={seoSaving}
-                        >
-                          Move to occasion
-                        </Button>
-                      </div>
-                    ))
-                  )}
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="customerId">Customer ID</Label>
+                  <Input
+                    id="customerId"
+                    placeholder="123-456-7890"
+                    value={formState.customerId}
+                    onChange={(event) =>
+                      setFormState((prev) => ({ ...prev, customerId: event.target.value }))
+                    }
+                    disabled={!formState.enabled}
+                  />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="developerToken">Developer Token</Label>
+                  <Input
+                    id="developerToken"
+                    placeholder="Stored securely in Google Ads"
+                    value={formState.developerToken}
+                    onChange={(event) =>
+                      setFormState((prev) => ({ ...prev, developerToken: event.target.value }))
+                    }
+                    disabled={!formState.enabled}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="clientId">Client ID</Label>
+                  <Input
+                    id="clientId"
+                    placeholder="Google OAuth client ID"
+                    value={formState.clientId}
+                    onChange={(event) =>
+                      setFormState((prev) => ({ ...prev, clientId: event.target.value }))
+                    }
+                    disabled={!formState.enabled}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="clientSecret">Client Secret</Label>
+                  <Input
+                    id="clientSecret"
+                    type="password"
+                    placeholder="Google OAuth client secret"
+                    value={formState.clientSecret}
+                    onChange={(event) =>
+                      setFormState((prev) => ({ ...prev, clientSecret: event.target.value }))
+                    }
+                    disabled={!formState.enabled}
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="refreshToken">Refresh Token</Label>
+                  <Input
+                    id="refreshToken"
+                    type="password"
+                    placeholder="Refresh token from OAuth flow"
+                    value={formState.refreshToken}
+                    onChange={(event) =>
+                      setFormState((prev) => ({ ...prev, refreshToken: event.target.value }))
+                    }
+                    disabled={!formState.enabled}
+                  />
+                </div>
+              </div>
+
+              {formState.enabled && missingFields.length > 0 && (
+                <p className="text-xs text-destructive">
+                  Enter all required Google Ads credentials to enable this provider.
+                </p>
+              )}
+
+              <div className="flex items-center justify-end">
+                <Button onClick={handleSave} disabled={isSaveDisabled}>
+                  {saving ? "Saving..." : "Save"}
+                </Button>
               </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Keyword Providers</CardTitle>
-          <CardDescription>Choose how keyword research providers are configured.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="rounded-lg border p-4 space-y-4">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-3">
-                  <h3 className="text-sm font-semibold text-foreground">Google Ads</h3>
-                  <Badge variant={googleAdsConfigured ? "default" : "outline"}>
-                    {googleAdsConfigured ? "Configured" : "Not configured"}
-                  </Badge>
-                </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Optional integration for keyword research. Enable only when you have credentials ready.
-                  {!googleAdsConfigured && " Not configured yet—add credentials when you’re ready."}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-muted-foreground">Enable Google Ads</span>
-                <Switch
-                  checked={formState.enabled}
-                  onCheckedChange={(checked) =>
-                    setFormState((prev) => ({ ...prev, enabled: checked }))
-                  }
-                  aria-label="Enable Google Ads"
-                />
-              </div>
+        <TabsContent value="llm-ai" className="mt-4">
+          <div className="ui-card ui-card-hover p-6 animate-fade-in ui-section">
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">LLM / AI</h2>
+              <p className="text-sm text-muted-foreground">
+                Controls how the AI assistant generates decision drafts.
+              </p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="customerId">Customer ID</Label>
-                <Input
-                  id="customerId"
-                  placeholder="123-456-7890"
-                  value={formState.customerId}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, customerId: event.target.value }))
-                  }
-                  disabled={!formState.enabled}
-                />
+                <p className="text-sm font-medium">Model</p>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">gpt-4o-mini</Badge>
+                  <span className="text-sm text-muted-foreground">
+                    Read-only (current deployment)
+                  </span>
+                </div>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="developerToken">Developer Token</Label>
-                <Input
-                  id="developerToken"
-                  placeholder="Stored securely in Google Ads"
-                  value={formState.developerToken}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, developerToken: event.target.value }))
-                  }
-                  disabled={!formState.enabled}
-                />
+                <Label htmlFor="llm-temperature" className="text-sm font-medium">
+                  Temperature
+                </Label>
+                <Select value={temperature} onValueChange={setTemperature}>
+                  <SelectTrigger id="llm-temperature">
+                    <SelectValue placeholder="Select temperature" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0.3">0.3 (Conservative)</SelectItem>
+                    <SelectItem value="0.5">0.5 (Balanced)</SelectItem>
+                    <SelectItem value="0.7">0.7 (Exploratory)</SelectItem>
+                    <SelectItem value="0.9">0.9 (Creative)</SelectItem>
+                    <SelectItem value="1.0">1.0 (Highly Creative)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  Higher values increase diversity in AI proposals.
+                </p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="clientId">Client ID</Label>
-                <Input
-                  id="clientId"
-                  placeholder="Google OAuth client ID"
-                  value={formState.clientId}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, clientId: event.target.value }))
-                  }
-                  disabled={!formState.enabled}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="clientSecret">Client Secret</Label>
-                <Input
-                  id="clientSecret"
-                  type="password"
-                  placeholder="Google OAuth client secret"
-                  value={formState.clientSecret}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, clientSecret: event.target.value }))
-                  }
-                  disabled={!formState.enabled}
-                />
-              </div>
+
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="refreshToken">Refresh Token</Label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Label htmlFor="openai-api-key" className="text-sm font-medium">
+                    OpenAI API Key
+                  </Label>
+                  <Badge variant="outline">ACTIVE=false</Badge>
+                </div>
                 <Input
-                  id="refreshToken"
+                  id="openai-api-key"
                   type="password"
-                  placeholder="Refresh token from OAuth flow"
-                  value={formState.refreshToken}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, refreshToken: event.target.value }))
-                  }
-                  disabled={!formState.enabled}
+                  value="••••••••••••••••"
+                  disabled
+                  readOnly
                 />
+                <p className="text-sm text-muted-foreground">
+                  Editable in Desktop vNext. Managed via deployment environment in Web.
+                </p>
               </div>
-            </div>
-
-            {formState.enabled && missingFields.length > 0 && (
-              <p className="text-xs text-destructive">
-                Enter all required Google Ads credentials to enable this provider.
-              </p>
-            )}
-
-            <div className="flex items-center justify-end">
-              <Button onClick={handleSave} disabled={isSaveDisabled}>
-                {saving ? "Saving..." : "Save"}
-              </Button>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
