@@ -1,4 +1,4 @@
-﻿# Stylenya Intelligence Dashboard
+# Stylenya Intelligence Dashboard
 
 ## a. Descripción general del proyecto
 
@@ -162,6 +162,15 @@ stylenya-intelligent-project/
 │       └── dist/           # Build de producción
 │
 ├── docs/                   # Documentación académica (TFM)
+│  - api-contract.md
+│  - apps-api.mdx
+│  - apps-web.mdx
+│  - data-model.md
+│  - development.mdx
+│  - domain-model.md
+│  - getting-started.mdx
+│  - index.mdx
+│  - system-architecture.md
 ├── README.md
 └── package.json
 ```
