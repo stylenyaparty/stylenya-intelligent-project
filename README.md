@@ -1,4 +1,4 @@
-﻿# Stylenya Intelligence Dashboard
+# Stylenya Intelligence Dashboard
 
 ## a. Descripción general del proyecto
 
@@ -250,3 +250,10 @@ Consideraciones:
 - Estados controlados manualmente.
 - Historial persistente y auditable.
 - Soft-disable de usuarios reviewer sin eliminar datos históricos.
+
+## f. Documentación adicional
+
+Para una comprensión más detallada de la arquitectura y el código, consulte la documentación específica de cada aplicación:
+
+- **API Documentation:** `/apps/api/README.md`
+- **Frontend Documentation:** `/apps/web/README.md`
