@@ -308,7 +308,7 @@ export default function ProductsPage() {
 
   return (
     <div className="animate-fade-in">
-      <PageHeader title="Products" description="Manage your catalog across sources">
+      <PageHeader title="Products" subtitle="Manage your catalog across sources">
         <input
           ref={fileInputRef}
           type="file"

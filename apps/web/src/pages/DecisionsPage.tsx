@@ -16,7 +16,6 @@ import {
   type SignalBatch,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { 
@@ -343,10 +342,10 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
   }, {} as Record<string, number>);
 
   return (
-    <div className="animate-fade-in">
+    <div className="ui-section animate-fade-in">
       <PageHeader 
         title={showDrafts ? "Decision Drafts" : "Decision Log"} 
-        description={
+        subtitle={
           showDrafts
             ? "Review signal-driven drafts before promoting to the log."
             : "Track and manage your product decisions"
@@ -460,14 +459,11 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
       {showLog && busy && !data && <LoadingState message="Loading decisions..." />}
 
       {showDrafts && mode !== "all" && (
-        <Card className="mb-6">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <Inbox className="h-5 w-5 text-primary" />
-              <CardTitle className="text-lg">Inbox</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
+        <section className="ui-card ui-card-hover mb-6 p-0">
+          <div className="flex items-center gap-2 border-b border-border/70 px-6 py-4">
+            <Inbox className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold tracking-tight">Inbox</h2>
+          </div>
             {(draftsBusy || batchesBusy) && <LoadingState message="Loading drafts..." />}
             {!draftsBusy && !batchesBusy && draftsError && (
               <div className="p-6">
@@ -509,7 +505,7 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
                   const isExpanded = expandedDrafts[draft.id] ?? false;
 
                   return (
-                  <div key={draft.id} className="p-6 space-y-4">
+                  <div key={draft.id} className="ui-card ui-card-hover p-6 space-y-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="space-y-2">
                         <h3 className="text-base font-semibold">{draft.title}</h3>
@@ -674,20 +670,16 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
                 })}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </section>
       )}
 
       {/* Decisions table */}
       {showLog && !busy && !error && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <ClipboardList className="h-5 w-5 text-primary" />
-              <CardTitle className="text-lg">All Decisions</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
+        <section className="ui-card ui-card-hover p-0">
+          <div className="flex items-center gap-2 border-b border-border/70 px-6 py-4">
+            <ClipboardList className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold tracking-tight">All Decisions</h2>
+          </div>
             {decisions.length === 0 ? (
               <div className="p-6">
                 <EmptyState 
@@ -697,7 +689,7 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
                 />
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto animate-fade-in">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50">
@@ -782,8 +774,7 @@ export default function DecisionsPage({ defaultView = "log" }: DecisionsPageProp
                 </Table>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </section>
       )}
       {showLog && (
         <Dialog
@@ -977,7 +968,7 @@ function SummaryCard({
   };
 
   return (
-    <div className={`rounded-lg border p-3 ${variantClasses[variant]}`}>
+    <div className={`ui-card p-3 ${variantClasses[variant]}`}>
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="text-xl font-semibold">{value}</p>
     </div>

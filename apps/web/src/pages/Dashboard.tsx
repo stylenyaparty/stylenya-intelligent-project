@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/auth/useAuth";
 import { Package, Target, ClipboardList, TrendingUp } from "lucide-react";
 import { KPICard, PageHeader, ActionBadge, StatusBadge, type ActionType, type DecisionStatus } from "@/components/dashboard";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { endReviewerAccess } from "@/api/auth";
@@ -98,10 +97,10 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="animate-fade-in">
+    <div className="ui-section animate-fade-in">
       <PageHeader
         title="Dashboard"
-        description="Overview of your product intelligence and recommendations"
+        subtitle="Overview of your product intelligence and recommendations"
       />
 
       {user?.isReviewer && (
@@ -118,7 +117,7 @@ export default function Dashboard() {
           KPI data unavailable: {kpisError}
         </p>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
         <KPICard
           title="Active Products"
           value={kpisLoading ? "—" : kpis.activeProducts}
@@ -147,14 +146,13 @@ export default function Dashboard() {
       </div>
 
       {/* Main Content Grid */}
-      <div className="grid grid-cols-1 gap-6">
+      <div className="ui-section grid grid-cols-1 gap-6">
         {/* SEO Focus */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
+        <section className="ui-card ui-card-hover p-6">
+          <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Target className="h-5 w-5 text-primary" />
-                <CardTitle className="text-lg">SEO Focus</CardTitle>
+                <h2 className="text-lg font-semibold tracking-tight">SEO Focus</h2>
               </div>
               <Link
                 to="/dashboard/seo-focus"
@@ -163,9 +161,7 @@ export default function Dashboard() {
                 View all →
               </Link>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
+          <div className="space-y-3 animate-fade-in">
               {seoFocusLoading && (
                 <p className="text-sm text-muted-foreground">Loading SEO focus…</p>
               )}
@@ -187,19 +183,15 @@ export default function Dashboard() {
                 />
               ))}
             </div>
-          </CardContent>
-        </Card>
+        </section>
 
         {/* Quick Actions */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Quick Navigation</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <section className="ui-card ui-card-hover p-6">
+          <h2 className="mb-4 text-lg font-semibold tracking-tight">Quick Navigation</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Link
                 to="/dashboard/seo-focus"
-                className="flex items-center gap-3 p-4 rounded-lg border border-border hover:bg-accent transition-colors"
+                className="flex items-center gap-3 rounded-lg border border-border/70 bg-background/70 p-4 transition-colors hover:bg-accent"
               >
                 <div className="p-2 rounded-lg bg-primary/10">
                   <Target className="h-5 w-5 text-primary" />
@@ -211,7 +203,7 @@ export default function Dashboard() {
               </Link>
               <Link
                 to="/dashboard/decisions"
-                className="flex items-center gap-3 p-4 rounded-lg border border-border hover:bg-accent transition-colors"
+                className="flex items-center gap-3 rounded-lg border border-border/70 bg-background/70 p-4 transition-colors hover:bg-accent"
               >
                 <div className="p-2 rounded-lg bg-primary/10">
                   <ClipboardList className="h-5 w-5 text-primary" />
@@ -222,8 +214,7 @@ export default function Dashboard() {
                 </div>
               </Link>
             </div>
-          </CardContent>
-        </Card>
+        </section>
       </div>
     </div>
   );
@@ -241,7 +232,7 @@ function FocusItemPreview({
   status: DecisionStatus;
 }) {
   return (
-    <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-card">
+    <div className="flex items-center justify-between rounded-lg border border-border/70 bg-background/80 p-3">
       <div className="flex items-center gap-3">
         <ActionBadge action={action} />
         <span className="font-medium text-sm">{title}</span>

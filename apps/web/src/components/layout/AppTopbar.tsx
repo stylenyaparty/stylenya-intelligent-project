@@ -1,6 +1,7 @@
 import { useAuth } from "@/auth/useAuth";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -8,23 +9,42 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User, ChevronDown } from "lucide-react";
+import { LogOut, User, ChevronDown, Moon, Sun } from "lucide-react";
 
 export function AppTopbar() {
   const { user, logout } = useAuth();
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    setIsDark(document.documentElement.classList.contains("dark"));
+  }, []);
+
+  function toggleTheme() {
+    const root = document.documentElement;
+    const nextIsDark = !root.classList.contains("dark");
+    root.classList.toggle("dark", nextIsDark);
+    setIsDark(nextIsDark);
+  }
 
   return (
-    <header className="h-14 border-b border-border bg-card flex items-center justify-between px-4 shrink-0">
+    <header className="h-14 sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70 shadow-sm flex items-center justify-between px-4 shrink-0">
       <div className="flex items-center gap-4">
         <SidebarTrigger className="-ml-2" />
         <div className="h-6 w-px bg-border" />
-        <div>
-          <h1 className="text-sm font-medium text-foreground">Decision Support Dashboard</h1>
-          <p className="text-xs text-muted-foreground">Product intelligence & recommendations</p>
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-1 rounded-full bg-primary/60" />
+          <div className="leading-tight">
+            <h1 className="text-sm font-semibold tracking-tight text-foreground">Stylenya Intelligence Dashboard</h1>
+            <p className="text-xs text-muted-foreground">Signals → Drafts → Decisions → SEO Focus</p>
+          </div>
         </div>
       </div>
 
       <div className="flex items-center gap-3">
+        <Button variant="outline" size="sm" className="h-9 gap-2" onClick={toggleTheme}>
+          {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          <span className="hidden sm:inline">{isDark ? "Light" : "Dark"}</span>
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-9 gap-2 px-3">

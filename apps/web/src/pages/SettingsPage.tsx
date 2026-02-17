@@ -363,7 +363,7 @@ export default function SettingsPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Settings"
-        description="Manage keyword provider preferences and integrations."
+        subtitle="Manage keyword provider preferences and integrations."
       />
 
       <Card>

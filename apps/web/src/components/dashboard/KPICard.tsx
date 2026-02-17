@@ -26,7 +26,7 @@ export function KPICard({
   return (
     <div 
       className={cn(
-        "rounded-lg border bg-card p-5 transition-shadow hover:shadow-sm",
+        "ui-card ui-card-hover p-5",
         variant === "highlight" && "border-primary/20 bg-primary/5",
         className
       )}
