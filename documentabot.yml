@@ -2,6 +2,13 @@
 ### Default to main or master branch.
 target-branch: main
 
+<!-- DOCS-GUARDRAILS
+Read /docs/DOCS_POLICY.md before editing.
+Do NOT rewrite: domain definitions, invariants, core flow (Signals → Drafts → Decisions → SEO Focus), or IA asistencial constraints.
+Only update: endpoints, env vars, file paths, UI labels, examples to match code.
+No secrets.
+-->
+
 ### List of all your documentation directories (optional).
 ### Default to README.md. Currently supports file paths only, not directory paths.
 doc-paths:
@@ -16,6 +23,7 @@ doc-paths:
  - /docs/system-architecture.md
  - /apps/api/README.md
  - /apps/web/README.md
+ - /docs/DOCS_POLICY.md
  - README.md
 
 ### List of all the directories you want to ignore (optional).
