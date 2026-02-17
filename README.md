@@ -40,6 +40,7 @@ El sistema sigue una **arquitectura desacoplada**, separando claramente frontend
 - **Provider abstraction** (Mock / OpenAI)
 - IA en rol **asistencial**, no decisorio
 - Generación de *Decision Drafts* y explicaciones contextualizadas
+- Control de parámetros de IA como la **temperatura**.
 
 ### Infraestructura y despliegue
 
@@ -236,6 +237,7 @@ Consideraciones:
 - Redacción de propuestas y justificación.
 - La IA no ejecuta acciones ni modifica estados de negocio.
 - Human-in-the-loop obligatorio para promoción.
+- Se han añadido controles para parámetros como la **temperatura**.
 
 ### Decision Drafts & Decision Log
 
