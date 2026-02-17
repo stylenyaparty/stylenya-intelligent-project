@@ -14,6 +14,8 @@ doc-paths:
  - /docs/getting-started.mdx
  - /docs/index.mdx
  - /docs/system-architecture.md
+ - /apps/api/README.md
+ - /apps/web/README.md
  - README.md
 
 ### List of all the directories you want to ignore (optional).
