@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { buildApiUrl } from "@/lib/api-url";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -215,17 +214,15 @@ export default function SignalsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="ui-section animate-fade-in">
       <PageHeader
         title="Signals"
-        description="Import keyword signals from Google Keyword Planner CSV uploads."
+        subtitle="Import keyword signals from Google Keyword Planner CSV uploads."
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Upload GKP CSV</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <section className="ui-card ui-card-hover p-6">
+        <h2 className="mb-4 text-lg font-semibold tracking-tight">Upload GKP CSV</h2>
+        <div className="space-y-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-end">
             <div className="flex-1 space-y-2">
               <Input
@@ -247,15 +244,13 @@ export default function SignalsPage() {
               </div>
             </div>
           ) : null}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Batches</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <section className="ui-card ui-card-hover p-6">
+          <h2 className="mb-4 text-lg font-semibold tracking-tight">Batches</h2>
+          <div>
             {loadingBatches ? (
               <LoadingState message="Loading batches..." />
             ) : batches.length === 0 ? (
@@ -288,14 +283,12 @@ export default function SignalsPage() {
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Signals</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <section className="ui-card ui-card-hover p-6">
+          <h2 className="mb-4 text-lg font-semibold tracking-tight">Signals</h2>
+          <div className="space-y-4">
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div className="text-sm text-muted-foreground">
                 {activeBatch
@@ -359,7 +352,8 @@ export default function SignalsPage() {
                 }
               />
             ) : (
-              <Table>
+              <div className="overflow-x-auto animate-fade-in">
+                <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Keyword</TableHead>
@@ -402,9 +396,10 @@ export default function SignalsPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       </div>
     </div>
   );

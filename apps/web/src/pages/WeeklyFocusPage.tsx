@@ -140,7 +140,7 @@ export default function WeeklyFocusPage() {
     <div className="animate-fade-in">
       <PageHeader
         title="SEO Focus"
-        description="Bi-weekly focus plan based on promoted keyword signals"
+        subtitle="Bi-weekly focus plan based on promoted keyword signals"
       >
         <Select value={limit} onValueChange={setLimit}>
           <SelectTrigger className="w-[100px]">

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -85,10 +84,10 @@ export default function SEOFocusPage() {
   const items = useMemo(() => data?.items ?? [], [data]);
 
   return (
-    <div className="animate-fade-in">
+    <div className="ui-section animate-fade-in">
       <PageHeader
         title="SEO Focus"
-        description="Bi-weekly planner view derived from the Decision Log"
+        subtitle="Bi-weekly planner view derived from the Decision Log"
       >
         <Select value={days} onValueChange={setDays}>
           <SelectTrigger className="w-[120px]">
@@ -135,15 +134,12 @@ export default function SEOFocusPage() {
       {busy && !data && <LoadingState message="Loading SEO focus..." />}
 
       {!busy && !error && (
-        <div className="space-y-6">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <Target className="h-5 w-5 text-primary" />
-                <CardTitle className="text-lg">SEO Focus Decisions</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
+        <div className="ui-section">
+          <section className="ui-card ui-card-hover p-0">
+            <div className="flex items-center gap-2 border-b border-border/70 px-6 py-4">
+              <Target className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold tracking-tight">SEO Focus Decisions</h2>
+            </div>
               {items.length === 0 ? (
                 <div className="p-6">
                   <EmptyState
@@ -153,7 +149,7 @@ export default function SEOFocusPage() {
                   />
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto animate-fade-in">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/50">
@@ -194,8 +190,7 @@ export default function SEOFocusPage() {
                   </Table>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </section>
         </div>
       )}
     </div>

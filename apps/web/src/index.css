@@ -165,4 +165,31 @@
   .text-balance {
     text-wrap: balance;
   }
+
+  .ui-card {
+    @apply rounded-xl border bg-card shadow-sm ring-1 ring-border/40;
+  }
+
+  .ui-card-hover {
+    @apply transition-shadow hover:shadow-md;
+  }
+
+  .ui-section {
+    @apply space-y-4;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 200ms ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(2px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }

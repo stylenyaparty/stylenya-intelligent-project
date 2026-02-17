@@ -539,7 +539,7 @@ export default function KeywordsPage() {
     <div className="animate-fade-in space-y-6">
       <PageHeader
         title="Keywords"
-        description="Curate seed keywords and run research jobs to surface new opportunities."
+        subtitle="Curate seed keywords and run research jobs to surface new opportunities."
       >
         <Button
           variant="outline"
