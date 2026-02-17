@@ -208,7 +208,7 @@ Se crea un usuario temporal con:
 
 - role = ADMIN
 - isReviewer = true
-- El usuario inicia sesión normalmente.
+- El usuario inicia sesión normally.
 - Tiene acceso completo al flujo DSS.
 - Desde el Dashboard puede ejecutar End Review.
 - El sistema deshabilita el usuario (archivedAt).
