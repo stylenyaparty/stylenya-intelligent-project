@@ -1,0 +1,27 @@
+## Name of the branch you want to monitor (optional).
+### Default to main or master branch.
+target-branch: main
+
+### List of all your documentation directories (optional).
+### Default to README.md. Currently supports file paths only, not directory paths.
+doc-paths:
+ - /docs/api-contract.md
+ - /docs/apps-api.mdx
+ - /docs/apps-web.mdx
+ - /docs/data-model.md
+ - /docs/development.mdx
+ - /docs/domain-model.md
+ - /docs/getting-started.mdx
+ - /docs/index.mdx
+ - /docs/system-architecture.md
+ - README.md
+
+### List of all the directories you want to ignore (optional).
+### All changes that happened inside these directories will not be reviewed. Supports wildcards (*).
+ignore-paths:
+ - .github/**
+
+### List of all the users you want to ignore (optional).
+### All commits made by these users will not be reviewed.
+ignore-users:
+ - your-intern
