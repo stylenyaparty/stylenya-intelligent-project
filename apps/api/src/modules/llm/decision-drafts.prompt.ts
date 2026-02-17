@@ -9,6 +9,7 @@ const SYSTEM_MESSAGE =
 export type DecisionDraftPromptInput = {
     signals: DecisionDraftSignal[];
     maxDrafts: number;
+    runNonce?: string;
 };
 
 export function buildDecisionDraftPrompt(input: DecisionDraftPromptInput) {
@@ -19,6 +20,7 @@ export function buildDecisionDraftPrompt(input: DecisionDraftPromptInput) {
         "- Include why the opportunity matters now.",
         "- Include risks.",
         "- Include concrete next steps.",
+        "- Provide DIVERSE drafts; avoid repeating the same structure and titles from prior runs.",
     ].join("\n");
 
     const user = [
@@ -31,6 +33,7 @@ export function buildDecisionDraftPrompt(input: DecisionDraftPromptInput) {
         "",
         "Keyword signals:",
         JSON.stringify(input.signals, null, 2),
+        ...(input.runNonce ? ["", `Run nonce: ${input.runNonce}`] : []),
         "",
         "Return ONLY valid JSON in this exact format:",
         JSON.stringify(

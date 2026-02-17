@@ -26,6 +26,10 @@ export type DecisionDraftResult = {
     }>;
     meta?: {
         model?: string;
+        temperature?: number;
+        topP?: number;
+        nonceEnabled?: boolean;
+        promptHash?: string;
     };
 };
 
