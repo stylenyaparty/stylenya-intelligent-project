@@ -1,62 +1,138 @@
-# Data Model — Stylenya Intelligent Project (v1.0)
+# Modelo de Datos — Stylenya Intelligent Project (Actualizado 2026)
 
-## 1) Purpose
+## 1. Propósito
 
-This document defines the initial **PostgreSQL data model** for the Stylenya Intelligent Project (decision-support system). The data model is designed to:
-
-- Store canonical business entities (Products, Orders, OrderItems),
-- Support analytics queries for dashboard KPIs,
-- Persist derived outputs (Insights, Recommendation/Decision records),
-- Maintain traceability (what was recommended, why, and based on which evidence).
-
-The model follows the Clean Architecture principle: **database structures support the domain** and not the other way around.
+Este documento describe el **modelo de datos actual** del sistema Stylenya Intelligent Project, un DSS (Decision Support System) para e-commerce creativo. El modelo refleja la estructura real de la base de datos y las entidades principales, alineadas con la lógica de negocio y las funcionalidades implementadas.
 
 ---
 
-## 2) Modeling Strategy (Key Decisions)
+## 2. Estrategia de Modelado
 
-### 2.1 Canonical vs Raw Ingestion (Pragmatic approach)
-
-We will support ingestion from external exports (Etsy/Shopify CSV). Two strategies exist:
-
-- **Raw-first**: store raw rows, then normalize later.
-- **Canonical-first**: map directly into normalized canonical tables.
-**Decision (v1 MVP): Hybrid**
-
-- Store minimal metadata about each import (`import_runs`),
-- Store canonical entities (`orders`, `order_items`, `products`) as the primary truth,
-- Optionally store raw payload for debugging only (future table `import_raw_rows` if needed).
-
-**Why:**
-
-- Keeps MVP fast,
-- Avoids complex raw schemas early,
-- Still preserves audit via `import_runs` + mapping notes.
+- **Canonical-first**: Las entidades principales (productos, pedidos, decisiones, métricas) se modelan de forma normalizada y agnóstica a la plataforma.
+- **Trazabilidad y auditoría**: Todas las decisiones y recomendaciones quedan registradas junto con la evidencia y reglas que las generaron.
+- **Extensibilidad**: El modelo permite incorporar nuevas fuentes de datos, reglas y funcionalidades sin romper la estructura base.
 
 ---
 
-## 3) Core Entities and Tables (MVP)
+## 3. Entidades Principales
 
-### 3.1 `products`
+### Usuario (`User`)
+- id (UUID, PK)
+- email (único)
+- nombre
+- rol (enum: ADMIN, USER, etc.)
+- isReviewer (bool)
+- archivedAt (fecha de archivado)
+- passwordHash
+- createdAt, updatedAt
 
-Canonical representation of a Stylenya product (platform-agnostic).
-**Columns**
+### Producto (`Product`)
+- id (UUID, PK)
+- nombre
+- productSource (enum: SHOPIFY, ETSY, etc.)
+- productType
+- status (enum: ACTIVE, DISCONTINUED, etc.)
+- seasonality (enum)
+- shopifyProductId, shopifyHandle, etsyListingId (referencias externas)
+- importNotes
+- archivedAt
+- createdAt, updatedAt
 
-- `id` UUID PK
-- `name` TEXT NOT NULL
-- `category` TEXT NOT NULL
-- `product_type` TEXT NOT NULL
-- `is_custom` BOOLEAN NOT NULL DEFAULT false
-- `status` TEXT NOT NULL DEFAULT 'ACTIVE'  -- ACTIVE | DISCONTINUED
-- `created_at` TIMESTAMPTZ NOT NULL DEFAULT now()
-- `updated_at` TIMESTAMPTZ NOT NULL DEFAULT now()
-**Notes**
+#### Relaciones:
+- Un producto puede tener muchos registros de ventas (`SalesRecord`)
+- Un producto puede estar vinculado a muchas solicitudes (`Request`)
 
-- `category` and `product_type` can be enums later (Prisma enum / PG enum), but TEXT is fine for v1.
-- Products are not bound to Etsy/Shopify IDs; that mapping is done via `product_platform_refs`.
-**Indexes**
-- `idx_products_category` on (`category`)
-- `idx_products_status` on (`status`)
+### Registro de Ventas (`SalesRecord`)
+- id (UUID, PK)
+- productId (FK → Product)
+- salesPeriod (enum: D7, D30, D90, etc.)
+- unitsSold
+- revenueAmount
+- asOfDate
+- createdAt
+
+### Solicitud de Producto (`Request`)
+- id (UUID, PK)
+- channel (enum)
+- theme
+- productType
+- status (enum)
+- productId (FK → Product)
+- createdAt
+
+### Configuración (`Settings`)
+- id (PK)
+- boostSalesThresholdD90, retireSalesThresholdD180, requestThemePriorityThreshold
+- defaultCurrency
+- googleAdsEnabled y credenciales asociadas
+- updatedAt
+
+### Decisión (`Decision`)
+- id (UUID, PK)
+- status (enum: PLANNED, etc.)
+- actionType
+- targetType, targetId
+- dedupeKey (único)
+- title, rationale, priorityScore, sources
+- promotedDraft (relación con DecisionDraft)
+- createdAt, updatedAt
+
+### Registro de Decisiones (`DecisionLog`)
+- id (UUID, PK)
+- weekStart (fecha)
+- engineVersion
+- itemsJson (snapshot de items)
+- createdAt
+
+### Palabra Clave (`KeywordSeed`)
+- id (UUID, PK)
+- term (único)
+- source, kind, status (enums)
+- tagsJson
+- createdAt, updatedAt
+
+### Definición de Tipo de Producto (`ProductTypeDefinition`)
+- id (UUID, PK)
+- key (único)
+- label, synonymsJson, required, status, tagsJson
+- createdAt, updatedAt
+
+### Señales y Métricas (`SignalBatch`, `KeywordSignal`)
+- SignalBatch: agrupa cargas de señales externas (ej. keywords)
+- KeywordSignal: señal individual, vinculada a un batch
+
+---
+
+## 4. Relaciones y Trazabilidad
+
+- Un producto puede tener múltiples registros de ventas y solicitudes.
+- Las decisiones pueden estar vinculadas a borradores promovidos y a evidencia/rastros de reglas.
+- Todas las acciones relevantes quedan auditadas con fecha y usuario.
+
+---
+
+## 5. Índices y Reglas de Integridad
+
+- Índices en campos de búsqueda frecuente (fechas, status, referencias externas).
+- Unicidad en claves externas y dedupeKey para evitar duplicados.
+- Integridad referencial entre entidades principales.
+
+---
+
+## 6. Extensiones y Futuras Tablas
+
+- Temas (`themes`) y relación producto-tema.
+- Snapshots de KPIs precomputados.
+- Items de contenido para SEO/blog.
+
+---
+
+## 7. Alineación con la Lógica de Negocio
+
+- El modelo soporta reglas como: productos agnósticos de plataforma, pedidos inmutables, decisiones trazables y configuraciones editables.
+- Permite la evolución del sistema sin migraciones disruptivas.
+
+---
 
 ---
 

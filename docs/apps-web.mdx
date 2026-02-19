@@ -1,16 +1,100 @@
-# Web App
+# Wireframe y Especificación del Dashboard Web — Stylenya Intelligent Project (2026)
 
-The Web app provides the decision-support dashboard. It consumes the API and focuses on UX and data visualization.
+## 1. Propósito
 
-## Key areas
+Este documento describe la estructura, pantallas y componentes principales del dashboard web, mapeando cada vista a los endpoints de la API y funcionalidades reales del sistema.
 
-- App entry: apps/web/src/main.tsx
-- Pages and routes: apps/web/src/pages
-- Shared components: apps/web/src/components
-- API client layer: apps/web/src/api
+---
 
-## Design goals
+## 2. Estructura General
 
-- Clear, actionable insights
-- Fast KPI exploration
-- Traceable recommendations
+- Entrada: `apps/web/src/main.tsx`
+- Rutas y páginas: `apps/web/src/pages`
+- Componentes compartidos: `apps/web/src/components`
+- Cliente API: `apps/web/src/api`
+
+---
+
+## 3. Pantallas Principales y Componentes
+
+### 3.1 Dashboard Principal (`/dashboard`)
+- **KPIs principales** (productos activos, decisiones pendientes, acciones SEO, decisiones recientes)
+	- Componente: `KPICard`
+	- Endpoint: `GET /dashboard/kpis`
+- **SEO Focus (acciones bi-semanales)**
+	- Componente: `FocusItemPreview`
+	- Endpoint: `GET /seo-focus?days=14&includeExecuted=true`
+- **Quick Navigation**
+	- Accesos rápidos a SEO Focus y Decision Log
+
+### 3.2 Productos (`/dashboard/products`)
+- Listado, búsqueda y filtrado de productos
+	- Endpoint: `GET /products`
+- Alta, edición, archivado y restauración de productos
+	- Endpoints: `POST /products`, `PATCH /products/:id`, `POST /products/:id/archive`, `POST /products/:id/restore`, `DELETE /products/:id`
+- Importación de catálogo (Shopify/Etsy)
+	- Endpoint: `POST /products/import-csv`
+
+### 3.3 Señales y Keywords (`/dashboard/signals`, `/dashboard/keywords`)
+- Subida de señales externas (CSV)
+	- Endpoint: `POST /signals/upload`
+- Listado de lotes y señales
+	- Endpoints: `GET /signals/batches`, `GET /signals`
+- Gestión de keywords seeds y jobs
+	- Endpoints: `GET /keywords/seeds`, `POST /keywords/seeds`, `PATCH /keywords/seeds/:id`, `POST /keywords/jobs`, etc.
+
+### 3.4 Decisiones y Borradores (`/dashboard/decisions`, `/dashboard/decision-drafts`)
+- Listado y gestión de decisiones
+	- Endpoint: `GET /decisions`, `GET /decisions/:id`
+- Borradores generados por IA, promoción y descarte
+	- Endpoints: `GET /decision-drafts`, `POST /decision-drafts/generate`, `POST /decision-drafts/:id/promote`, `POST /decision-drafts/:id/dismiss`
+
+### 3.5 SEO Focus (`/dashboard/seo-focus`)
+- Listado completo de acciones SEO recientes
+	- Endpoint: `GET /seo-focus`
+
+### 3.6 Weekly Focus (`/dashboard/weekly-focus`)
+- Resumen de enfoque semanal
+	- Endpoint: `GET /weekly-focus`
+
+### 3.7 Configuración (`/dashboard/settings`)
+- Seeds de contexto SEO, tipos de producto, proveedores de keywords, Google Ads
+	- Endpoints: `/settings/seo-context`, `/settings/product-types`, `/settings/keyword-providers`, `/settings/google-ads`
+
+### 3.8 Login y Reviewer
+- Login de usuario y flujo de acceso reviewer
+	- Endpoints: `POST /login`, `POST /reviewer/signup`, `POST /reviewer/end`
+
+---
+
+## 4. Mapeo de Componentes a Endpoints
+
+| Pantalla/Componente         | Endpoint(s) principales                                 |
+|----------------------------|--------------------------------------------------------|
+| Dashboard (KPIs, SEO)      | /dashboard/kpis, /seo-focus                            |
+| Productos                  | /products, /products/:id, /products/import-csv         |
+| Señales                    | /signals/upload, /signals, /signals/batches            |
+| Keywords                   | /keywords/seeds, /keywords/jobs, /keywords/jobs/:id    |
+| Decisiones                 | /decisions, /decisions/:id                             |
+| Borradores de decisión     | /decision-drafts, /decision-drafts/:id/promote         |
+| SEO Focus                  | /seo-focus                                             |
+| Weekly Focus               | /weekly-focus                                          |
+| Configuración              | /settings/seo-context, /settings/product-types, etc.   |
+| Login/Reviewer             | /login, /reviewer/signup, /reviewer/end                |
+
+---
+
+## 5. Consideraciones de UX
+
+- Todas las pantallas usan feedback visual para carga y errores.
+- Navegación rápida entre módulos clave desde el dashboard.
+- Acciones críticas (archivar, eliminar, finalizar reviewer) requieren confirmación.
+- El diseño es desktop-first, responsivo y accesible.
+
+---
+
+## 6. Relación con la Arquitectura
+
+El dashboard web consume la API REST y refleja la separación de responsabilidades: presentación (web), lógica de negocio (API), persistencia (DB).
+
+---

@@ -1,16 +1,65 @@
-# API App
+# Aplicación API — Stylenya Intelligent Project (Actualizado 2026)
 
-The API app implements clean architecture and exposes business capabilities through HTTP endpoints. It owns deterministic rules and optionally calls LLM services for narrative insights.
+## 1. Propósito
 
-## Key areas
+La app API implementa la lógica de negocio y expone las capacidades del sistema mediante endpoints HTTP REST. Sigue principios de arquitectura limpia, separando dominio, aplicación, infraestructura y presentación (API).
 
-- Application use cases: apps/api/src/application
-- Domain rules and entities: apps/api/src/domain
-- Infrastructure adapters: apps/api/src/infrastructure
-- HTTP interface layer: apps/api/src/interfaces
+---
 
-## Contracts
+## 2. Estructura de Carpetas
 
-See the API contract for endpoint definitions and conventions:
+- **Casos de uso (application):** apps/api/src/application
+- **Dominio (entidades, reglas):** apps/api/src/domain
+- **Infraestructura (adaptadores, repositorios):** apps/api/src/infrastructure
+- **Capa HTTP (rutas, controladores, middleware):** apps/api/src/interfaces
 
+---
+
+## 3. Principios Clave
+
+- Todas las reglas de negocio y decisiones se ejecutan en el backend.
+- La API es determinista y auditable; la IA (LLM) es asistencial y nunca decisoria.
+- JWT obligatorio para autenticación (excepto login y reviewer).
+- Los endpoints están versionados bajo `/api/v1`.
+
+---
+
+## 4. Rutas y Endpoints
+
+La API expone rutas agrupadas por dominio funcional:
+
+- **Autenticación:** login, reviewer, sesión
+- **Productos:** CRUD, importación, archivado/restauración
+- **Señales y keywords:** ingestión, gestión de seeds y jobs
+- **Decisiones y borradores:** consulta, promoción, descarte
+- **KPIs y dashboard:** métricas principales, enfoque semanal, SEO focus
+- **Configuración:** tipos de producto, contexto SEO, proveedores
+- **IA/LLM:** generación de borradores sandbox, estado del proveedor
+
+Ver detalle y contratos en:
 - docs/api-contract.md
+
+---
+
+## 5. Flujo de Peticiones
+
+1. El frontend realiza peticiones autenticadas a la API.
+2. La API valida JWT y roles, ejecuta el caso de uso correspondiente.
+3. Se aplican reglas de dominio y se consulta la infraestructura (DB, LLM, etc.).
+4. Se retorna una respuesta estructurada y consistente.
+
+---
+
+## 6. Manejo de Errores y Seguridad
+
+- Errores devuelven códigos y mensajes claros (`ok: false`, `error: { code, message }`).
+- No se exponen datos sensibles ni trazas internas.
+- Los endpoints críticos requieren rol ADMIN.
+
+---
+
+## 7. Relación con la Arquitectura
+
+La app API es el núcleo de la lógica de negocio y orquesta la interacción entre dominio, infraestructura y presentación. Permite evolucionar el sistema sin acoplar la lógica al frontend ni a detalles de infraestructura.
+
+---

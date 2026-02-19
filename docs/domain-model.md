@@ -1,23 +1,178 @@
-# Stylenya Intelligent Project — Domain Model (v1.0)
 
-## 1) Purpose of the Domain
+# Modelo de Dominio — Stylenya Intelligent Project (Actualizado 2026)
 
-This project is a **decision-support system** for Stylenya (real e-commerce business).  
-It is **not** a store-front and it is **not** a CRM. Its mission is to consolidate historical business data and produce actionable insights to improve product strategy and operations.
+## 1. Propósito y Alcance
 
-### Core goals
+El sistema es un **Decision Support System (DSS)** para e-commerce creativo. Su misión es consolidar datos históricos de negocio y generar recomendaciones accionables para la estrategia de producto, priorización y operaciones.
 
-- Consolidate sales activity from different sources (Etsy, Shopify).
-- Understand product performance over time.
-- Detect patterns: trends, seasonality, best sellers, slow movers.
-- Generate recommendations (human-readable insights) supported by business rules and (later) LLM assistance.
-- Provide a dashboard-oriented experience focused on **analysis and decision-making**.
+**No** es un e-commerce ni un CRM. No gestiona pagos, envíos ni clientes finales.
 
 ---
 
-## 2) Domain Boundaries (What the system is / is not)
+## 2. Límites del Dominio
 
-### In scope
+**Incluye:**
+- Productos y su clasificación (tipo, categoría, estado)
+- Pedidos y líneas de venta (histórico)
+- Métricas y KPIs
+- Decisiones y recomendaciones (outputs del sistema)
+- Señales externas (keywords, tendencias)
+- Usuarios y roles (admin, reviewer)
+
+**No incluye:**
+- Checkout, pagos, envíos
+- Mensajería a clientes
+- Inventario en tiempo real
+- Automatización CRM
+
+---
+
+## 3. Lenguaje Ubicuo (Glosario)
+
+- **Producto**: Oferta vendible, agnóstica de plataforma
+- **Pedido**: Evento de compra (histórico)
+- **Línea de pedido**: Producto vendido en un pedido
+- **Decisión**: Acción recomendada (promover, retirar, crear, etc.)
+- **Borrador de decisión**: Propuesta generada por IA, pendiente de promoción
+- **KPI**: Métrica clave de rendimiento
+- **Señal**: Dato externo relevante (ej. keyword con volumen)
+- **Usuario**: Actor del sistema (admin, reviewer)
+
+---
+
+## 4. Entidades Principales
+
+### Usuario (`User`)
+- id, email, nombre, rol (ADMIN/USER), isReviewer, archivedAt, passwordHash, createdAt, updatedAt
+
+### Producto (`Product`)
+- id, nombre, productSource, productType, status, seasonality, referencias externas, createdAt, updatedAt
+
+### Pedido (`Order`)
+- id, plataforma, fecha, total, moneda, país, líneas
+
+### Línea de Pedido (`OrderItem`)
+- id, orderId, productId, cantidad, precio unitario, tipo de customización, notas
+
+### Decisión (`Decision`)
+- id, status, actionType, targetType, targetId, dedupeKey, title, rationale, priorityScore, sources, createdAt, updatedAt
+
+### Borrador de Decisión (`DecisionDraft`)
+- id, estado, título, rationale, fuentes, fecha creación
+
+### Señal (`Signal`)
+- id, batchId, keyword, métricas asociadas, fecha
+
+---
+
+## 5. Value Objects y Enums
+
+- **UserRole**: ADMIN | USER
+- **ProductStatus**: ACTIVE | DISCONTINUED | ARCHIVED
+- **SalesPeriod**: D7 | D30 | D90 | D180
+- **DecisionStatus**: PLANNED | EXECUTED | REJECTED | ...
+- **Money**: amount, currency
+- **DateRange**: start, end
+
+---
+
+## 6. Servicios de Dominio
+
+### PerformanceAnalyzer
+- Calcula KPIs y métricas de productos/categorías/temas para un periodo
+
+### InsightGenerator
+- Transforma métricas en insights y recomendaciones priorizadas
+
+### RecommendWeeklyFocusUseCase
+- Recomienda acciones prioritarias para el ciclo semanal (enfoque operativo)
+
+---
+
+## 7. Puertos y Adaptadores (Interfaces)
+
+- **UserRepository**: findByEmail, create, countUsers
+- **ProductRepository**: findAll, findById, upsert
+- **OrderRepository**: findByDateRange, saveBatch
+- **DecisionLogRepository**: findByWeekStart, upsertWeekSnapshot
+
+---
+
+## 8. Reglas de Negocio Clave
+
+- Los pedidos son inmutables una vez almacenados
+- Los productos son agnósticos de plataforma (referencias externas separadas)
+- Todas las decisiones requieren justificación y evidencia
+- Los borradores de decisión deben ser promovidos manualmente
+- Los umbrales de métricas y reglas son configurables
+
+---
+
+## 9. Diagrama Conceptual (Mermaid)
+
+```mermaid
+classDiagram
+  class User {
+    +UUID id
+    +string email
+    +string name
+    +UserRole role
+    +bool isReviewer
+    +Date archivedAt
+  }
+  class Product {
+    +UUID id
+    +string name
+    +string productSource
+    +string productType
+    +ProductStatus status
+  }
+  class Order {
+    +UUID id
+    +string platform
+    +Date orderDate
+    +Money totalAmount
+  }
+  class OrderItem {
+    +UUID id
+    +UUID orderId
+    +UUID productId
+    +int quantity
+    +Money unitPrice
+  }
+  class Decision {
+    +UUID id
+    +DecisionStatus status
+    +string actionType
+    +string targetType
+    +string targetId
+    +string dedupeKey
+    +string title
+    +string rationale
+    +int priorityScore
+    +Date createdAt
+  }
+  class DecisionDraft {
+    +UUID id
+    +string status
+    +string title
+    +string rationale
+    +Date createdAt
+  }
+  class Signal {
+    +UUID id
+    +string keyword
+    +int avgMonthlySearches
+    +Date createdAt
+  }
+  User "1" --> "many" Decision
+  Product "1" --> "many" OrderItem
+  Order "1" --> "many" OrderItem
+  Decision "1" --> "many" DecisionDraft
+  Signal --> Product : (relación indirecta)
+```
+
+---
 
 - Products and their classification (category/type).
 - Orders and sold items (historical facts).

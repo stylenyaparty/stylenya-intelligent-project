@@ -1,181 +1,176 @@
-# API Contract — Stylenya Intelligent Project (v1.0)
 
-## 1. Purpose
+# Especificación de API — Stylenya Intelligent Project (Actualizado 2026)
 
-This document defines the REST API contract for the Stylenya Intelligent Project.  
-The API enables data ingestion, KPI computation, insight generation, and traceable decision support for a real e-commerce business.
+## 1. Propósito
 
-The API is designed to:
-
-- Separate business logic from presentation (API/Web split),
-- Provide deterministic and auditable outputs,
-- Support incremental growth without breaking existing consumers.
+Este documento define la especificación REST de la API para Stylenya Intelligent Project, alineada con la implementación real y las funcionalidades actuales. Incluye la lista de endpoints, DTOs de request/response y consideraciones de seguridad.
 
 ---
 
-## 2. API Design Principles
+## 2. Principios de Diseño
 
-### 2.1 Versioning
-
-All endpoints are prefixed with `/api/v1`.  
-Breaking changes require a new version.
-
-### 2.2 Deterministic Core
-
-All KPIs and rule-based recommendations must be deterministic given the same inputs and date ranges.  
-LLM-assisted text is optional and always labeled as such.
-
-### 2.3 Traceability by Design
-
-Every recommendation must be traceable to:
-
-- The evidence metrics used,
-- The business rules applied,
-- The time range and context.
+- Versionado: todos los endpoints están bajo `/api/v1`.
+- Respuestas deterministas y auditables.
+- Trazabilidad total de decisiones y acciones.
+- Autenticación JWT obligatoria (excepto login y registro reviewer).
 
 ---
 
-## 3. Common Concepts
+## 3. Estructura General de Endpoints
 
-### Platforms
+### Autenticación
+- `POST /api/v1/login` — Login de usuario (email, password)
+- `POST /api/v1/reviewer/signup` — Alta temporal de reviewer (modo evaluación)
+- `POST /api/v1/reviewer/end` — Finalizar sesión reviewer
 
-- ETSY
-- SHOPIFY
+### Productos
+- `GET /api/v1/products` — Listar productos (filtros: source, status, búsqueda, paginación)
+- `POST /api/v1/products` — Crear producto
+- `PATCH /api/v1/products/:id` — Modificar producto
+- `POST /api/v1/products/:id/archive` — Archivar producto
+- `POST /api/v1/products/:id/restore` — Restaurar producto archivado
+- `DELETE /api/v1/products/:id` — Eliminar producto (requiere confirmación)
+- `POST /api/v1/products/import-csv` — Importar catálogo (Shopify/Etsy, CSV)
 
-### Insight Types
+### Señales y Keywords
+- `POST /api/v1/signals/upload` — Subir CSV de señales externas (Google Keyword Planner)
+- `GET /api/v1/signals/batches` — Listar lotes de señales importadas
+- `GET /api/v1/signals` — Listar señales (filtros: batch, source, búsqueda, orden, paginación)
 
-- TREND
-- OPPORTUNITY
-- WARNING
-- INFO
+### Keywords y Jobs
+- `GET /api/v1/keyword-seeds/count` — Contar seeds activas
+- `POST /api/v1/keywords/seeds` — Crear seeds
+- `GET /api/v1/keywords/seeds` — Listar seeds (filtro por estado)
+- `PATCH /api/v1/keywords/seeds/:id` — Actualizar estado de seed
+- `POST /api/v1/keywords/jobs` — Crear job de keywords
+- `GET /api/v1/keywords/jobs` — Listar jobs
+- `GET /api/v1/keywords/jobs/:id` — Detalle de job
+- `POST /api/v1/keywords/jobs/:id/promote` — Promover señal
+- `POST /api/v1/keywords/jobs/:id/archive` — Archivar job
+- `POST /api/v1/keywords/jobs/:id/restore` — Restaurar job
 
-### Insight Scope
+### Decisiones y Borradores
+- `GET /api/v1/decision-drafts` — Listar borradores de decisión (filtros: fecha, estado)
+- `POST /api/v1/decision-drafts/generate` — Generar borradores (IA)
+- `POST /api/v1/decision-drafts/:id/dismiss` — Descartar borrador
+- `POST /api/v1/decision-drafts/:id/promote` — Promover borrador a decisión
 
-- PRODUCT
-- CATEGORY
-- THEME
-- GLOBAL
+### Decisiones
+- `GET /api/v1/decisions` — Listar decisiones (filtros: tipo, prioridad, estado, paginación)
+- `GET /api/v1/decisions/:id` — Detalle de decisión (incluye evidencia y reglas)
 
-### Decision Types
+### Métricas y Dashboard
+- `GET /api/v1/dashboard/kpis` — KPIs principales del sistema
+- `GET /api/v1/kpis/products` — Métricas de productos (parámetros: fecha inicio/fin, plataforma, categoría)
 
-- PRODUCT
-- SEO
-- CONTENT
-- BUNDLE
-- PRICING
+### SEO y Contexto
+- `GET /api/v1/seo-focus` — Decisiones SEO recientes (parámetros: días, incluir ejecutadas)
+- `GET /api/v1/settings/seo-context` — Listar seeds de contexto SEO
+- `POST /api/v1/settings/seo-context/seeds` — Crear seed de contexto SEO
+- `PATCH /api/v1/settings/seo-context/seeds/:id` — Actualizar seed de contexto SEO
 
-### Priority Levels
+### Tipos de Producto y Configuración
+- `GET /api/v1/settings/product-types` — Listar tipos de producto
+- `POST /api/v1/settings/product-types` — Crear tipo de producto
+- `PATCH /api/v1/settings/product-types/:id` — Modificar tipo de producto
+- `GET /api/v1/settings/keyword-providers` — Estado de proveedores de keywords
+- `POST /api/v1/settings/google-ads` — Configuración de Google Ads
 
-- P0 (critical)
-- P1 (important)
-- P2 (nice to have)
+### LLM (IA)
+- `GET /api/v1/llm/status` — Estado del proveedor LLM
+- `POST /api/v1/llm/sandbox` — Generar borradores sandbox (IA, pruebas)
 
-### Decision Status
-
-- PROPOSED
-- ACCEPTED
-- REJECTED
-- DONE
-
----
-
-## 4. Error Model
-
-All errors follow a standard structure.
-
-### Error Response Format
-
-- code: short error identifier
-- message: human-readable description
-- details: optional contextual information
-
-### Common Error Codes
-
-- VALIDATION_ERROR (400)
-- NOT_FOUND (404)
-- CONFLICT (409)
-- INTERNAL_ERROR (500)
-- SERVICE_UNAVAILABLE (503)
-
----
-
-## 5. API Endpoints (MVP)
-
-### 5.1 Health Check
-
-**GET /api/v1/health**
-Purpose: verify that the API and its dependencies are running.
-
-Response:
-
-- status
-- API version
-- current server time
-- database connectivity status
+### Weekly Focus
+- `GET /api/v1/weekly-focus` — Resumen de enfoque semanal
 
 ---
 
-### 5.2 Imports (Data Ingestion)
+## 4. Estructura de DTOs (Request/Response)
 
-#### POST /api/imports/etsy
+### Ejemplo de respuesta estándar:
+```json
+{
+	"ok": true,
+	"data": { ... },
+	"error": null
+}
+```
+En caso de error:
+```json
+{
+	"ok": false,
+	"error": {
+		"code": "VALIDATION_ERROR",
+		"message": "El campo X es obligatorio",
+		"details": {}
+	}
+}
+```
 
-Purpose: import Etsy orders using a simplified JSON representation (MVP).
+### Ejemplo DTO Producto (GET /products):
+```json
+{
+	"ok": true,
+	"products": [
+		{
+			"id": "uuid",
+			"name": "Nombre",
+			"productSource": "SHOPIFY",
+			"productType": "Camiseta",
+			"status": "ACTIVE",
+			"seasonality": "NONE",
+			"createdAt": "2026-02-19T12:00:00Z",
+			...
+		}
+	],
+	"pagination": { "page": 1, "pageSize": 20, "total": 100, "totalPages": 5 }
+}
+```
 
-Input:
-
-- import metadata (type, filename)
-- list of order rows with items
-
-Behavior:
-
-- validates required fields
-- maps raw rows to canonical Orders and OrderItems
-- stores an import run record
-- rejects duplicate external order IDs
-
-Output:
-
-- import run summary
-- total records processed
-- success/failure counts
-
-Errors:
-
-- VALIDATION_ERROR for malformed payloads
-- CONFLICT if duplicate orders are detected
-- INTERNAL_ERROR for unexpected failures
+### Ejemplo DTO Decisión (GET /decisions/:id):
+```json
+{
+	"ok": true,
+	"decision": {
+		"id": "uuid",
+		"title": "Recomendar producto X",
+		"status": "PLANNED",
+		"priorityScore": 90,
+		"targetType": "PRODUCT",
+		"targetId": "uuid-producto",
+		"rationale": "Basado en señales de demanda y ventas recientes",
+		"sources": [ ... ],
+		"createdAt": "2026-02-19T12:00:00Z",
+		...
+	},
+	"evidence": [ ... ],
+	"rules": [ ... ]
+}
+```
 
 ---
 
-#### GET /api/imports
+## 5. Consideraciones de Seguridad
 
-Purpose: list previous import executions for audit and debugging.
-
-Supports filtering by:
-
-- platform
-- pagination (limit, offset)
+- Autenticación JWT obligatoria en todos los endpoints salvo login y reviewer.
+- Los datos sensibles (tokens, credenciales) nunca se exponen en respuestas.
+- Los errores de validación y negocio devuelven códigos y mensajes claros.
 
 ---
 
-### 5.3 Products (Catalog)
+## 6. Notas de Implementación
 
-#### GET /api/products
+- Todos los endpoints devuelven `ok: true/false` y estructura consistente.
+- Los filtros y paginación siguen el estándar: `?page=1&pageSize=20`.
+- Los DTOs pueden extenderse según necesidades del frontend.
 
-Purpose: list canonical products.
+---
 
-Supports filtering by query params:
+## 7. Relación con la Arquitectura
 
-- source (ETSY | SHOPIFY | MANUAL)
-- status (ACTIVE | DRAFT | ARCHIVED | REVIEW)
-- q (text search on name/product type)
-- page (default 1)
-- pageSize (default 20, max 100)
+La API refleja la separación de capas (dominio, aplicación, infraestructura) y soporta el ciclo completo: ingestión → señales/keywords → IA → decisiones → dashboard.
 
-Returns:
-
-- products[]
-- pagination { page, pageSize, total, totalPages }
+---
 
 
 #### POST /api/products/import-csv
