@@ -1,303 +1,551 @@
-# System Architecture — Stylenya Intelligent Project (TFM)
+# Arquitectura del Sistema — Stylenya Intelligent Project (TFM)
 
-## 1. Purpose and Scope
+## 1. Propósito y Alcance
 
-This document defines the system architecture for **Stylenya Intelligent Project**, a decision-support platform for a real e-commerce business (Stylenya). The system integrates:
+Este documento define la arquitectura del sistema para **Stylenya Intelligent Project**, una plataforma de soporte a la toma de decisiones para un negocio e-commerce real (Stylenya). El sistema integra:
 
-- **Historical sales signals** (Etsy exports / Shopify orders),
-- **Shopify catalog structure** (products/variants/tags),
-- **Business rules** (pricing, production capacity, turnaround constraints),
-- And optional **LLM-assisted insights** (summaries, prioritization, recommendations).
+- **Señales de ventas históricas** (exportaciones de Etsy / pedidos de Shopify),
+- **Estructura del catálogo de Shopify** (productos/variantes/etiquetas),
+- **Reglas de negocio** (precios, capacidad de producción, restricciones de tiempo de entrega),
+- E **insights asistidos por LLM opcionales** (resúmenes, priorización, recomendaciones).
 
-The architecture is designed to be:
+La arquitectura está diseñada para ser:
 
-- **Maintainable** (Clean Architecture),
-- **Auditable** (business rules are deterministic and traceable),
-- **Extensible** (LLM is optional and cannot break core logic),
-- **Deployable** (Docker + Postgres; API/Web as separate apps).
+- **Mantenible** (Arquitectura Limpia),
+- **Auditable** (las reglas de negocio son deterministas y trazables),
+- **Extensible** (el LLM es opcional y no puede romper la lógica central),
+- **Desplegable** (Docker + Postgres; API/Web como aplicaciones separadas).
 
-This architecture supports the TFM requirement of clear engineering decisions, traceability, and real-world applicability.
+Esta arquitectura respalda los requisitos del TFM de decisiones de ingeniería claras, trazabilidad y aplicabilidad en el mundo real.
 
 ---
 
-## 2. High-Level Architecture Overview
+## 2. Visión General de la Arquitectura de Alto Nivel
 
-The system is composed of two main applications:
+El sistema está compuesto por dos aplicaciones principales:
 
-- **API App (Backend)**: exposes business capabilities via HTTP endpoints (REST).
-- **Web App (Frontend)**: provides the dashboard UI for decision-making, reporting, and workflows.
+- **Aplicación API (Backend)**: expone capacidades de negocio mediante endpoints HTTP (REST).
+- **Aplicación Web (Frontend)**: proporciona la interfaz de usuario del dashboard para toma de decisiones, informes y flujos de trabajo.
 
-A PostgreSQL database stores:
+Una base de datos PostgreSQL almacena:
 
-- Imported datasets (orders, products, customers if needed),
-- Domain entities and rule outputs,
-- Derived metrics and “decision records” (what the system recommended and why).
+- Conjuntos de datos importados (pedidos, productos, clientes si es necesario),
+- Entidades de dominio y salidas de reglas,
+- Métricas derivadas y "registros de decisiones" (qué recomendó el sistema y por qué).
 
-### Component Summary
+### Resumen de Componentes
 
 - **apps/api**  
-  - Implements use cases and exposes HTTP endpoints.
-  - Owns domain rules execution (deterministic).
-  - Calls LLM gateway optionally (non-deterministic insights).
+  - Implementa casos de uso y expone endpoints HTTP.
+  - Posee la ejecución de reglas de dominio (determinista).
+  - Llama al gateway LLM opcionalmente (insights no deterministas).
 
 - **apps/web**  
-  - Dashboard UI and workflows.
-  - Consumes API endpoints.
-  - No business logic beyond presentation & UX rules.
+  - Interfaz de usuario del dashboard y flujos de trabajo.
+  - Consume endpoints de la API.
+  - Sin lógica de negocio más allá de reglas de presentación y UX.
 
 - **PostgreSQL (Docker)**  
-  - Single source of truth for structured data.
+  - Única fuente de verdad para datos estructurados.
 
-- **LLM Provider (Optional)**  
-  - Used for summarization, explanation, “insight narratives”.
-  - Never becomes a dependency for correctness.
-
----
-
-## 3. Clean Architecture Mapping to Repository Structure
-
-The repository structure follows a Clean Architecture approach:
-
-### 3.1 Layers
-
-**Domain Layer (`apps/api/src/domain`)**  
-Contains enterprise-level business concepts:
-
-- Entities (core objects of the business)
-- Value objects / enums
-- Domain services (pure business logic)
-- Ports (interfaces that define dependencies outward)
-
-**Application Layer (`apps/api/src/application`)**  
-Contains system-level orchestration:
-
-- Use cases (interactors) that coordinate domain operations
-- DTOs (input/output models for use cases)
-- Mappers (convert between DTOs and domain objects)
-
-**Infrastructure Layer (`apps/api/src/infrastructure`)**  
-Contains external integrations and technical implementations:
-
-- DB (Postgres adapters)
-- Repositories (implement domain ports)
-- Gateways (e.g., LLM adapter, Shopify/Etsy import adapters)
-
-**Interfaces Layer (`apps/api/src/interfaces/http`)**  
-Contains the HTTP delivery mechanism:
-
-- Controllers / routes
-- Request validation
-- Authentication hooks (future)
-- Response formatting
-
-### 3.2 Why this structure matters (TFM justification)
-
-This separation ensures:
-
-- Domain rules are **testable** without HTTP/DB.
-- External services (LLM, imports) can be changed without altering business logic.
-- The system remains **auditable**: recommendations can be traced to deterministic rule outputs.
+- **Proveedor LLM (Opcional)**  
+  - Usado para resúmenes, explicaciones, "narrativas de insights".
+  - Nunca se convierte en una dependencia para la corrección.
 
 ---
 
-## 4. Data Flow and Processing Pipelines
+## 3. Mapeo de Arquitectura Limpia a la Estructura del Repositorio
 
-### 4.1 Primary Flow (Decision Support)
+La estructura del repositorio sigue un enfoque de Arquitectura Limpia, con adaptaciones prácticas para Fastify y organización modular:
 
-1. User opens the Web dashboard.
-2. Web calls API endpoint(s) for:
+### 3.1 Capas Principales
+
+**Capa de Dominio (`apps/api/src/domain`)**  
+Contiene conceptos de negocio de nivel empresarial:
+
+- Entidades (objetos centrales del negocio)
+- Objetos de valor / enums (ej. `UserRole`)
+- Servicios de dominio (lógica de negocio pura)
+- Puertos (interfaces que definen dependencias hacia afuera)
+
+**Capa de Aplicación (`apps/api/src/application`)**  
+Contiene orquestación a nivel de sistema:
+
+- Casos de uso (interactores) que coordinan operaciones de dominio
+- DTOs (modelos de entrada/salida para casos de uso)
+- Mappers (convierten entre DTOs y objetos de dominio)
+
+**Capa de Infraestructura (`apps/api/src/infrastructure`)**  
+Contiene integraciones externas e implementaciones técnicas:
+
+- DB (adaptadores de Postgres con Prisma ORM)
+- Repositorios (implementan puertos de dominio)
+- Gateways (ej. adaptador LLM, adaptadores de importación Shopify/Etsy)
+
+**Capa de Interfaces (`apps/api/src/interfaces/http`)**  
+Contiene el mecanismo de entrega HTTP:
+
+- Configuración de la aplicación Fastify (`app.ts`)
+- Punto de entrada del servidor (`server.ts`)
+- Registro de rutas (`routes.ts`)
+- Middleware (guardias de autenticación, validación)
+- Formateo de respuestas
+
+### 3.2 Organización Modular (Extensión Práctica)
+
+**Módulos de Características (`apps/api/src/modules`)**  
+Para mantener la cohesión y facilitar el escalado, las funcionalidades específicas se organizan en módulos verticales:
+
+- `dashboard/` — KPIs y métricas del dashboard
+- `decision-drafts/` — Borradores de decisiones generados por IA
+- `keywords/` — Investigación y gestión de palabras clave
+- `llm/` — Integración LLM (OpenAI + Mock provider)
+- `products/` — Gestión del catálogo de productos
+- `seo-focus/` — Seguimiento de enfoque SEO
+- `settings/` — Configuración de aplicación (tipos de producto, contexto SEO, proveedores de keywords)
+- `signals/` — Procesamiento de señales de mercado
+- `weekly-focus/` — Recomendaciones de enfoque semanal
+
+Cada módulo puede contener:
+- Rutas (`.routes.ts`)
+- Servicios (`.service.ts`)
+- Lógica específica del módulo
+
+**Plugins Fastify (`apps/api/src/plugins`)**  
+- `auth-guard.ts` — Guardia de autenticación JWT global
+- Otros plugins reutilizables de Fastify
+
+**Tipos TypeScript (`apps/api/src/types`)**  
+- `app-error.ts` — Manejo de errores personalizado
+- `fastify-jwt.d.ts` — Extensión de tipos para Fastify JWT
+- Definiciones de tipos compartidas
+
+**Utilidades (`apps/api/src/utils`)**  
+- `hash.ts` — Utilidades de hashing (SHA256)
+- Funciones auxiliares transversales
+
+### 3.3 Por Qué Esta Estructura Importa (Justificación TFM)
+
+Esta separación asegura:
+
+- Las reglas de dominio son **testeables** sin HTTP/DB.
+- Los servicios externos (LLM, importaciones) pueden cambiarse sin alterar la lógica de negocio.
+- El sistema permanece **auditable**: las recomendaciones pueden rastrearse hasta salidas de reglas deterministas.
+- **Escalabilidad modular**: nuevas funcionalidades pueden añadirse como módulos independientes sin afectar el núcleo.
+- **Mantenibilidad**: separación clara de responsabilidades entre capas y módulos.
+
+---
+
+## 4. Flujo de Datos y Pipelines de Procesamiento
+
+### 4.1 Flujo Principal (Soporte a Decisiones)
+
+1. El usuario abre el dashboard Web.
+2. Web llama a endpoint(s) de la API para:
    - KPIs,
-   - Recommendations,
-   - Work queues (e.g., “what to prepare next”),
-   - Rule-based alerts (not push alerts; dashboard signals).
-3. API executes use cases:
-   - Loads relevant data (repositories),
-   - Runs deterministic business rules (domain services),
-   - Stores decision outputs when appropriate (decision records).
-4. API optionally calls LLM gateway to generate:
-   - Explanations (human readable),
-   - Summaries (weekly status),
-   - Insights narratives (e.g., “why this product is trending”).
-5. API returns structured results to Web.
+   - Recomendaciones,
+   - Colas de trabajo (ej. "qué preparar a continuación"),
+   - Alertas basadas en reglas (señales del dashboard, no alertas push).
+3. La API ejecuta casos de uso:
+   - Carga datos relevantes (repositorios),
+   - Ejecuta reglas de negocio deterministas (servicios de dominio),
+   - Almacena salidas de decisiones cuando es apropiado (registros de decisiones).
+4. La API opcionalmente llama al gateway LLM para generar:
+   - Explicaciones (legibles por humanos),
+   - Resúmenes (estado semanal),
+   - Narrativas de insights (ej. "por qué este producto es tendencia").
+5. La API devuelve resultados estructurados a Web.
 
-### 4.2 Import & Normalization Flow
+### 4.2 Flujo de Importación y Normalización
 
-Data sources may include:
+Las fuentes de datos pueden incluir:
 
-- Shopify exports / API access (future),
-- Etsy CSV exports (historical),
-- Manual input (admin forms).
+- Exportaciones/API de Shopify (futuro),
+- Exportaciones CSV de Etsy (histórico),
+- Entrada manual (formularios de administrador).
 
-Import approach:
+Enfoque de importación:
 
-- Raw data is normalized into internal tables.
-- A validation stage ensures required fields exist.
-- A “data quality score” (optional) can flag incomplete datasets.
-
----
-
-## 5. Core Architectural Decisions (With Rationale)
-
-### Decision A — API + Web as Separate Apps
-
-**Decision:** Maintain API and Web as separate applications in `apps/`.
-
-**Rationale:**
-
-- Clean separation of concerns: UI changes do not break business rules.
-- Independent deployment paths.
-- Supports scaling: future mobile, admin, integrations can reuse API.
-
-**Trade-off:**
-
-- More setup and coordination in early stages (endpoints/contracts).
-- Mitigated by strong documentation and versioned API contracts.
+- Los datos crudos se normalizan en tablas internas.
+- Una etapa de validación asegura que existan campos requeridos.
+- Un "puntaje de calidad de datos" (opcional) puede señalar conjuntos de datos incompletos.
 
 ---
 
-### Decision B — Deterministic Business Rules First; LLM as Optional Enhancement
+## 5. Decisiones Arquitectónicas Clave (Con Justificación)
 
-**Decision:** Business decisions are made by deterministic logic; LLM only enhances presentation.
+### Decisión A — API + Web como Aplicaciones Separadas
 
-**Rationale:**
+**Decisión:** Mantener API y Web como aplicaciones separadas en `apps/`.
 
-- E-commerce operations require repeatable and auditable logic.
-- LLM output can vary; it cannot be the source of truth.
-- Enables explainability for TFM: “the rule produced X because Y”.
-**Result:**
-- The platform never becomes “AI magic”; it becomes a reliable decision engine with AI explanations.
+**Justificación:**
 
----
+- Separación limpia de responsabilidades: cambios de UI no rompen reglas de negocio.
+- Rutas de despliegue independientes.
+- Soporta escalado: futuros móvil, admin, integraciones pueden reutilizar la API.
 
-### Decision C — PostgreSQL as Single Source of Structured Truth
+**Compromiso:**
 
-**Decision:** Postgres stores normalized datasets and system outputs.
-
-**Rationale:**
-
-- Strong relational modeling for orders/products/metrics.
-- Supports reporting, audit trails, and future analytics.
-- Works smoothly with Docker in dev.
+- Más configuración y coordinación en etapas tempranas (endpoints/contratos).
+- Mitigado por documentación fuerte y contratos de API versionados.
 
 ---
 
-### Decision D — Clean Architecture to Protect the Domain
+### Decisión B — Reglas de Negocio Deterministas Primero; LLM como Mejora Opcional
 
-**Decision:** Domain logic has no dependency on DB, HTTP, or LLM.
+**Decisión:** Las decisiones de negocio se toman mediante lógica determinista; el LLM solo mejora la presentación.
 
-**Rationale:**
+**Justificación:**
 
-- Protects the long-term maintainability of the project.
-- Aligns with academic best practices (TFM defensible).
-- Reduces future refactor cost.
+- Las operaciones de e-commerce requieren lógica repetible y auditable.
+- La salida del LLM puede variar; no puede ser la fuente de verdad.
+- Habilita explicabilidad para el TFM: "la regla produjo X porque Y".
 
----
-
-## 6. Interfaces and Contracts (How apps communicate)
-
-### 6.1 API Contract Style
-
-The API will be REST-based for clarity and speed of implementation.
-
-Examples of endpoint families:
-
-- `/health` — system health check
-- `/kpis` — dashboard KPIs
-- `/recommendations` — suggested actions
-- `/imports/*` — dataset ingestion
-- `/catalog/*` — products & variants
-- `/decisions/*` — “decision records” for audit trail
-
-The final endpoint list will be derived from the **domain use cases**.
+**Resultado:**
+- La plataforma nunca se convierte en "magia de IA"; se convierte en un motor de decisiones confiable con explicaciones de IA.
 
 ---
 
-## 7. Non-Functional Requirements
+### Decisión C — PostgreSQL como Única Fuente de Verdad Estructurada
 
-### 7.1 Maintainability
+**Decisión:** Postgres almacena conjuntos de datos normalizados y salidas del sistema.
 
-- Separation of layers
-- Consistent DTO mapping
-- Unit tests prioritized at domain/application
+**Justificación:**
 
-### 7.2 Traceability / Auditability
+- Modelado relacional fuerte para pedidos/productos/métricas.
+- Soporta reporting, pistas de auditoría y futura analítica.
+- Funciona suavemente con Docker en desarrollo.
 
-- Deterministic rules produce structured decision outputs
-- Decisions can be stored with:
+---
+
+### Decisión D — Arquitectura Limpia para Proteger el Dominio
+
+**Decisión:** La lógica de dominio no tiene dependencia en DB, HTTP o LLM.
+
+**Justificación:**
+
+- Protege la mantenibilidad a largo plazo del proyecto.
+- Se alinea con mejores prácticas académicas (defendible para el TFM).
+- Reduce el costo de refactorización futura.
+
+---
+
+### Decisión E — Organización Modular dentro de Clean Architecture
+
+**Decisión:** Implementar módulos por funcionalidad dentro del backend.
+
+**Justificación:**
+
+- Mejora la cohesión: código relacionado vive junto.
+- Facilita navegación y mantenimiento en un proyecto real.
+- Permite equipos distribuidos trabajando en módulos diferentes.
+- Compatible con Arquitectura Limpia: los módulos respetan las capas.
+
+---
+
+### Decisión F — Autenticación JWT con Roles
+
+**Decisión:** Implementar autenticación JWT con sistema de roles (ADMIN/USER).
+
+**Justificación:**
+
+- Sistema de producción real requiere control de acceso.
+- JWT stateless facilita escalado horizontal.
+- Sistema de roles permite separación de responsabilidades (admin setup, revisión, operaciones).
+
+**Implementación:**
+- Guardia global de autenticación con rutas públicas definidas
+- Middleware `requireAuth` y `requireRole`
+- Flujo de bootstrap para setup inicial del admin
+
+---
+
+## 6. Interfaces y Contratos (Cómo se Comunican las Apps)
+
+### 6.1 Estilo de Contrato de la API
+
+La API es REST-based para claridad y velocidad de implementación.
+
+**Prefijo de API:** `/api/v1`
+
+### 6.2 Familias de Endpoints Implementados
+
+**Autenticación**
+- `POST /api/v1/auth/login` — Login de usuario
+- `POST /api/v1/auth/reviewer/signup` — Registro de revisor
+- `GET /api/v1/me` — Información del usuario actual
+
+**Bootstrap**
+- `GET /api/v1/bootstrap-status` — Estado del setup inicial
+- `POST /api/v1/initial-admin` — Crear primer admin
+
+**Dashboard**
+- `GET /api/v1/dashboard/*` — KPIs y métricas del dashboard
+
+**Productos**
+- `GET /api/v1/products` — Listado de productos
+- Endpoints CRUD para gestión de productos
+
+**Keywords**
+- `GET /api/v1/keywords/*` — Gestión de keywords y seeds
+- `POST /api/v1/keywords/jobs` — Trabajos de investigación de keywords
+
+**Señales**
+- `POST /api/v1/signals/upload` — Carga de señales de mercado
+- `GET /api/v1/signals/*` — Análisis de señales
+
+**Decisiones**
+- `GET /api/v1/decisions` — Registro de decisiones
+- `POST /api/v1/decisions` — Crear decisión
+
+**Decision Drafts (IA)**
+- `GET /api/v1/decision-drafts` — Borradores generados por IA
+- `POST /api/v1/decision-drafts/generate` — Generar nuevo borrador
+
+**LLM**
+- `GET /api/v1/llm/status` — Estado del proveedor LLM
+- `POST /api/v1/llm/sandbox` — Sandbox para pruebas de LLM
+
+**Weekly Focus**
+- `GET /api/v1/weekly-focus` — Recomendaciones de enfoque semanal
+- `POST /api/v1/weekly-focus/snapshot` — Generar snapshot
+
+**SEO Focus**
+- `GET /api/v1/seo-focus` — Seguimiento de enfoque SEO
+
+**Settings**
+- `GET/POST /api/v1/settings/keyword-provider` — Configuración de proveedor de keywords
+- `GET/POST /api/v1/settings/product-types` — Gestión de tipos de producto
+- `GET/POST /api/v1/settings/seo-context` — Contexto SEO del negocio
+
+**Utilidades**
+- `GET /api/v1/health` — Health check del sistema
+- `POST /api/v1/ui/sidebar-state` — Estado de UI (sidebar)
+- `GET /api/v1/admin/ping` — Verificación de permisos de admin
+
+### 6.3 Autenticación y Autorización
+
+**Rutas Públicas (sin autenticación):**
+- `GET /api/v1/health`
+- `GET /api/v1/bootstrap-status`
+- `POST /api/v1/initial-admin`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/reviewer/signup`
+
+**Rutas Protegidas:**
+- Todas las demás rutas requieren token JWT válido
+- Algunas rutas requieren rol específico (ej. ADMIN)
+
+**Flujo de Autenticación:**
+1. Usuario envía credenciales a `/auth/login`
+2. API valida y devuelve JWT
+3. Cliente incluye JWT en header `Authorization: Bearer <token>`
+4. Guardia de autenticación valida token en cada request
+
+---
+
+## 7. Requisitos No Funcionales
+
+### 7.1 Mantenibilidad
+
+- Separación de capas (domain, application, infrastructure, interfaces)
+- Organización modular por funcionalidad
+- Mapeo consistente de DTOs
+- Tests unitarios priorizados en domain/application
+- Tests de integración con Vitest + Supertest
+
+### 7.2 Trazabilidad / Auditabilidad
+
+- Las reglas deterministas producen salidas de decisiones estructuradas
+- Las decisiones pueden almacenarse con:
   - timestamp,
-  - rule version,
-  - input snapshot reference,
-  - output rationale fields
+  - versión de regla,
+  - referencia de snapshot de entrada,
+  - campos de justificación de salida
 
-### 7.3 Performance
+### 7.3 Rendimiento
 
-- Dashboard is read-heavy: KPIs, lists, summaries
-- Use indexes and precomputed aggregates where needed
-- LLM calls are asynchronous or optional to avoid blocking core flows
+- El dashboard es de lectura intensiva: KPIs, listas, resúmenes
+- Usar índices y agregados precalculados donde sea necesario
+- Las llamadas al LLM son asíncronas u opcionales para evitar bloquear flujos principales
 
-### 7.4 Security (Initial baseline)
+### 7.4 Seguridad
 
-- No sensitive secrets in repo
-- `.env` not committed
-- Future: authentication for admin/import endpoints
+**Implementado:**
+- Sin secretos sensibles en el repo
+- `.env` no commiteado
+- Autenticación JWT para todos los endpoints protegidos
+- Hashing de contraseñas con bcrypt
+- Validación de entrada con Zod
+- CORS configurado
+- Cookies HttpOnly para estado de UI
 
----
+**Futuro:**
+- Rate limiting
+- Auditoría de acciones de admin
+- Encriptación de datos sensibles en DB
 
-## 8. Deployment and Environment Strategy
+### 7.5 Observabilidad
 
-### 8.1 Development (Local)
+**Actual:**
+- Logs estructurados en API (request ID + nombre de caso de uso)
+- Endpoint de health check básico
+- Logging de uso de LLM (tokens, latencia)
 
-- Docker Compose runs Postgres
-- API connects using environment variables
-- Web points to API base URL (local)
-
-### 8.2 Production (Future)
-
-Two typical options:
-
-- Single VPS with Docker Compose for all services, or
-- Managed DB + containerized API/Web (platform of choice)
-
-This is intentionally left flexible for the TFM stage.
-
----
-
-## 9. Observability (Minimal viable, expandable)
-
-Initial:
-
-- Structured logs at API (request ID + use case name)
-- Basic health endpoint
-
-Future:
-
-- Metrics (request durations, DB timings)
-- Error tracking (Sentry, etc.)
+**Futuro:**
+- Métricas (duraciones de request, tiempos de DB)
+- Rastreo de errores (Sentry, etc.)
+- Distributed tracing
 
 ---
 
-## 10. Next Steps (Implementation Roadmap Alignment)
+## 8. Estrategia de Despliegue y Entornos
 
-Immediate next documents:
+### 8.1 Desarrollo (Local)
 
-1. **Data Model** (`docs/data-model.md`)  
-   - Tables/entities for orders, products, decisions, metrics.
-2. **API Specification** (`docs/api-spec.md` or OpenAPI later)  
-   - Endpoint list, request/response DTOs.
-3. **Dashboard Wireframe** (`docs/dashboard-wireframe.md`)  
-   - Screens and components mapped to endpoints.
-4. **System README** (`README.md`)  
-   - Setup steps, run commands, architecture summary.
+- Docker Compose ejecuta Postgres
+- API se conecta usando variables de entorno
+- Web apunta a URL base de API (local: `http://localhost:3001`)
+- **Runtime:** Bun (preferido) o Node.js
+
+**Comandos de inicio:**
+```bash
+# Backend
+cd apps/api
+bun install
+bun run dev
+
+# Frontend
+cd apps/web
+bun install
+bun run dev
+
+# Base de datos
+docker-compose up -d
+bun run prisma:migrate
+```
+
+### 8.2 Producción (Futuro)
+
+Opciones típicas:
+
+- VPS único con Docker Compose para todos los servicios, o
+- DB gestionada + API/Web contenerizados (plataforma de elección)
+- Variables de entorno seguras
+- SSL/TLS para comunicaciones
+- Backups regulares de BD
+
+Esto se deja intencionalmente flexible para la etapa del TFM.
 
 ---
 
-## 11. Conclusion
+## 9. Stack Tecnológico Completo
 
-This architecture provides a professional and defensible foundation for a real decision-support system:
+### Backend (apps/api)
 
-- It keeps business logic clean and testable,
-- Supports evidence-based decision-making,
-- Enables optional AI insight generation without sacrificing correctness,
-- And aligns with academic expectations for a final master’s project.
+**Runtime & Lenguaje:**
+- **Bun** (runtime principal, compatible con Node.js)
+- **TypeScript** (tipado estático)
 
-The system is designed to deliver a usable product incrementally: deterministic engine first, insights layer second.
+**Framework & Librerías:**
+- **Fastify** (framework HTTP de alto rendimiento)
+- **Prisma ORM** (modelado y migraciones de base de datos)
+- **PostgreSQL** (motor de base de datos)
+- **@fastify/jwt** (autenticación JWT)
+- **@fastify/cors** (CORS)
+- **@fastify/cookie** (gestión de cookies)
+- **@fastify/multipart** (carga de archivos)
+- **Zod** (validación de esquemas)
+- **bcrypt** (hashing de contraseñas)
+
+**Testing:**
+- **Vitest** (test runner)
+- **Supertest** (tests de integración HTTP)
+
+**Integración IA:**
+- **OpenAI SDK** (proveedor principal)
+- Capa de abstracción de proveedores (Mock/OpenAI)
+
+### Frontend (apps/web)
+
+**Framework & Build:**
+- **React 18**
+- **Vite** (build tool)
+- **TypeScript**
+
+**Routing & Estado:**
+- **React Router** (navegación)
+- **Context API** (estado de autenticación)
+
+**UI & Estilos:**
+- **Tailwind CSS** (estilos utility-first)
+- **shadcn/ui** (50+ componentes UI pre-construidos)
+- **Lucide React** (iconos)
+
+**Formularios & Validación:**
+- **React Hook Form**
+- **Zod** (validación client-side)
+
+**Data Fetching:**
+- Fetch API nativo
+- Cliente API custom con manejo de errores
+
+**Testing:**
+- **Vitest** (unit tests)
+
+### Infraestructura
+
+**Base de Datos:**
+- **PostgreSQL 16** (en Docker para desarrollo)
+- **Prisma** como ORM y gestor de migraciones
+
+**Containerización:**
+- **Docker** & **Docker Compose**
+
+**Control de Versiones:**
+- **Git** + GitHub
+
+---
+
+## 10. Próximos Pasos (Alineación con Roadmap de Implementación)
+
+Documentos inmediatos siguientes:
+
+1. **Modelo de Datos** (`docs/data-model.md`)  
+   - Tablas/entidades para pedidos, productos, decisiones, métricas.
+   
+2. **Especificación de API** (`docs/api-contract.md`)  
+   - Lista completa de endpoints, DTOs de request/response.
+   
+3. **Wireframe del Dashboard** (`docs/dashboard-wireframe.md` o existente en `apps-web.mdx`)  
+   - Pantallas y componentes mapeados a endpoints.
+   
+4. **README del Sistema** (`README.md`)  
+   - Pasos de setup, comandos de ejecución, resumen de arquitectura.
+
+5. **Modelo de Dominio** (`docs/domain-model.md`)
+   - Entidades, value objects, servicios de dominio.
+
+---
+
+## 11. Conclusión
+
+Esta arquitectura proporciona una base profesional y defendible para un sistema real de soporte a decisiones:
+
+- Mantiene la lógica de negocio limpia y testeable,
+- Soporta toma de decisiones basada en evidencia,
+- Habilita generación opcional de insights de IA sin sacrificar corrección,
+- Implementa autenticación y autorización desde el inicio,
+- Organiza el código de forma modular y escalable,
+- Y se alinea con las expectativas académicas para un proyecto final de máster.
+
+El sistema está diseñado para entregar un producto usable incrementalmente: motor determinista primero, capa de insights segundo, con arquitectura sólida que soporta ambos.
+
+**Diferencias clave con documentación previa:**
+- ✅ Refleja la estructura real implementada (modules/, plugins/, types/, utils/)
+- ✅ Documenta la autenticación JWT ya implementada
+- ✅ Incluye endpoints reales y rutas específicas
+- ✅ Añade Bun como runtime
+- ✅ Detalla el sistema de bootstrap y roles
+- ✅ Actualiza el stack tecnológico completo
+- ✅ Mantiene los principios de Clean Architecture con adaptaciones prácticas
