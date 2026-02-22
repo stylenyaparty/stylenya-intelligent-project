@@ -268,3 +268,12 @@ Para una comprensión más detallada de la arquitectura y el código, consulte l
 
 - **API Documentation:** `/apps/api/README.md`
 - **Frontend Documentation:** `/apps/web/README.md`
+
+
+## g. Presentación TFM
+
+Todos los archivos para la carga inicial del proyecto además de un .txt con el access code está disponible en mi googledrive personal y se envió invitación a Brais a través de su gmail:
+https://drive.google.com/drive/folders/1umQ0aIyJv2iC3sRua0mHEPuuMqeTW-Os?usp=drive_link
+
+La presentación se encuentra en:
+https://notebooklm.google.com/notebook/339d21f5-aa95-41ec-9e64-35f9fcc49729?artifactId=aa5f13a5-8f37-4ef3-a0f5-e77fcf4d6988
