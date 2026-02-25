@@ -332,6 +332,79 @@ model DecisionLogEvent {
   @@index([refType, refId])
 }
 
+model WebResearchRun {
+  id         String            @id @default(cuid())
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  status     WebResearchStatus @default(RUNNING)
+  mode       ResearchMode      @default(quick)
+  query      String
+  locale     String?
+  geo        String?
+  language   String?
+  seedJson   Json?
+  timingsMs  Json?
+  errorJson  Json?
+  resultJson Json?
+  clusters   ResearchCluster[]
+  rows       ResearchRow[]
+
+  @@index([createdAt])
+  @@index([status])
+}
+
+model ResearchRow {
+  id          String             @id @default(cuid())
+  runId       String
+  run         WebResearchRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  createdAt   DateTime           @default(now())
+  url         String
+  title       String
+  snippet     String?
+  publishedAt DateTime?
+  score       Float?
+  clusterKey  String?
+  clusterRank Int?
+  rawJson     Json?
+  evidences   ResearchEvidence[]
+
+  @@unique([runId, url])
+  @@index([runId])
+}
+
+model ResearchCluster {
+  id         String         @id @default(cuid())
+  runId      String
+  run        WebResearchRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  createdAt  DateTime       @default(now())
+  key        String
+  label      String
+  summary    String?
+  rank       Int?
+  rowCount   Int            @default(0)
+  topScore   Float?
+  bundleJson Json?
+
+  @@unique([runId, key])
+  @@index([runId])
+}
+
+model ResearchEvidence {
+  id          String      @id @default(cuid())
+  rowId       String
+  row         ResearchRow @relation(fields: [rowId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+  url         String
+  title       String?
+  snippet     String?
+  publishedAt DateTime?
+  source      String?
+  rawJson     Json?
+
+  @@unique([rowId, url])
+  @@index([rowId])
+}
+
 enum UserRole {
   ADMIN
   USER
@@ -469,4 +542,15 @@ enum KeywordPriority {
   LOW
   MED
   HIGH
+}
+
+enum WebResearchStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum ResearchMode {
+  quick
+  deep
 }

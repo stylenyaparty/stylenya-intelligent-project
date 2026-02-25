@@ -13,6 +13,7 @@ import { seoContextRoutes } from "../../modules/settings/seo-context.routes";
 import { productTypesRoutes } from "../../modules/settings/product-types.routes";
 import { decisionDraftRoutes } from "../../modules/decision-drafts/decision-drafts.routes";
 import { signalsRoutes } from "../../modules/signals/signals.routes";
+import { webResearchRoutes } from "../../modules/web-research/web-research.routes";
 
 import { z } from "zod";
 import { PrismaUserRepository } from "../../infrastructure/repositories/prisma-user-repository";
@@ -51,6 +52,7 @@ export async function registerRoutes(app: FastifyInstance) {
 
     app.register(productsRoutes);
     app.register(signalsRoutes);
+    app.register(webResearchRoutes, { prefix: "/research" });
     app.register(keywordProviderSettingsRoutes);
     app.register(productTypesRoutes);
     app.register(seoContextRoutes);
